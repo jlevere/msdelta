@@ -238,7 +238,7 @@ pub fn decompress(reference: &[u8], patch_data: &[u8], target_size: usize) -> Re
             && format
                 .boundaries
                 .get(seg_idx + 1)
-                .map_or(false, |&b| pos >= b)
+                .is_some_and(|&b| pos >= b)
         {
             seg_idx += 1;
         }
@@ -258,7 +258,7 @@ pub fn decompress(reference: &[u8], patch_data: &[u8], target_size: usize) -> Re
             distance = ref_len as i64;
         } else if raw_offset < SOURCE_COPY {
             distance = raw_offset as i64 - OFFSET_BIAS as i64;
-        } else if raw_offset >= LRU_BASE && raw_offset < LRU_BASE + 3 {
+        } else if (LRU_BASE..LRU_BASE + 3).contains(&raw_offset) {
             distance = lru[(raw_offset - LRU_BASE) as usize];
         } else {
             distance = (raw_offset - RAW_OFFSET_BASE) as i64;
@@ -275,7 +275,7 @@ pub fn decompress(reference: &[u8], patch_data: &[u8], target_size: usize) -> Re
         }
 
         let src_start = (pos as i64 - distance) as u64;
-        if src_start + copy_len as u64 <= ref_len as u64 {
+        if src_start + copy_len <= ref_len as u64 {
             // Entire copy from reference — bulk copy
             let start = src_start as usize;
             let end = start + copy_len as usize;
@@ -364,7 +364,8 @@ pub fn compress(reference: &[u8], target: &[u8]) -> Result<Vec<u8>> {
         (h.wrapping_mul(0x9E3779B1)) >> 16
     }
 
-    // Index the reference
+    // Index the reference into the hash chain
+    #[allow(clippy::needless_range_loop)]
     for i in 0..ref_len.saturating_sub(2) {
         let h = hash3(&combined, i) & hash_mask;
         hash_chain[i] = hash_table[h];
@@ -442,7 +443,7 @@ pub fn compress(reference: &[u8], target: &[u8]) -> Result<Vec<u8>> {
             // Update LRU
             let distance = if best_offset == SOURCE_COPY {
                 ref_len as i64
-            } else if best_offset >= LRU_BASE && best_offset < LRU_BASE + 3 {
+            } else if (LRU_BASE..LRU_BASE + 3).contains(&best_offset) {
                 lru[(best_offset - LRU_BASE) as usize]
             } else {
                 (best_offset - RAW_OFFSET_BASE) as i64
@@ -488,7 +489,7 @@ pub fn compress(reference: &[u8], target: &[u8]) -> Result<Vec<u8>> {
             let (offset_slot, _, needs_aligned) =
                 compute_symbol_info(sym.raw_offset, sym.length);
             let length_slot = compute_length_slot(sym.length);
-            let main_sym = (0x100 + (offset_slot << 3) | length_slot) as usize;
+            let main_sym = ((0x100 + (offset_slot << 3)) | length_slot) as usize;
             if main_sym < MAIN_SYMBOLS {
                 main_freq[main_sym] += 1;
             }
@@ -599,7 +600,7 @@ fn compute_symbol_info(raw_offset: u32, _length: u32) -> (u32, u32, bool) {
     if raw_offset == SOURCE_COPY {
         return (3, 0, false);
     }
-    if raw_offset >= LRU_BASE && raw_offset < LRU_BASE + 3 {
+    if (LRU_BASE..LRU_BASE + 3).contains(&raw_offset) {
         return (raw_offset - 0x53FFD, 0, false);
     }
     if raw_offset >= RAW_OFFSET_BASE {
@@ -632,7 +633,7 @@ fn compute_symbol_info(raw_offset: u32, _length: u32) -> (u32, u32, bool) {
 }
 
 fn compute_length_slot(length: u32) -> u32 {
-    if length - 1 >= 1 && length - 1 <= 7 {
+    if length > 1 && length - 1 <= 7 {
         length - 1
     } else {
         0
@@ -656,7 +657,7 @@ fn encode_match(
 
     if raw_offset == SOURCE_COPY {
         offset_slot = 3;
-    } else if raw_offset >= LRU_BASE && raw_offset < LRU_BASE + 3 {
+    } else if (LRU_BASE..LRU_BASE + 3).contains(&raw_offset) {
         offset_slot = raw_offset - 0x53FFD;
     } else if raw_offset >= RAW_OFFSET_BASE {
         let dist = raw_offset - RAW_OFFSET_BASE;
@@ -717,7 +718,7 @@ fn encode_match(
     // Compute length encoding
     let length_slot: u32;
     let length_extra: Option<u16>;
-    if length - 1 >= 1 && length - 1 <= 7 {
+    if length > 1 && length - 1 <= 7 {
         length_slot = length - 1;
         length_extra = None;
     } else {
@@ -731,7 +732,7 @@ fn encode_match(
     }
 
     // Verify main symbol is in range
-    let main_sym = (0x100 + (offset_slot << 3) | length_slot) as u16;
+    let main_sym = ((0x100 + (offset_slot << 3)) | length_slot) as u16;
     if main_sym as usize >= tables.main.lengths.len() {
         return Err(Error::Malformed("main symbol out of range"));
     }
@@ -822,7 +823,7 @@ fn decompress_inner(
             return Err(Error::Malformed("bitstream exhausted"));
         }
         while seg_idx + 1 < format.segments.len()
-            && format.boundaries.get(seg_idx + 1).map_or(false, |&b| pos >= b)
+            && format.boundaries.get(seg_idx + 1).is_some_and(|&b| pos >= b)
         {
             seg_idx += 1;
         }
@@ -840,7 +841,7 @@ fn decompress_inner(
             ref_len as i64
         } else if raw_offset < SOURCE_COPY {
             raw_offset as i64 - OFFSET_BIAS as i64
-        } else if raw_offset >= LRU_BASE && raw_offset < LRU_BASE + 3 {
+        } else if (LRU_BASE..LRU_BASE + 3).contains(&raw_offset) {
             lru[(raw_offset - LRU_BASE) as usize]
         } else {
             (raw_offset - RAW_OFFSET_BASE) as i64
@@ -856,7 +857,7 @@ fn decompress_inner(
         }
 
         let src_start = (pos as i64 - distance) as u64;
-        if src_start + copy_len as u64 <= ref_len as u64 {
+        if src_start + copy_len <= ref_len as u64 {
             let start = src_start as usize;
             output.extend_from_slice(&reference[start..start + copy_len as usize]);
         } else if src_start >= ref_len as u64 {

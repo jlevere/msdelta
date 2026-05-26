@@ -132,8 +132,8 @@ impl HuffmanTable {
             total_entries += mask + 1;
         }
         // Fill remaining slots
-        for i in (max_slot_used + 1)..32 {
-            slots[i] = Slot {
+        for slot in &mut slots[(max_slot_used + 1)..] {
+            *slot = Slot {
                 mask: 0,
                 offset: total_entries,
             };
@@ -545,10 +545,7 @@ mod tests {
 
     #[test]
     fn huffman_write_read_256_symbols() {
-        let mut freqs = vec![0u32; 256];
-        for i in 0..256 {
-            freqs[i] = (256 - i) as u32;
-        }
+        let freqs: Vec<u32> = (0..256).map(|i| (256 - i) as u32).collect();
         let table = HuffmanTable::from_frequencies(&freqs, 15).unwrap();
 
         let mut writer = BitWriter::new();

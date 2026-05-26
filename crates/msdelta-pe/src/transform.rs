@@ -65,12 +65,7 @@ pub fn transform_inferred_relocations_x86(
                 let rva = (val - image_base) as u64;
                 let mapped = rift_map(rva);
                 let new_val = (mapped as i32 + new_image_base as i32) as u32;
-                let src_bytes = new_val.to_le_bytes();
-                source_buf.get(pos..pos + 4).map(|_| {
-                    // Write the remapped value back to the source buffer position
-                    // in the original PE data context
-                });
-                let _ = src_bytes; // TODO: wire up properly
+                let _ = new_val; // TODO: wire up remapped value writing
                 count += 1;
                 pos += 4;
                 continue;

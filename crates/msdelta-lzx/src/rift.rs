@@ -43,7 +43,7 @@ impl RiftTable {
         let fmt_dst = IntFormat::from_reader(reader)?;
 
         let count = reader.read_i64()?;
-        if count < 0 || count > 0x0FFFFFFFFFFFFFFF {
+        if !(0..=0x0FFFFFFFFFFFFFFF).contains(&count) {
             return Err(Error::Malformed("rift table entry count out of range"));
         }
         let count = count as usize;
@@ -110,17 +110,15 @@ impl IntFormat {
         if mode == 0 {
             // All symbols have the same length
             let uniform_len = reader.read_bits(4)? as u8;
-            for l in &mut lengths {
-                *l = uniform_len;
-            }
+            lengths.fill(uniform_len);
         } else if (mode as usize) <= INT_FORMAT_HALF {
             // Only first `mode` positive and `mode` negative symbols are used
             let active = mode as usize;
-            for i in 0..active {
-                lengths[i] = reader.read_bits(4)? as u8;
+            for l in &mut lengths[..active] {
+                *l = reader.read_bits(4)? as u8;
             }
-            for i in 0..active {
-                lengths[INT_FORMAT_HALF + i] = reader.read_bits(4)? as u8;
+            for l in &mut lengths[INT_FORMAT_HALF..INT_FORMAT_HALF + active] {
+                *l = reader.read_bits(4)? as u8;
             }
         } else {
             return Err(Error::Malformed("IntFormat mode out of range"));

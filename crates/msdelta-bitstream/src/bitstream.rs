@@ -266,14 +266,13 @@ impl<'a> BitReader<'a> {
     /// Ensure at least `n` bits are available in the accumulator.
     fn ensure(&mut self, n: u32) -> Result<()> {
         while self.bits < n {
-            if !self.refill() {
-                if self.bits < n {
+            if !self.refill()
+                && self.bits < n {
                     return Err(Error::BitstreamExhausted {
                         needed: n,
                         available: self.bits,
                     });
                 }
-            }
         }
         Ok(())
     }
@@ -350,6 +349,12 @@ pub struct BitWriter {
     buf: Vec<u8>,
     accum: u64,
     bits: u32,
+}
+
+impl Default for BitWriter {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BitWriter {

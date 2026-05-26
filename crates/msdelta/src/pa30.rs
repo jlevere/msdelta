@@ -111,19 +111,19 @@ pub fn parse_header(delta: &[u8]) -> Result<Header> {
     let bitstream_data = &delta[BITSTREAM_OFFSET..];
     let mut outer_reader = BitReader::new(bitstream_data)?;
 
-    let pa31_extra;
-    // For PA31, the PA30 fields are wrapped in a sub-buffer.
-    // We need to keep the sub_buf alive while parsing.
-    let sub_buf: Vec<u8>;
-    let reader: &mut BitReader;
-    let mut sub_reader: BitReader;
-    if version == FormatVersion::PA31 {
-        sub_buf = outer_reader.read_buffer()?;
-        sub_reader = BitReader::new(&sub_buf)?;
-        reader = &mut sub_reader;
+    // For PA31, the PA30 fields are in a sub-buffer. For PA30, they're inline.
+    let sub_buf = if version == FormatVersion::PA31 {
+        Some(outer_reader.read_buffer()?)
     } else {
-        reader = &mut outer_reader;
-    }
+        None
+    };
+    let mut sub_reader;
+    let reader: &mut BitReader = if let Some(ref buf) = sub_buf {
+        sub_reader = BitReader::new(buf)?;
+        &mut sub_reader
+    } else {
+        &mut outer_reader
+    };
 
     let file_type_set = reader.read_i64()?;
     let file_type = reader.read_i64()?;
@@ -143,7 +143,7 @@ pub fn parse_header(delta: &[u8]) -> Result<Header> {
         return Err(Error::Malformed("negative target size"));
     }
 
-    if version == FormatVersion::PA31 {
+    let pa31_extra = if version == FormatVersion::PA31 {
         let f1 = reader.read_i64()? as i32;
         let f2 = reader.read_i64()? as i32;
         let f3 = reader.read_i64()? as i32;
@@ -154,15 +154,15 @@ pub fn parse_header(delta: &[u8]) -> Result<Header> {
                 max: MAX_HASH_LEN,
             });
         }
-        pa31_extra = Some(Pa31Extra {
+        Some(Pa31Extra {
             field1: f1,
             field2: f2,
             field3: f3,
             extra_hash,
-        });
+        })
     } else {
-        pa31_extra = None;
-    }
+        None
+    };
 
     Ok(Header {
         version,
