@@ -16,8 +16,8 @@ pub struct BitReader<'a> {
     pos: usize,
     accum: u64,
     bits: u32,
-    total_usable_bits: u64,
-    bits_consumed: u64,
+    /// Padding bits in the final byte (0-7). Constant after construction.
+    padding: u32,
 }
 
 impl<'a> BitReader<'a> {
@@ -38,8 +38,7 @@ impl<'a> BitReader<'a> {
             pos: 0,
             accum: 0,
             bits: 0,
-            total_usable_bits: total_bits - padding as u64,
-            bits_consumed: 0,
+            padding,
         };
 
         reader.refill();
@@ -49,10 +48,11 @@ impl<'a> BitReader<'a> {
         Ok(reader)
     }
 
-    /// Bits remaining in the stream (including accumulator + unloaded data).
+    /// Bits remaining in the stream. Derived from pos/bits/padding — no counter.
     #[inline]
     pub fn remaining(&self) -> u32 {
-        (self.total_usable_bits - self.bits_consumed) as u32
+        let unloaded = ((self.data.len() - self.pos) as u32) * 8;
+        (self.bits + unloaded).saturating_sub(self.padding)
     }
 
     /// Bits currently loaded in the accumulator (available for peek without refill).
@@ -96,11 +96,11 @@ impl<'a> BitReader<'a> {
     }
 
     /// Consume `n` bits from the accumulator. No refill, no bounds check.
+    /// Consume `n` bits. No refill, no bounds check, no counter.
     #[inline]
     pub fn consume_unchecked(&mut self, n: u32) {
         self.accum >>= n;
         self.bits -= n;
-        self.bits_consumed += n as u64;
     }
 
     /// Ensure at least `n` bits are available, refilling if needed.
@@ -256,7 +256,6 @@ impl<'a> BitReader<'a> {
         if bulk > 0 {
             buf.extend_from_slice(&self.data[self.pos..self.pos + bulk]);
             self.pos += bulk;
-            self.bits_consumed += bulk as u64 * 8;
             remaining -= bulk;
         }
 
