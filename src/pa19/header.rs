@@ -3,7 +3,8 @@
 //! The PA19 header contains patch metadata immediately after the magic.
 //! Fields are mostly fixed-width little-endian integers.
 
-use crate::{Error, PatchHeader, Result};
+use crate::{Error, Result};
+use super::PatchHeader;
 
 /// Decode the PA19 patch header.
 pub fn decode(patch: &[u8]) -> Result<PatchHeader> {
@@ -26,7 +27,7 @@ pub fn decode(patch: &[u8]) -> Result<PatchHeader> {
         }
         let exp = u32_le(patch, 24);
         if exp > 31 {
-            return Err(Error::Format(format!("invalid LZX window exponent: {exp}")));
+            return Err(Error::Pa19(format!("invalid LZX window exponent: {exp}")));
         }
         1u32 << exp
     } else {

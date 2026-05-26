@@ -6,8 +6,8 @@
 //!
 //! PDB-confirmed: `RiftTable`, `IntFormat`, `OffsetRiftTable`.
 
-use msdelta_bitstream::bitstream::BitReader;
-use msdelta_bitstream::huffman::HuffmanTable;
+use crate::bitstream::BitReader;
+use crate::huffman::HuffmanTable;
 use crate::{Error, Result};
 
 const INT_FORMAT_SYMBOLS: usize = 252;

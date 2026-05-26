@@ -1,0 +1,4 @@
+//! PE binary transforms and rift table generation for MSDelta.
+
+pub mod parse;
+pub mod transform;

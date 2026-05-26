@@ -25,12 +25,12 @@ impl PeInfo {
     /// Parse PE headers from a byte buffer.
     pub fn parse(data: &[u8]) -> Result<Self> {
         let pe = goblin::pe::PE::parse(data)
-            .map_err(|e| Error::InvalidPe(format!("{e}")))?;
+            .map_err(|_| Error::Malformed("invalid PE"))?;
 
         let header = &pe.header;
         let opt = header
             .optional_header
-            .ok_or_else(|| Error::InvalidPe("no optional header".into()))?;
+            .ok_or(Error::Malformed("PE: no optional header"))?;
 
         let is_64bit = opt.standard_fields.magic == goblin::pe::optional_header::MAGIC_64;
         let image_base = opt.windows_fields.image_base;

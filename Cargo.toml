@@ -1,20 +1,24 @@
-[workspace]
-members = [
-    "crates/msdelta-bitstream",
-    "crates/msdelta-lzx",
-    "crates/msdelta-bsdiff",
-    "crates/msdelta-lzms",
-    "crates/msdelta-pa19",
-    "crates/msdelta-pe",
-    "crates/msdelta",
-    "crates/msdelta-wintest",
-]
-resolver = "2"
-
-[workspace.package]
+[package]
+name = "msdelta"
+version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
 license = "MIT OR Apache-2.0"
+description = "Pure-Rust encoder and decoder for Microsoft's MSDelta (PA30/PA31/PA19) binary patch format."
+categories = ["compression", "parser-implementations", "os::windows-apis"]
+keywords = ["windows", "delta", "patch", "manifest", "winsxs"]
+
+[dependencies]
+thiserror = "2"
+goblin = { version = "0.10", default-features = false, features = ["pe64", "pe32"] }
+lzxd = "0.2"
+md-5 = "0.10"
+sha2 = "0.10"
+digest = "0.10"
+
+[dev-dependencies]
+anyhow = "1"
+insta = "1"
 
 [profile.release]
 lto = "thin"

@@ -10,24 +10,12 @@
 
 #![forbid(unsafe_code)]
 
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("LZMS decompression failed: {0}")]
-    Decompress(String),
-    #[error("LZMS compression failed: {0}")]
-    Compress(String),
-    #[error("LZMS not available on this platform")]
-    NotAvailable,
-}
-
-pub type Result<T> = std::result::Result<T, Error>;
+use crate::{Error, Result};
 
 /// Decompress LZMS-compressed data.
 ///
 /// On Windows, uses the native compression API. On other platforms,
-/// returns `Error::NotAvailable`.
+/// returns `Error::Malformed("LZMS not available on this platform")`.
 pub fn decompress(data: &[u8], uncompressed_size: usize) -> Result<Vec<u8>> {
     if data.is_empty() {
         return Ok(Vec::new());
@@ -41,14 +29,14 @@ pub fn decompress(data: &[u8], uncompressed_size: usize) -> Result<Vec<u8>> {
     #[cfg(not(windows))]
     {
         let _ = uncompressed_size;
-        Err(Error::NotAvailable)
+        Err(Error::Malformed("LZMS not available on this platform"))
     }
 }
 
 /// Compress data using LZMS.
 ///
 /// On Windows, uses the native compression API. On other platforms,
-/// returns `Error::NotAvailable`.
+/// returns `Error::Malformed("LZMS not available on this platform")`.
 pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
     if data.is_empty() {
         return Ok(Vec::new());
@@ -61,7 +49,7 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
 
     #[cfg(not(windows))]
     {
-        Err(Error::NotAvailable)
+        Err(Error::Malformed("LZMS not available on this platform"))
     }
 }
 
@@ -74,7 +62,7 @@ fn decompress_windows(data: &[u8], uncompressed_size: usize) -> Result<Vec<u8>> 
         CreateDecompressor(COMPRESS_ALGORITHM_LZMS, None, &mut handle)
     };
     if !ok.as_bool() {
-        return Err(Error::Decompress("CreateDecompressor failed".into()));
+        return Err(Error::Malformed("LZMS CreateDecompressor failed"));
     }
 
     let mut output = vec![0u8; uncompressed_size];
@@ -91,7 +79,7 @@ fn decompress_windows(data: &[u8], uncompressed_size: usize) -> Result<Vec<u8>> 
     unsafe { CloseDecompressor(handle) };
 
     if !ok.as_bool() {
-        return Err(Error::Decompress("Decompress failed".into()));
+        return Err(Error::Malformed("LZMS Decompress failed"));
     }
 
     output.truncate(actual_size);
@@ -107,7 +95,7 @@ fn compress_windows(data: &[u8]) -> Result<Vec<u8>> {
         CreateCompressor(COMPRESS_ALGORITHM_LZMS, None, &mut handle)
     };
     if !ok.as_bool() {
-        return Err(Error::Compress("CreateCompressor failed".into()));
+        return Err(Error::Malformed("LZMS CreateCompressor failed"));
     }
 
     // First call to get size
@@ -130,7 +118,7 @@ fn compress_windows(data: &[u8]) -> Result<Vec<u8>> {
     unsafe { CloseCompressor(handle) };
 
     if !ok.as_bool() {
-        return Err(Error::Compress("Compress failed".into()));
+        return Err(Error::Malformed("LZMS Compress failed"));
     }
 
     output.truncate(actual_size);

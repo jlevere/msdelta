@@ -8,10 +8,13 @@
 //! PDB-confirmed class names: `Decompressor`, `CompositeFormat`, `CompressionFormat`,
 //! `CompressionLengths`, `RiftTable`, `OffsetRiftTable`.
 
-use msdelta_bitstream::bitstream::{BitReader, BitWriter};
-use msdelta_bitstream::huffman::HuffmanTable;
-use crate::ops::{SOURCE_COPY_RAW, LRU_BASE_RAW, RAW_OFFSET_BASE, OFFSET_BIAS};
-use crate::rift::RiftTable;
+pub mod ops;
+pub mod rift;
+
+use crate::bitstream::{BitReader, BitWriter};
+use crate::huffman::HuffmanTable;
+use self::ops::{SOURCE_COPY_RAW, LRU_BASE_RAW, RAW_OFFSET_BASE, OFFSET_BIAS};
+use self::rift::RiftTable;
 use crate::{Error, Result};
 
 // Aliases for the raw wire constants used throughout this module
@@ -365,10 +368,9 @@ pub fn compress(reference: &[u8], target: &[u8]) -> Result<Vec<u8>> {
     }
 
     // Index the reference into the hash chain
-    #[allow(clippy::needless_range_loop)]
-    for i in 0..ref_len.saturating_sub(2) {
+    for (i, chain_entry) in hash_chain[..ref_len.saturating_sub(2)].iter_mut().enumerate() {
         let h = hash3(&combined, i) & hash_mask;
-        hash_chain[i] = hash_table[h];
+        *chain_entry = hash_table[h];
         hash_table[h] = i as u32;
     }
 

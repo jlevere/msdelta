@@ -15,23 +15,7 @@
 
 #![forbid(unsafe_code)]
 
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("PA19: input too short")]
-    Truncated,
-    #[error("PA19: bad magic")]
-    BadMagic,
-    #[error("PA19: CRC mismatch")]
-    CrcMismatch,
-    #[error("PA19: {0}")]
-    Format(String),
-    #[error("PA19: LZX decompression failed: {0}")]
-    Lzx(String),
-}
-
-pub type Result<T> = std::result::Result<T, Error>;
+use crate::{Error, Result};
 
 pub const MAGIC: &[u8; 4] = b"PA19";
 
@@ -60,13 +44,13 @@ pub struct PatchHeader {
 /// Apply a PA19 patch to produce the new file from old file + patch data.
 pub fn apply(old_file: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
     if patch.len() < 4 || &patch[..4] != MAGIC {
-        return Err(Error::BadMagic);
+        return Err(Error::Malformed("PA19: bad magic"));
     }
 
     let hdr = header::decode(patch)?;
 
     if old_file.len() != hdr.old_file_size as usize {
-        return Err(Error::Format(format!(
+        return Err(Error::Pa19(format!(
             "old file size mismatch: expected {}, got {}",
             hdr.old_file_size,
             old_file.len()
@@ -89,7 +73,7 @@ pub fn apply(old_file: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
     // of the standard finalized CRC32). Our crc32() also returns the raw register.
     let crc = crc32(&new_file);
     if crc != hdr.new_file_crc {
-        return Err(Error::CrcMismatch);
+        return Err(Error::Malformed("PA19: CRC mismatch"));
     }
 
     Ok(new_file)

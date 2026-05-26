@@ -3,7 +3,7 @@
 //! The format is undocumented; this module is built from reverse-engineering
 //! `msdelta.dll` and `UpdateCompression.dll` (with PDB symbols).
 
-use msdelta_bitstream::bitstream::BitReader;
+use crate::bitstream::BitReader;
 use crate::{Error, Result};
 
 pub const PA30_MAGIC: &[u8; 4] = b"PA30";
@@ -77,7 +77,7 @@ pub fn parse_header(delta: &[u8]) -> Result<Header> {
 
     let magic = &delta[..4];
     if magic == PA19_MAGIC {
-        let pa19_hdr = msdelta_pa19::header::decode(delta)?;
+        let pa19_hdr = crate::pa19::header::decode(delta)?;
         return Ok(Header {
             version: FormatVersion::PA19,
             target_file_time: 0,
@@ -237,12 +237,12 @@ pub fn parse(delta: &[u8]) -> Result<ParsedDelta> {
 /// Equivalent to `ApplyDeltaB(0, reference, delta, &out)` on Windows.
 pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
     if delta.len() >= 4 && &delta[..4] == PA19_MAGIC {
-        return Ok(msdelta_pa19::apply(reference, delta)?);
+        return crate::pa19::apply(reference, delta);
     }
 
     let parsed = parse(delta)?;
     let target_size = parsed.header.target_size as usize;
-    Ok(msdelta_lzx::lzx::decompress(reference, &parsed.patch_data, target_size)?)
+    crate::lzx::decompress(reference, &parsed.patch_data, target_size)
 }
 
 /// Encode `target` as a PA30 delta against `reference`.
@@ -250,10 +250,10 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
 /// Equivalent to `CreateDeltaB(...)` on Windows. Produces a format-compatible
 /// delta decodable by both this crate and msdelta.dll.
 pub fn create(reference: &[u8], target: &[u8]) -> Result<Vec<u8>> {
-    use msdelta_bitstream::bitstream::BitWriter;
+    use crate::bitstream::BitWriter;
 
     // Compress target using PseudoLzx
-    let patch_data = msdelta_lzx::lzx::compress(reference, target)?;
+    let patch_data = crate::lzx::compress(reference, target)?;
 
     // Build the outer PA30 bitstream
     let mut header_writer = BitWriter::new();
@@ -336,7 +336,7 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures");
+    const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 
     fn fixture_paths() -> Vec<PathBuf> {
         let mut paths: Vec<_> = std::fs::read_dir(FIXTURES_DIR)
@@ -559,7 +559,7 @@ mod tests {
         let base = base_manifest();
         let pa30 = strip_dcm(&data);
         let parsed = parse(pa30).unwrap();
-        let (partial, err) = msdelta_lzx::lzx::decompress_partial(
+        let (partial, err) = crate::lzx::decompress_partial(
             &base,
             &parsed.patch_data,
             parsed.header.target_size as usize,

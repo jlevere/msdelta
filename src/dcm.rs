@@ -40,7 +40,7 @@ mod tests {
     use super::*;
     use crate::pa30;
 
-    const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures");
+    const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 
     fn fixture_paths() -> Vec<std::path::PathBuf> {
         std::fs::read_dir(FIXTURES_DIR)

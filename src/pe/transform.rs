@@ -5,7 +5,7 @@
 //! "inferred relocations" which scans for 32-bit pointers within
 //! the PE's image range and rebases them using the rift table.
 
-use crate::pe::PeInfo;
+use super::parse::PeInfo;
 use crate::Result;
 
 /// MSDelta file type flags.

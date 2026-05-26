@@ -19,7 +19,7 @@ pub fn decompress_delta(
         if target_size == 0 {
             return Ok(Vec::new());
         }
-        return Err(Error::Lzx("empty LZX data for non-zero target".into()));
+        return Err(Error::Pa19("empty LZX data for non-zero target".into()));
     }
 
     let ws = match window_size {
@@ -27,14 +27,14 @@ pub fn decompress_delta(
         0x10000 => lzxd::WindowSize::KB64,
         0x20000 => lzxd::WindowSize::KB128,
         other => {
-            return Err(Error::Lzx(format!("unsupported LZX window size: {other:#x}")));
+            return Err(Error::Pa19(format!("unsupported LZX window size: {other:#x}")));
         }
     };
     let mut decoder = lzxd::Lzxd::new(ws);
 
     let result = decoder
         .decompress_next(lzx_data, target_size)
-        .map_err(|e| Error::Lzx(format!("LZX decode: {e}")))?;
+        .map_err(|e| Error::Pa19(format!("LZX decode: {e}")))?;
 
     Ok(result.to_vec())
 }

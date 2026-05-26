@@ -6,17 +6,7 @@
 
 #![forbid(unsafe_code)]
 
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("bspatch error: {0}")]
-    Patch(&'static str),
-    #[error("bspatch: unexpected end of patch data")]
-    Truncated,
-}
-
-pub type Result<T> = std::result::Result<T, Error>;
+use crate::{Error, Result};
 
 /// Apply a bsdiff patch to produce the target from source + patch data.
 ///
@@ -46,10 +36,10 @@ pub fn bspatch(source: &[u8], target_size: usize, patch_data: &[u8]) -> Result<V
         patch_pos += 8;
 
         if add_len > 0x7FFFFFFF || insert_len > 0x7FFFFFFF {
-            return Err(Error::Patch("control value too large"));
+            return Err(Error::Malformed("control value too large"));
         }
         if new_pos + add_len > target_size {
-            return Err(Error::Patch("add_len exceeds target size"));
+            return Err(Error::Malformed("add_len exceeds target size"));
         }
 
         // Read add_len bytes of diff data
@@ -70,7 +60,7 @@ pub fn bspatch(source: &[u8], target_size: usize, patch_data: &[u8]) -> Result<V
 
         // Read insert_len bytes of literal data
         if new_pos + insert_len > target_size {
-            return Err(Error::Patch("insert_len exceeds target size"));
+            return Err(Error::Malformed("insert_len exceeds target size"));
         }
         if patch_pos + insert_len > patch_data.len() {
             return Err(Error::Truncated);
