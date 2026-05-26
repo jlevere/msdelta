@@ -274,20 +274,54 @@ pub fn decompress(reference: &[u8], patch_data: &[u8], target_size: usize) -> Re
             }
         }
 
-        for _ in 0..copy_len {
-            let src_pos = (pos as i64 - distance) as u64;
-            let byte = if src_pos < ref_len as u64 {
-                *reference
-                    .get(src_pos as usize)
-                    .ok_or(Error::Malformed("source copy out of reference bounds"))?
+        let src_start = (pos as i64 - distance) as u64;
+        if src_start + copy_len as u64 <= ref_len as u64 {
+            // Entire copy from reference — bulk copy
+            let start = src_start as usize;
+            let end = start + copy_len as usize;
+            if end > reference.len() {
+                return Err(Error::Malformed("source copy out of reference bounds"));
+            }
+            output.extend_from_slice(&reference[start..end]);
+            pos += copy_len;
+        } else if src_start >= ref_len as u64 {
+            // Entire copy from output — may overlap (like LZ back-reference)
+            let out_start = (src_start - ref_len as u64) as usize;
+            if out_start >= output.len() {
+                return Err(Error::Malformed("back-reference out of output bounds"));
+            }
+            if out_start + (copy_len as usize) <= output.len() {
+                // Non-overlapping: bulk copy via extend_from_within
+                let start = out_start;
+                let len = copy_len as usize;
+                output.extend_from_within(start..start + len);
             } else {
-                let out_idx = (src_pos - ref_len as u64) as usize;
-                output.get(out_idx).copied().ok_or_else(|| {
-                    Error::Malformed("back-reference out of output bounds")
-                })?
-            };
-            output.push(byte);
-            pos += 1;
+                // Overlapping: byte-by-byte (LZ repeat pattern)
+                for _ in 0..copy_len {
+                    let idx = (pos as i64 - distance) as u64 - ref_len as u64;
+                    let byte = output[idx as usize];
+                    output.push(byte);
+                    pos += 1;
+                }
+                continue; // pos already advanced
+            }
+            pos += copy_len;
+        } else {
+            // Copy spans reference/output boundary — split
+            let ref_bytes = (ref_len as u64 - src_start) as usize;
+            let out_bytes = copy_len as usize - ref_bytes;
+            output.extend_from_slice(&reference[src_start as usize..ref_len]);
+            // Remaining bytes from output start
+            for _ in 0..out_bytes {
+                let idx = output.len() - ref_len; // should be 0..out_bytes
+                let byte = if idx < output.len() {
+                    output[idx]
+                } else {
+                    return Err(Error::Malformed("back-reference out of output bounds"));
+                };
+                output.push(byte);
+            }
+            pos += copy_len;
         }
     }
 
@@ -821,17 +855,31 @@ fn decompress_inner(
             }
         }
 
-        for _ in 0..copy_len {
-            let src_pos = (pos as i64 - distance) as u64;
-            let byte = if src_pos < ref_len as u64 {
-                *reference.get(src_pos as usize).ok_or(Error::Malformed("src OOB"))?
+        let src_start = (pos as i64 - distance) as u64;
+        if src_start + copy_len as u64 <= ref_len as u64 {
+            let start = src_start as usize;
+            output.extend_from_slice(&reference[start..start + copy_len as usize]);
+        } else if src_start >= ref_len as u64 {
+            let out_start = (src_start - ref_len as u64) as usize;
+            if out_start + (copy_len as usize) <= output.len() {
+                output.extend_from_within(out_start..out_start + copy_len as usize);
             } else {
-                let out_idx = (src_pos - ref_len as u64) as usize;
-                *output.get(out_idx).ok_or(Error::Malformed("backref OOB"))?
-            };
-            output.push(byte);
-            pos += 1;
+                for _ in 0..copy_len {
+                    let idx = (pos as i64 - distance) as u64 - ref_len as u64;
+                    output.push(output[idx as usize]);
+                    pos += 1;
+                }
+                continue;
+            }
+        } else {
+            let ref_bytes = (ref_len as u64 - src_start) as usize;
+            output.extend_from_slice(&reference[src_start as usize..ref_len]);
+            for _ in 0..(copy_len as usize - ref_bytes) {
+                let idx = output.len() - ref_len;
+                output.push(output[idx]);
+            }
         }
+        pos += copy_len;
     }
     Ok(())
 }

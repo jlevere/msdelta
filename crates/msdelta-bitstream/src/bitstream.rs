@@ -219,10 +219,39 @@ impl<'a> BitReader<'a> {
             return Ok(Vec::new());
         }
 
-        let mut buf = vec![0u8; size];
-        for byte in &mut buf {
-            *byte = self.read_bits(8)? as u8;
+        // After align_to_byte, the accumulator has 0 or 8/16/24 bits.
+        // Drain them first, then bulk-copy from the underlying byte stream.
+        let mut buf = Vec::with_capacity(size);
+        let mut remaining = size;
+
+        // Drain any bits in the accumulator
+        while remaining > 0 && self.bits >= 8 {
+            buf.push((self.accum & 0xFF) as u8);
+            self.shift_out(8);
+            remaining -= 1;
         }
+
+        // Bulk copy from word/tail slices
+        let from_words = remaining.min(self.words.len());
+        if from_words > 0 {
+            buf.extend_from_slice(&self.words[..from_words]);
+            self.words = &self.words[from_words..];
+            remaining -= from_words;
+        }
+        let from_tail = remaining.min(self.tail.len());
+        if from_tail > 0 {
+            buf.extend_from_slice(&self.tail[..from_tail]);
+            self.tail = &self.tail[from_tail..];
+            remaining -= from_tail;
+        }
+
+        if remaining > 0 {
+            return Err(Error::BitstreamExhausted {
+                needed: (remaining * 8) as u32,
+                available: 0,
+            });
+        }
+
         Ok(buf)
     }
 
@@ -404,8 +433,16 @@ impl BitWriter {
     pub fn write_buffer(&mut self, data: &[u8]) {
         self.write_i64(data.len() as i64);
         self.align_to_byte();
-        for &b in data {
-            self.write_bits(b as u64, 8);
+        // After alignment, bits is a multiple of 8. Flush to get to a
+        // clean byte boundary, then bulk-append the data.
+        self.flush();
+        if self.bits == 0 {
+            self.buf.extend_from_slice(data);
+        } else {
+            // Accumulator has residual bits — write byte-by-byte
+            for &b in data {
+                self.write_bits(b as u64, 8);
+            }
         }
     }
 
