@@ -372,21 +372,18 @@ impl HuffmanTable {
     }
 
     /// Decode one symbol from the bitstream.
+    /// Decode one symbol. Caller should have called `reader.refill()` recently.
+    #[inline]
     pub fn read_symbol(&self, reader: &mut BitReader) -> Result<u16> {
         if self.symbols.is_empty() {
             return Err(Error::Malformed("empty huffman table"));
         }
 
-        let avail = reader.remaining().min(32);
-        if avail == 0 {
-            return Err(Error::Malformed("no bits for huffman decode"));
-        }
-        reader.ensure_bits(avail)?;
-        let accum = if avail >= 32 {
-            reader.peek(32) as u32
-        } else {
-            reader.peek(avail) as u32
-        };
+        // Ensure we have enough bits for the longest possible code (16 bits).
+        // After a refill() we typically have 56+ bits, so this is usually a no-op.
+        // Ensure at least 16 bits (max Huffman code length) or whatever is left.
+        reader.ensure_bits(16.min(reader.remaining()))?;
+        let accum = reader.peek(reader.buffered().min(32)) as u32;
 
         let with_sentinel = accum | 0x8000_0000;
         let ctz = with_sentinel.trailing_zeros();
@@ -405,7 +402,7 @@ impl HuffmanTable {
             return Err(Error::Malformed("decoded symbol has zero length"));
         }
 
-        reader.consume_bits(len as u32)?;
+        reader.consume_unchecked(len as u32);
         Ok(sym)
     }
 }
