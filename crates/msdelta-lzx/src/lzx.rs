@@ -10,10 +10,7 @@
 
 use msdelta_bitstream::bitstream::{BitReader, BitWriter};
 use msdelta_bitstream::huffman::HuffmanTable;
-use crate::ops::{
-    CopyOffset, LruQueue, MatchOp,
-    SOURCE_COPY_RAW, LRU_BASE_RAW, RAW_OFFSET_BASE, OFFSET_BIAS,
-};
+use crate::ops::{SOURCE_COPY_RAW, LRU_BASE_RAW, RAW_OFFSET_BASE, OFFSET_BIAS};
 use crate::rift::RiftTable;
 use crate::{Error, Result};
 
