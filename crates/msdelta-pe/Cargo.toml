@@ -1,0 +1,11 @@
+[package]
+name = "msdelta-pe"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT OR Apache-2.0"
+description = "PE binary transforms and rift table generation for MSDelta."
+
+[dependencies]
+goblin = { version = "0.10", default-features = false, features = ["pe64", "pe32"] }
+thiserror = "2"

@@ -1,0 +1,21 @@
+[workspace]
+members = [
+    "crates/msdelta-bitstream",
+    "crates/msdelta-lzx",
+    "crates/msdelta-bsdiff",
+    "crates/msdelta-lzms",
+    "crates/msdelta-pa19",
+    "crates/msdelta-pe",
+    "crates/msdelta",
+    "crates/msdelta-wintest",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.75"
+license = "MIT OR Apache-2.0"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

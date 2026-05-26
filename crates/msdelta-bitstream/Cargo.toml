@@ -1,0 +1,10 @@
+[package]
+name = "msdelta-bitstream"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT OR Apache-2.0"
+description = "LSB-first bitstream reader/writer and Huffman codec for MSDelta."
+
+[dependencies]
+thiserror = "2"

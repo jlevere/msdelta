@@ -1,0 +1,9 @@
+/target
+Cargo.lock
+.direnv
+result
+
+# Microsoft proprietary binaries for reverse-engineering reference only.
+# Pulled from a Windows host; not redistributable.
+/reference/
+/notes/

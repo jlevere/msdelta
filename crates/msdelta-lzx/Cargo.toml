@@ -1,0 +1,11 @@
+[package]
+name = "msdelta-lzx"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT OR Apache-2.0"
+description = "PseudoLzx compression codec for MSDelta PA30 patches."
+
+[dependencies]
+msdelta-bitstream = { path = "../msdelta-bitstream" }
+thiserror = "2"
