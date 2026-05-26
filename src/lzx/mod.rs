@@ -200,14 +200,26 @@ fn read_compression_lengths(
 }
 
 /// Decompress a PseudoLzx patch.
-///
-/// The virtual address space is `[0..ref_len]` = reference, `[ref_len..ref_len+target_size]` = output.
 pub fn decompress(reference: &[u8], patch_data: &[u8], target_size: usize) -> Result<Vec<u8>> {
+    let mut output = Vec::with_capacity(target_size);
+    decompress_into(reference, patch_data, target_size, &mut output)?;
+    Ok(output)
+}
+
+/// Decompress into a provided buffer. Core implementation shared by
+/// `decompress` and `decompress_partial`.
+fn decompress_into(
+    reference: &[u8],
+    patch_data: &[u8],
+    target_size: usize,
+    output: &mut Vec<u8>,
+) -> Result<()> {
     if patch_data.is_empty() {
-        if target_size == 0 {
-            return Ok(Vec::new());
-        }
-        return Err(Error::Malformed("empty patch data for non-zero target"));
+        return if target_size == 0 {
+            Ok(())
+        } else {
+            Err(Error::Malformed("empty patch data for non-zero target"))
+        };
     }
 
     let mut reader = BitReader::new(patch_data)?;
@@ -227,7 +239,7 @@ pub fn decompress(reference: &[u8], patch_data: &[u8], target_size: usize) -> Re
     let mut seg_idx = 0;
 
     let ref_len = reference.len();
-    let mut output = Vec::with_capacity(target_size);
+    output.reserve(target_size);
     let mut lru: [i64; 3] = [0; 3];
     let mut pos: u64 = ref_len as u64;
     let end: u64 = pos + target_size as u64;
@@ -332,7 +344,7 @@ pub fn decompress(reference: &[u8], patch_data: &[u8], target_size: usize) -> Re
         return Err(Error::Malformed("output size mismatch"));
     }
 
-    Ok(output)
+    Ok(())
 }
 
 /// Compress `target` as a PseudoLzx patch against `reference`.
@@ -655,7 +667,8 @@ fn encode_match(
 ) -> Result<()> {
     // Compute offset slot and prepare extra bits
     let offset_slot: u32;
-    let mut offset_extra: Vec<(u64, u32)> = Vec::new(); // (value, bits) to write after main sym
+    let mut offset_extra = [(0u64, 0u32); 2]; // (value, bits), max 2 entries
+    let mut n_extra = 0usize;
 
     if raw_offset == SOURCE_COPY {
         offset_slot = 3;
@@ -684,7 +697,7 @@ fn encode_match(
                         adj = try_adj;
                         let extra = dist - shifted;
                         if half > 0 {
-                            offset_extra.push((extra as u64, half));
+                            offset_extra[n_extra] = (extra as u64, half); n_extra += 1;
                         }
                         found = true;
                         break;
@@ -699,9 +712,9 @@ fn encode_match(
                         adj = try_adj;
                         if high_bits > 0 {
                             let high = (dist >> 4) & max_high;
-                            offset_extra.push((high as u64, high_bits));
+                            offset_extra[n_extra] = (high as u64, high_bits); n_extra += 1;
                         }
-                        offset_extra.push((u64::MAX, 0)); // sentinel: use aligned table
+                        offset_extra[n_extra] = (u64::MAX, 0); n_extra += 1; // sentinel: use aligned table
                         found = true;
                         break;
                     }
@@ -743,7 +756,7 @@ fn encode_match(
     tables.main.write_symbol(writer, main_sym);
 
     // Write offset extra bits
-    for &(val, bits) in &offset_extra {
+    for &(val, bits) in &offset_extra[..n_extra] {
         if val == u64::MAX {
             // Sentinel: write aligned symbol from the distance's low 4 bits
             let aligned = (raw_offset - RAW_OFFSET_BASE) & 0xF;
@@ -775,121 +788,17 @@ pub fn decompress_partial(
     patch_data: &[u8],
     target_size: usize,
 ) -> (Vec<u8>, Option<Error>) {
-    match decompress(reference, patch_data, target_size) {
-        Ok(output) => (output, None),
-        Err(_) => {
-            // Re-run with error capture - decompress as much as possible
-            let mut output = Vec::new();
-            let err = decompress_inner(reference, patch_data, target_size, &mut output);
-            (output, err.err())
-        }
+    let mut output = Vec::new();
+    match decompress_into(reference, patch_data, target_size, &mut output) {
+        Ok(()) => (output, None),
+        Err(e) => (output, Some(e)),
     }
-}
-
-fn decompress_inner(
-    reference: &[u8],
-    patch_data: &[u8],
-    target_size: usize,
-    output: &mut Vec<u8>,
-) -> Result<()> {
-    if patch_data.is_empty() {
-        return if target_size == 0 {
-            Ok(())
-        } else {
-            Err(Error::Malformed("empty patch data for non-zero target"))
-        };
-    }
-
-    let mut reader = BitReader::new(patch_data)?;
-    let _rift = RiftTable::from_reader(&mut reader)?;
-
-    let cf_simple = reader.read_bits(1)? != 0;
-    let format = if cf_simple {
-        CompositeFormat {
-            segments: vec![SegmentTables::from_flat()?],
-            boundaries: vec![u64::MAX],
-        }
-    } else {
-        read_composite_format(&mut reader)?
-    };
-
-    let mut seg_idx = 0;
-    let ref_len = reference.len();
-    output.reserve(target_size);
-    let mut lru: [i64; 3] = [0; 3];
-    let mut pos: u64 = ref_len as u64;
-    let end: u64 = pos + target_size as u64;
-
-    while pos < end {
-        if reader.remaining() == 0 {
-            return Err(Error::Malformed("bitstream exhausted"));
-        }
-        while seg_idx + 1 < format.segments.len()
-            && format.boundaries.get(seg_idx + 1).is_some_and(|&b| pos >= b)
-        {
-            seg_idx += 1;
-        }
-        let tables = &format.segments[seg_idx];
-        let (raw_offset, match_len) = read_symbol(tables, &mut reader)?;
-
-        if match_len == 1 && raw_offset < 256 {
-            output.push(raw_offset as u8);
-            pos += 1;
-            continue;
-        }
-        let copy_len = (match_len as u64).min(end - pos);
-
-        let distance: i64 = if raw_offset == SOURCE_COPY {
-            ref_len as i64
-        } else if raw_offset < SOURCE_COPY {
-            raw_offset as i64 - OFFSET_BIAS as i64
-        } else if (LRU_BASE..LRU_BASE + 3).contains(&raw_offset) {
-            lru[(raw_offset - LRU_BASE) as usize]
-        } else {
-            (raw_offset - RAW_OFFSET_BASE) as i64
-        };
-
-        if lru[0] != distance {
-            let old_1 = lru[1];
-            lru[1] = lru[0];
-            lru[0] = distance;
-            if old_1 != distance {
-                lru[2] = old_1;
-            }
-        }
-
-        let src_start = (pos as i64 - distance) as u64;
-        if src_start + copy_len <= ref_len as u64 {
-            let start = src_start as usize;
-            output.extend_from_slice(&reference[start..start + copy_len as usize]);
-        } else if src_start >= ref_len as u64 {
-            let out_start = (src_start - ref_len as u64) as usize;
-            if out_start + (copy_len as usize) <= output.len() {
-                output.extend_from_within(out_start..out_start + copy_len as usize);
-            } else {
-                for _ in 0..copy_len {
-                    let idx = (pos as i64 - distance) as u64 - ref_len as u64;
-                    output.push(output[idx as usize]);
-                    pos += 1;
-                }
-                continue;
-            }
-        } else {
-            let ref_bytes = (ref_len as u64 - src_start) as usize;
-            output.extend_from_slice(&reference[src_start as usize..ref_len]);
-            for _ in 0..(copy_len as usize - ref_bytes) {
-                let idx = output.len() - ref_len;
-                output.push(output[idx]);
-            }
-        }
-        pos += copy_len;
-    }
-    Ok(())
 }
 
 /// Read one symbol, returning (raw_offset, length).
 /// For literals: (byte_value, 1).
 /// For matches: (encoded_offset, match_length).
+#[inline]
 fn read_symbol(tables: &SegmentTables, reader: &mut BitReader) -> Result<(u32, u32)> {
     let raw = tables.main.read_symbol(reader)?;
 
@@ -921,6 +830,7 @@ fn read_symbol(tables: &SegmentTables, reader: &mut BitReader) -> Result<(u32, u
     Ok((offset, length + 1))
 }
 
+#[inline]
 fn decode_offset(slot: u32, tables: &SegmentTables, reader: &mut BitReader) -> Result<u32> {
     if slot < 3 {
         let adjusted = match slot {
@@ -990,25 +900,38 @@ fn decode_offset(slot: u32, tables: &SegmentTables, reader: &mut BitReader) -> R
 /// Decode the extra value for generic offset slots.
 /// For adj_slot != 0: the value IS adj_slot directly.
 /// For adj_slot == 0: read a variable-length value from the bitstream.
+/// Decode the extra value for generic offset adj_slot == 0.
+/// Uses a single peek + lookup instead of sequential 1-bit reads.
+///
+/// Prefix encoding (7 bits max):
+///   0xx      → val = xx + 0x24           (3 bits consumed)
+///   10xxx    → val = xxx + 4 + 0x24      (5 bits consumed)
+///   11xxxx   → val = xxxx + 12 + 0x24    (6 bits consumed)
+#[inline]
 fn decode_extra_value(adj_slot: u32, reader: &mut BitReader) -> Result<u32> {
     if adj_slot != 0 {
         return Ok(adj_slot);
     }
 
-    let bit = reader.read_bits(1)? as u32;
-    if bit == 0 {
-        let val = reader.read_bits(2)? as u32;
-        return Ok(val + 0x24);
-    }
+    reader.ensure_bits(6)?;
+    let peek = reader.peek(6) as u32;
 
-    let bit2 = reader.read_bits(1)? as u32;
-    if bit2 == 0 {
-        let val = reader.read_bits(3)? as u32;
-        return Ok(val + 4 + 0x24);
+    if peek & 1 == 0 {
+        // 0xx: consume 3 bits
+        let val = (peek >> 1) & 3;
+        reader.consume_unchecked(3);
+        Ok(val + 0x24)
+    } else if peek & 2 == 0 {
+        // 10xxx: consume 5 bits
+        let val = (peek >> 2) & 7;
+        reader.consume_unchecked(5);
+        Ok(val + 4 + 0x24)
+    } else {
+        // 11xxxx: consume 6 bits
+        let val = (peek >> 2) & 0xF;
+        reader.consume_unchecked(6);
+        Ok(val + 8 + 4 + 0x24)
     }
-
-    let val = reader.read_bits(4)? as u32;
-    Ok(val + 8 + 4 + 0x24)
 }
 
 #[cfg(test)]

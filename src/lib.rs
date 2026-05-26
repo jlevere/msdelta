@@ -7,6 +7,8 @@
 //! # Quick start
 //!
 //! ```no_run
+//! # let base_manifest = vec![0u8; 100];
+//! # let (old_file, new_file) = (vec![0u8; 10], vec![0u8; 10]);
 //! // Decode a DCM-wrapped manifest
 //! let compressed = std::fs::read("manifest.dcm").unwrap();
 //! let pa30_data = msdelta::dcm::strip(&compressed).unwrap();
