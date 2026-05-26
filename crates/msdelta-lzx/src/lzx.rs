@@ -10,19 +10,22 @@
 
 use msdelta_bitstream::bitstream::{BitReader, BitWriter};
 use msdelta_bitstream::huffman::HuffmanTable;
+use crate::ops::{
+    CopyOffset, LruQueue, MatchOp,
+    SOURCE_COPY_RAW, LRU_BASE_RAW, RAW_OFFSET_BASE, OFFSET_BIAS,
+};
 use crate::rift::RiftTable;
 use crate::{Error, Result};
+
+// Aliases for the raw wire constants used throughout this module
+const SOURCE_COPY: u32 = SOURCE_COPY_RAW;
+const LRU_BASE: u32 = LRU_BASE_RAW;
 
 const MAIN_SYMBOLS: usize = 600;
 const LENGTH_SYMBOLS: usize = 256;
 const ALIGNED_SYMBOLS: usize = 16;
-const TOTAL_LENGTHS: usize = MAIN_SYMBOLS + LENGTH_SYMBOLS + ALIGNED_SYMBOLS; // 872
+const TOTAL_LENGTHS: usize = MAIN_SYMBOLS + LENGTH_SYMBOLS + ALIGNED_SYMBOLS;
 const PRETREE_SYMBOLS: usize = 39;
-
-const SOURCE_COPY: u32 = 0x54000;
-const LRU_BASE: u32 = 0x54001;
-const RAW_OFFSET_BASE: u32 = 0x54003;
-const OFFSET_BIAS: u32 = 0x2a000;
 
 fn flat_code_lengths(count: usize) -> Vec<u8> {
     if count == 0 {
