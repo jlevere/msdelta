@@ -243,10 +243,25 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
     let parsed = parse(delta)?;
     let target_size = parsed.header.target_size as usize;
 
-    let mut output = crate::lzx::decompress(reference, &parsed.patch_data, target_size)?;
+    let (caller_rift, pp) = if parsed.header.file_type != 1 && !parsed.preprocess.is_empty() {
+        let pp = parse_pe_preprocess(&parsed.preprocess)?;
+        // Combine PE rift + preprocess rift into one table for the decompressor
+        let mut combined = pp.pe_rift.clone();
+        for e in &pp.preprocess_rift.entries {
+            combined.entries.push(*e);
+        }
+        combined.entries.sort_by_key(|e| e.source);
+        (Some(combined), Some(pp))
+    } else {
+        (None, None)
+    };
 
-    if parsed.header.file_type != 1 && !parsed.preprocess.is_empty() {
-        apply_pe_postprocess(reference, &parsed.preprocess, &mut output)?;
+    let mut output = crate::lzx::decompress_with_rift(
+        reference, &parsed.patch_data, target_size, caller_rift.as_ref(),
+    )?;
+
+    if let Some(pp) = &pp {
+        apply_pe_timestamp_fixup(reference, pp, &mut output)?;
     }
 
     Ok(output)
@@ -318,13 +333,11 @@ fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
 ///
 /// The preprocess buffer also contains rift tables needed for the full
 /// transform pipeline (not yet wired for inferred relocations).
-fn apply_pe_postprocess(
+fn apply_pe_timestamp_fixup(
     reference: &[u8],
-    preprocess: &[u8],
-    output: &mut [u8],
+    pp: &PePreprocess,
+    output: &mut Vec<u8>,
 ) -> Result<()> {
-    let pp = parse_pe_preprocess(preprocess)?;
-
     let source_timestamp = pe_timestamp(reference);
     if source_timestamp == 0 || source_timestamp == pp.target_timestamp {
         return Ok(());

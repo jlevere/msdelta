@@ -201,8 +201,18 @@ fn read_compression_lengths(
 
 /// Decompress a PseudoLzx patch.
 pub fn decompress(reference: &[u8], patch_data: &[u8], target_size: usize) -> Result<Vec<u8>> {
+    decompress_with_rift(reference, patch_data, target_size, None)
+}
+
+/// Decompress with an optional caller-provided rift table (from PE preprocessing).
+pub fn decompress_with_rift(
+    reference: &[u8],
+    patch_data: &[u8],
+    target_size: usize,
+    caller_rift: Option<&RiftTable>,
+) -> Result<Vec<u8>> {
     let mut output = Vec::with_capacity(target_size);
-    decompress_into(reference, patch_data, target_size, &mut output)?;
+    decompress_into(reference, patch_data, target_size, caller_rift, &mut output)?;
     Ok(output)
 }
 
@@ -212,6 +222,7 @@ fn decompress_into(
     reference: &[u8],
     patch_data: &[u8],
     target_size: usize,
+    caller_rift: Option<&RiftTable>,
     output: &mut Vec<u8>,
 ) -> Result<()> {
     if patch_data.is_empty() {
@@ -225,10 +236,15 @@ fn decompress_into(
     let mut reader = BitReader::new(patch_data)?;
 
     let mut rift = RiftTable::from_reader(&mut reader)?;
-    // Add boundary entry at source_size. In msdelta.dll, ApplyForward calls
-    // RiftTable::Add(ref_len, 0) before passing to the decompressor.
-    // target=0 means the raw delta is 0; OffsetRiftTable computes
-    // offset = 0 - ref_len = -ref_len for the boundary zone.
+
+    // Merge with caller-provided rift (from PE preprocessing)
+    if let Some(cr) = caller_rift {
+        for e in &cr.entries {
+            rift.entries.push(*e);
+        }
+    }
+
+    // Add boundary entry at source_size (as ApplyForward does in msdelta.dll)
     let ref_len = reference.len();
     rift.entries.push(rift::RiftEntry { source: ref_len as i64, target: 0 });
     rift.entries.sort_by_key(|e| e.source);
@@ -792,7 +808,7 @@ pub fn decompress_partial(
     target_size: usize,
 ) -> (Vec<u8>, Option<Error>) {
     let mut output = Vec::new();
-    match decompress_into(reference, patch_data, target_size, &mut output) {
+    match decompress_into(reference, patch_data, target_size, None, &mut output) {
         Ok(()) => (output, None),
         Err(e) => (output, Some(e)),
     }
