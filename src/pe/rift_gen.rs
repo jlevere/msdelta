@@ -85,6 +85,45 @@ pub fn rift_from_imports(source_data: &[u8], target_data: &[u8]) -> RiftTable {
     RiftTable { entries }
 }
 
+/// Generate rift entries from export directory matching.
+pub fn rift_from_exports(source_data: &[u8], target_data: &[u8]) -> RiftTable {
+    let mut entries = Vec::new();
+
+    let src_pe = match goblin::pe::PE::parse(source_data) {
+        Ok(pe) => pe,
+        Err(_) => return RiftTable { entries },
+    };
+    let tgt_pe = match goblin::pe::PE::parse(target_data) {
+        Ok(pe) => pe,
+        Err(_) => return RiftTable { entries },
+    };
+
+    let src_exports = &src_pe.exports;
+    let tgt_exports = &tgt_pe.exports;
+
+    for src_exp in src_exports {
+        if let Some(src_name) = src_exp.name {
+            for tgt_exp in tgt_exports {
+                if tgt_exp.name == Some(src_name) {
+                    if let (Some(src_off), Some(tgt_off)) = (src_exp.offset, tgt_exp.offset) {
+                        if src_off != tgt_off {
+                            entries.push(RiftEntry {
+                                source: src_off as i64,
+                                target: tgt_off as i64,
+                            });
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    entries.sort_by_key(|e| e.source);
+    entries.dedup_by_key(|e| e.source);
+    RiftTable { entries }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

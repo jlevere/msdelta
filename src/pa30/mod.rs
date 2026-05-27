@@ -345,6 +345,25 @@ mod tests {
     }
 
     #[test]
+    fn roundtrip_pa31() {
+        let reference = b"Hello, this is a reference buffer with some repeated content. Hello again!";
+        let target = b"Hello, this is a modified buffer with some repeated content. Goodbye!";
+
+        let delta = CreateOptions::new()
+            .version(FormatVersion::PA31)
+            .execute(reference, target)
+            .unwrap();
+        assert!(delta.starts_with(b"PA31"));
+
+        let header = parse_header(&delta).unwrap();
+        assert_eq!(header.version, FormatVersion::PA31);
+        assert!(header.pa31_extra.is_some());
+
+        let recovered = apply(reference, &delta).unwrap();
+        assert_eq!(recovered, target);
+    }
+
+    #[test]
     fn roundtrip_bsdiff_simple() {
         let reference = b"Hello, this is a reference buffer with some repeated content. Hello again!";
         let target = b"Hello, this is a modified buffer with some repeated content. Goodbye!";

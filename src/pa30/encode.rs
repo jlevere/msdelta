@@ -2,7 +2,7 @@
 
 use crate::Result;
 
-use super::header::MAGIC;
+use super::header::{FormatVersion, PA30_MAGIC, PA31_MAGIC};
 use super::preprocess::build_pe_preprocess;
 use super::signature::{get_signature, HASH_ALG_NONE};
 
@@ -37,11 +37,17 @@ pub struct CreateOptions {
     hash_alg: u32,
     codec: Codec,
     file_type: FileType,
+    version: FormatVersion,
 }
 
 impl Default for CreateOptions {
     fn default() -> Self {
-        CreateOptions { hash_alg: HASH_ALG_NONE, codec: Codec::default(), file_type: FileType::default() }
+        CreateOptions {
+            hash_alg: HASH_ALG_NONE,
+            codec: Codec::default(),
+            file_type: FileType::default(),
+            version: FormatVersion::PA30,
+        }
     }
 }
 
@@ -69,6 +75,12 @@ impl CreateOptions {
         self
     }
 
+    /// Set the format version (PA30 or PA31).
+    pub fn version(mut self, v: FormatVersion) -> Self {
+        self.version = v;
+        self
+    }
+
     /// Build the delta.
     pub fn execute(&self, reference: &[u8], target: &[u8]) -> Result<Vec<u8>> {
         use crate::bitstream::BitWriter;
@@ -90,8 +102,12 @@ impl CreateOptions {
 
                 let section_rift = rift_gen::rift_from_sections(&src_pe, &tgt_pe);
                 let import_rift = rift_gen::rift_from_imports(reference, target);
+                let export_rift = rift_gen::rift_from_exports(reference, target);
                 let mut merged = section_rift;
                 for e in import_rift.entries {
+                    merged.entries.push(e);
+                }
+                for e in export_rift.entries {
                     merged.entries.push(e);
                 }
                 merged.entries.sort_by_key(|e| e.source);
@@ -124,19 +140,43 @@ impl CreateOptions {
             Vec::new()
         };
 
-        let mut header_writer = BitWriter::new();
-        header_writer.write_i64(file_type_set);
-        header_writer.write_i64(file_type_val);
-        header_writer.write_i64(flags);
-        header_writer.write_i64(target.len() as i64);
-        header_writer.write_i64(self.hash_alg as i64);
-        header_writer.write_buffer(&target_hash);
-        header_writer.write_buffer(&preprocess);
-        header_writer.write_buffer(&patch_data);
-        let bitstream = header_writer.finish();
+        let magic = match self.version {
+            FormatVersion::PA31 => PA31_MAGIC,
+            _ => PA30_MAGIC,
+        };
+
+        let mut outer_writer = BitWriter::new();
+
+        if self.version == FormatVersion::PA31 {
+            let mut header_writer = BitWriter::new();
+            header_writer.write_i64(file_type_set);
+            header_writer.write_i64(file_type_val);
+            header_writer.write_i64(flags);
+            header_writer.write_i64(target.len() as i64);
+            header_writer.write_i64(self.hash_alg as i64);
+            header_writer.write_buffer(&target_hash);
+            // PA31 extra fields
+            header_writer.write_i64(0); // field1
+            header_writer.write_i64(0); // field2
+            header_writer.write_i64(0); // field3
+            header_writer.write_buffer(&[]); // extra_hash
+            let header_buf = header_writer.finish();
+            outer_writer.write_buffer(&header_buf);
+        } else {
+            outer_writer.write_i64(file_type_set);
+            outer_writer.write_i64(file_type_val);
+            outer_writer.write_i64(flags);
+            outer_writer.write_i64(target.len() as i64);
+            outer_writer.write_i64(self.hash_alg as i64);
+            outer_writer.write_buffer(&target_hash);
+        }
+
+        outer_writer.write_buffer(&preprocess);
+        outer_writer.write_buffer(&patch_data);
+        let bitstream = outer_writer.finish();
 
         let mut out = Vec::with_capacity(12 + bitstream.len());
-        out.extend_from_slice(MAGIC);
+        out.extend_from_slice(magic);
         out.extend_from_slice(&0u64.to_le_bytes());
         out.extend_from_slice(&bitstream);
 
