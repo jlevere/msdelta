@@ -266,8 +266,146 @@ fn x86_filter_impl(data: &mut [u8], undo: bool) {
     }
 }
 
-pub fn compress(_data: &[u8]) -> Result<Vec<u8>> {
-    Err(Error::Malformed("LZMS compression not implemented"))
+/// Compress data using LZMS.
+///
+/// Currently uses literal-only encoding (no LZ/delta matching).
+/// The output is a raw LZMS bitstream suitable for decompress().
+pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
+    if data.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut filtered = data.to_vec();
+    x86_filter_impl(&mut filtered, false);
+
+    let num_offset_syms = tables::num_offset_slots(filtered.len() as u32);
+
+    let mut rc = RangeEncoder::new();
+    let mut bs = BackBitsWriter::new();
+
+    let mut literal_code = AdaptiveCode::new(256, 1024);
+    let _lz_offset_code = AdaptiveCode::new(num_offset_syms, 1024);
+    let _length_code = AdaptiveCode::new(54, 512);
+    let _delta_offset_code = AdaptiveCode::new(num_offset_syms, 1024);
+    let _delta_power_code = AdaptiveCode::new(8, 512);
+
+    let mut main_st = 0u32;
+    let mut probs = ProbTables::new();
+
+    for &byte in &filtered {
+        rc.encode_bit(0, &mut main_st, NUM_MAIN_PROBS, &mut probs.main);
+        literal_code.encode_symbol(byte as usize, &mut bs);
+    }
+
+    let mut out = Vec::new();
+    rc.finish(&mut out);
+    bs.finish(&mut out);
+
+    if out.len() % 2 != 0 {
+        out.push(0);
+    }
+
+    Ok(out)
+}
+
+// --- Range Encoder (forward stream, writes LE16 to front of buffer) ---
+
+struct RangeEncoder {
+    low: u64,
+    range: u32,
+    output: Vec<u8>,
+}
+
+impl RangeEncoder {
+    fn new() -> Self {
+        RangeEncoder { low: 0, range: 0xFFFF_FFFF, output: Vec::new() }
+    }
+
+    #[inline]
+    fn normalize(&mut self) {
+        while self.range < 0x10000 {
+            let word = (self.low >> 32) as u16;
+            self.output.push(word as u8);
+            self.output.push((word >> 8) as u8);
+            self.low <<= 16;
+            self.range <<= 16;
+        }
+    }
+
+    fn encode_bit(
+        &mut self,
+        bit: u32,
+        state: &mut u32,
+        num_states: usize,
+        probs: &mut [ProbEntry],
+    ) {
+        self.normalize();
+        let prob = probs[*state as usize].get();
+        let bound = (self.range >> PROB_BITS) * prob;
+        if bit == 0 {
+            self.range = bound;
+        } else {
+            self.low += bound as u64;
+            self.range -= bound;
+        }
+        probs[*state as usize].update(bit);
+        *state = (*state << 1 | bit) & (num_states as u32 - 1);
+    }
+
+    fn finish(&mut self, out: &mut Vec<u8>) {
+        // Flush remaining state: force 2 more normalize outputs
+        // to ensure the final interval is fully encoded
+        for _ in 0..2 {
+            let word = (self.low >> 32) as u16;
+            self.output.push(word as u8);
+            self.output.push((word >> 8) as u8);
+            self.low <<= 16;
+        }
+        // The output is the complete encoded stream:
+        // first 4 bytes = initial code for decoder
+        // remaining bytes = normalization refills
+        out.splice(0..0, self.output.drain(..));
+    }
+}
+
+// --- Backward bitstream writer (writes LE16 to end of buffer, MSB-first) ---
+
+struct BackBitsWriter {
+    buf: u64,
+    bits: u32,
+    output: Vec<u8>,
+}
+
+impl BackBitsWriter {
+    fn new() -> Self {
+        BackBitsWriter { buf: 0, bits: 0, output: Vec::new() }
+    }
+
+    fn write_bits(&mut self, val: u32, n: u32) {
+        self.buf = (self.buf << n) | (val as u64);
+        self.bits += n;
+        while self.bits >= 16 {
+            self.bits -= 16;
+            let word = (self.buf >> self.bits) as u16;
+            self.output.push(word as u8);
+            self.output.push((word >> 8) as u8);
+            self.buf &= (1u64 << self.bits) - 1;
+        }
+    }
+
+    fn finish(&self, out: &mut Vec<u8>) {
+        let mut final_buf = self.buf;
+        let final_bits = self.bits;
+        if final_bits > 0 {
+            final_buf <<= 16 - final_bits;
+            let word = final_buf as u16;
+            out.push(word as u8);
+            out.push((word >> 8) as u8);
+        }
+        for chunk in self.output.chunks(2).rev() {
+            out.extend_from_slice(chunk);
+        }
+    }
 }
 
 fn decode_rep(
@@ -468,6 +606,8 @@ struct AdaptiveCode {
     countdown: u32,
     direct: Vec<u16>,
     overflow: Vec<[u16; 2]>,
+    codes: Vec<u32>,
+    lens: Vec<u8>,
 }
 
 const ENTRY_OVERFLOW: u16 = 0x8000;
@@ -480,6 +620,8 @@ impl AdaptiveCode {
             countdown: rebuild_freq,
             direct: vec![0; TABLE_SIZE],
             overflow: Vec::new(),
+            codes: vec![0; num_syms],
+            lens: vec![0; num_syms],
         };
         if num_syms > 0 {
             code.rebuild();
@@ -490,6 +632,28 @@ impl AdaptiveCode {
     fn rebuild(&mut self) {
         let lens = compute_code_lengths(&self.freqs);
         self.build_tables(&lens);
+        self.build_codes(&lens);
+    }
+
+    fn build_codes(&mut self, lens: &[u8]) {
+        let mut count = [0u32; MAX_CODEWORD_LEN as usize + 1];
+        for &l in lens {
+            if l > 0 { count[l as usize] += 1; }
+        }
+        let mut next_code = [0u32; MAX_CODEWORD_LEN as usize + 1];
+        let mut code = 0u32;
+        for bits in 1..=MAX_CODEWORD_LEN as usize {
+            code = (code + count[bits - 1]) << 1;
+            next_code[bits] = code;
+        }
+        self.lens.fill(0);
+        self.codes.fill(0);
+        for (sym, &len) in lens.iter().enumerate() {
+            if len == 0 { continue; }
+            self.lens[sym] = len;
+            self.codes[sym] = next_code[len as usize];
+            next_code[len as usize] += 1;
+        }
     }
 
     fn build_tables(&mut self, lens: &[u8]) {
@@ -551,6 +715,23 @@ impl AdaptiveCode {
                 let last_bit = (suffix & 1) as usize;
                 self.overflow[node][last_bit] = ((sym as u16) << 4) | len as u16;
             }
+        }
+    }
+
+    fn encode_symbol(&mut self, sym: usize, bs: &mut BackBitsWriter) {
+        let len = self.lens[sym] as u32;
+        let code = self.codes[sym];
+        if len > 0 {
+            bs.write_bits(code, len);
+        }
+        self.freqs[sym] += 1;
+        self.countdown -= 1;
+        if self.countdown == 0 {
+            for f in &mut self.freqs {
+                *f = (*f >> 1) + 1;
+            }
+            self.rebuild();
+            self.countdown = self.rebuild_freq;
         }
     }
 
@@ -756,5 +937,37 @@ mod tests {
 
         x86_filter_impl(&mut data, true);
         assert_eq!(data, original, "x86 filter roundtrip failed");
+    }
+
+    #[test]
+    fn compress_decompress_roundtrip() {
+        let original = b"Hello, this is a test of LZMS compression roundtrip!";
+        let compressed = compress(original).unwrap();
+        let decompressed = decompress(&compressed, original.len()).unwrap();
+        assert_eq!(decompressed, original);
+    }
+
+    #[test]
+    fn compress_decompress_zeros() {
+        let original = vec![0u8; 256];
+        let compressed = compress(&original).unwrap();
+        let decompressed = decompress(&compressed, original.len()).unwrap();
+        assert_eq!(decompressed, original);
+    }
+
+    #[test]
+    fn compress_decompress_sequential() {
+        let original: Vec<u8> = (0..=255).collect();
+        let compressed = compress(&original).unwrap();
+        let decompressed = decompress(&compressed, original.len()).unwrap();
+        assert_eq!(decompressed, original);
+    }
+
+    #[test]
+    fn compress_decompress_large() {
+        let original: Vec<u8> = (0..4096).map(|i| (i * 7 + 13) as u8).collect();
+        let compressed = compress(&original).unwrap();
+        let decompressed = decompress(&compressed, original.len()).unwrap();
+        assert_eq!(decompressed, original);
     }
 }
