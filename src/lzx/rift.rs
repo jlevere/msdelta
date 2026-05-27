@@ -159,29 +159,70 @@ struct IntFormat {
 }
 
 impl IntFormat {
+    /// Parse from bitstream. Decompiled from IntFormat::FromBitReader (1800470f0).
+    ///
+    /// Format: 3 mode bytes + explicit code lengths + default length.
+    ///   byte1: count of explicit positive symbol lengths (0..126)
+    ///   byte2: count of explicit negative symbol lengths (0..126)
+    ///   byte3: count of "default fill" symbols
+    /// Then byte1 + byte2 code lengths (4 bits each), plus 1 default length.
+    /// Remaining symbols are filled with the default length (decrementing).
     fn from_reader(reader: &mut BitReader) -> Result<Self> {
-        let mode = reader.read_bits(8)? as u8;
-        if std::env::var("RIFT_DEBUG").is_ok() {
-            eprintln!("    IntFormat: mode={mode}, remaining={}", reader.remaining());
+        let num_pos = reader.read_bits(8)? as usize;
+        let num_neg = reader.read_bits(8)? as usize;
+        let num_default = reader.read_bits(8)? as usize;
+
+        if num_pos > INT_FORMAT_HALF || num_neg > INT_FORMAT_HALF {
+            return Err(Error::Malformed("IntFormat mode out of range"));
+        }
+        if num_default > INT_FORMAT_SYMBOLS - num_pos - num_neg {
+            return Err(Error::Malformed("IntFormat default count overflow"));
         }
 
         let mut lengths = vec![0u8; INT_FORMAT_SYMBOLS];
 
-        if mode == 0 {
-            // All symbols have the same length
-            let uniform_len = reader.read_bits(4)? as u8;
-            lengths.fill(uniform_len);
-        } else if (mode as usize) <= INT_FORMAT_HALF {
-            // Only first `mode` positive and `mode` negative symbols are used
-            let active = mode as usize;
-            for l in &mut lengths[..active] {
-                *l = reader.read_bits(4)? as u8;
+        // Read explicit positive code lengths
+        for l in &mut lengths[..num_pos] {
+            *l = (reader.read_bits(4)? as u8).wrapping_add(1);
+        }
+
+        // Read explicit negative code lengths
+        for l in &mut lengths[INT_FORMAT_HALF..INT_FORMAT_HALF + num_neg] {
+            *l = (reader.read_bits(4)? as u8).wrapping_add(1);
+        }
+
+        // Read default length for remaining symbols
+        let default_len = (reader.read_bits(4)? as u8).wrapping_add(1);
+        if default_len > 16 {
+            return Err(Error::Malformed("IntFormat code length > 16"));
+        }
+
+        // Fill remaining positive symbols
+        {
+            let mut len = default_len;
+            let mut remaining = num_default;
+            for i in num_pos..INT_FORMAT_HALF {
+                if remaining == 0 {
+                    len = len.saturating_sub(1);
+                    remaining = INT_FORMAT_SYMBOLS - num_pos - num_neg - i;
+                }
+                lengths[i] = len;
+                remaining = remaining.saturating_sub(1);
             }
-            for l in &mut lengths[INT_FORMAT_HALF..INT_FORMAT_HALF + active] {
-                *l = reader.read_bits(4)? as u8;
+        }
+
+        // Fill remaining negative symbols
+        {
+            let mut len = default_len;
+            let mut remaining = num_default.saturating_sub(INT_FORMAT_HALF - num_pos);
+            for i in (INT_FORMAT_HALF + num_neg)..INT_FORMAT_SYMBOLS {
+                if remaining == 0 {
+                    len = len.saturating_sub(1);
+                    remaining = INT_FORMAT_HALF - (i - INT_FORMAT_HALF);
+                }
+                lengths[i] = len;
+                remaining = remaining.saturating_sub(1);
             }
-        } else {
-            return Err(Error::Malformed("IntFormat mode out of range"));
         }
 
         let table = HuffmanTable::from_lengths(&lengths)?;

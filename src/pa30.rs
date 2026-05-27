@@ -279,18 +279,34 @@ fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
     //   RiftTable::FromBitReader = second rift table
     //   CliMap::FromBitReader = CLI map
     //
-    // Full parsing of the rift tables and CLI metadata is needed for the
-    // complete PE transform pipeline. For now we only extract the fixed
-    // header fields and leave the rest unparsed.
     let target_image_base = reader.read_bits(64)?;
     let _target_field1 = reader.read_bits(32)?;
     let target_timestamp = reader.read_bits(32)? as u32;
 
+    let pe_rift = crate::lzx::rift::RiftTable::from_reader(&mut reader)?;
+
+    // CliMetadata: 1-bit flag (0 = empty for native PEs)
+    let cli_flag = reader.read_bits(1)?;
+    if cli_flag != 0 {
+        return Err(Error::Malformed("CLI metadata in preprocess not supported"));
+    }
+
+    // Second rift table from PreProcessPEForApply
+    let preprocess_rift = crate::lzx::rift::RiftTable::from_reader(&mut reader)?;
+
+    // CliMap: 1-bit flag (0 = empty for native PEs)
+    if reader.remaining() > 0 {
+        let climap_flag = reader.read_bits(1)?;
+        if climap_flag != 0 {
+            return Err(Error::Malformed("CLI map in preprocess not supported"));
+        }
+    }
+
     Ok(PePreprocess {
         target_image_base,
         target_timestamp,
-        pe_rift: crate::lzx::rift::RiftTable { entries: Vec::new() },
-        preprocess_rift: crate::lzx::rift::RiftTable { entries: Vec::new() },
+        pe_rift,
+        preprocess_rift,
     })
 }
 
