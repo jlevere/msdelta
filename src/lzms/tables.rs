@@ -80,6 +80,38 @@ pub fn decode_length(slot: usize, bs: &mut BackBits) -> u32 {
     base + bs.read_bits(eb)
 }
 
+pub fn find_offset_slot(offset: u32) -> usize {
+    let t = &OFFSET_TABLE;
+    match t.bases[..t.bases.len() - 1].binary_search(&offset) {
+        Ok(i) => i,
+        Err(i) => i.saturating_sub(1),
+    }
+}
+
+pub fn encode_offset_extra(offset: u32, slot: usize, bs: &mut super::BackBitsWriter) {
+    let t = &OFFSET_TABLE;
+    let base = t.bases[slot];
+    let eb = t.extra_bits(slot);
+    if eb > 0 {
+        bs.write_bits(offset - base, eb);
+    }
+}
+
+pub fn find_length_slot(length: u32) -> usize {
+    match LENGTH_BASES.binary_search(&length) {
+        Ok(i) => i,
+        Err(i) => i.saturating_sub(1),
+    }
+}
+
+pub fn encode_length_extra(length: u32, slot: usize, bs: &mut super::BackBitsWriter) {
+    let base = LENGTH_BASES[slot];
+    let eb = LENGTH_EXTRA[slot] as u32;
+    if eb > 0 {
+        bs.write_bits(length - base, eb);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
