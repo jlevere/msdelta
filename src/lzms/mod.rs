@@ -398,14 +398,6 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
             pos += match_len as usize;
             prev_type = 1;
         } else {
-            // Encode literal
-            if pos + 3 < d.len() {
-                let h = hash4(d, pos) & ((1 << HASH_BITS) - 1);
-                if chain[pos] == 0 && head[h] == 0 {
-                    chain[pos] = head[h];
-                    head[h] = pos as u32;
-                }
-            }
             rc.encode_bit(0, &mut main_st, NUM_MAIN_PROBS, &mut probs.main);
             literal_code.encode_symbol(d[pos] as usize, &mut bs);
             pos += 1;

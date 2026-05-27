@@ -307,7 +307,7 @@ fn find_match(sa: &[i64], source: &[u8], target: &[u8]) -> (usize, usize) {
     let mut best_pos = 0usize;
     let mut best_len = 0usize;
 
-    while lo <= hi {
+    while lo < hi {
         let mid = lo + (hi - lo) / 2;
         let pos = sa[mid] as usize;
         let ml = match_len(source, pos, target, 0);
@@ -315,17 +315,21 @@ fn find_match(sa: &[i64], source: &[u8], target: &[u8]) -> (usize, usize) {
             best_len = ml;
             best_pos = pos;
         }
-        let cmp = compare_at(source, pos, target);
-        match cmp {
-            std::cmp::Ordering::Less => {
-                if mid == n - 1 { break; }
-                lo = mid + 1;
+        if compare_at(source, pos, target) == std::cmp::Ordering::Less {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+
+    for &idx in &[lo, lo.saturating_sub(1)] {
+        if idx < n {
+            let pos = sa[idx] as usize;
+            let ml = match_len(source, pos, target, 0);
+            if ml > best_len {
+                best_len = ml;
+                best_pos = pos;
             }
-            std::cmp::Ordering::Greater => {
-                if mid == 0 { break; }
-                hi = mid - 1;
-            }
-            std::cmp::Ordering::Equal => break,
         }
     }
 
