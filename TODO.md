@@ -54,7 +54,7 @@ UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 |--------|--------|--------|-------|
 | PA19 | **done** | missing | legacy, standard LZX via `lzxd` crate |
 | PA30 | **done** | **done** | primary format |
-| PA31 | **done** (decode) | missing | extended header with 3 extra i32 fields + extra hash |
+| PA31 | **done** | **done** | extended header with 3 extra i32 fields + extra hash |
 | DCM | **done** | **done** | 4-byte magic wrapper around PA30 |
 
 ---
@@ -78,7 +78,7 @@ UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 | Signed offsets (slots 0-2) | done | done | |
 | Aligned-offset extra bits | done | done | |
 | Multi-segment composite format | done | partial | encoder always writes 1 segment |
-| Pre-tree delta/RLE encoding | done | **missing** | encoder writes raw symbols (valid but larger) |
+| Pre-tree delta/RLE encoding | done | done | delta/RLE symbols 17-38 |
 | Rift table in patch bitstream | done | **missing** | encoder writes empty rift; PE rift goes in preprocess only |
 
 ### LZMS details
@@ -120,7 +120,7 @@ UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 | Section rift generation | **done** | match by name, VA-1 entries |
 | Data directory rift generation | **done** | match by fixed index |
 | Import descriptor rift | **done** | match by DLL name (simplified) |
-| Export table rift | missing | `RiftTableFromExportsFactory` |
+| Export table rift | **done** | match by function name |
 | Resource section rift | missing | `RiftTableFromResourcesFactory` |
 | Pdata/exception rift | missing | `RiftTableFromPdatasFactory` |
 | Import thunk-level rift | missing | per-function IAT matching within each DLL |
