@@ -39,10 +39,22 @@ impl RiftTable {
             });
         }
 
+        if std::env::var("RIFT_DEBUG").is_ok() {
+            eprintln!("  rift: parsing IntFormats, {} bits remaining", reader.remaining());
+        }
         let fmt_src = IntFormat::from_reader(reader)?;
+        if std::env::var("RIFT_DEBUG").is_ok() {
+            eprintln!("  rift: after fmt_src, {} bits remaining", reader.remaining());
+        }
         let fmt_dst = IntFormat::from_reader(reader)?;
+        if std::env::var("RIFT_DEBUG").is_ok() {
+            eprintln!("  rift: after fmt_dst, {} bits remaining", reader.remaining());
+        }
 
         let count = reader.read_i64()?;
+        if std::env::var("RIFT_DEBUG").is_ok() {
+            eprintln!("  rift: flag=1, count={count}, remaining={}", reader.remaining());
+        }
         if !(0..=0x0FFFFFFFFFFFFFFF).contains(&count) {
             return Err(Error::Malformed("rift table entry count out of range"));
         }
@@ -148,8 +160,10 @@ struct IntFormat {
 
 impl IntFormat {
     fn from_reader(reader: &mut BitReader) -> Result<Self> {
-        // Read 8-bit "mode" byte
         let mode = reader.read_bits(8)? as u8;
+        if std::env::var("RIFT_DEBUG").is_ok() {
+            eprintln!("    IntFormat: mode={mode}, remaining={}", reader.remaining());
+        }
 
         let mut lengths = vec![0u8; INT_FORMAT_SYMBOLS];
 

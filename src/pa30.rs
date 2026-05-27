@@ -252,40 +252,69 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
     Ok(output)
 }
 
+/// Parsed PE preprocess buffer from the delta.
+///
+/// From decompiled PreProcessPEForApply + PortableExecutableInfo::FromBitReader.
+struct PePreprocess {
+    target_image_base: u64,
+    target_timestamp: u32,
+    pe_rift: crate::lzx::rift::RiftTable,
+    // Second rift table (from PreProcessPEForApply, separate from PE info rift)
+    preprocess_rift: crate::lzx::rift::RiftTable,
+}
+
+fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
+    use crate::bitstream::BitReader;
+
+    let mut reader = BitReader::new(preprocess)?;
+
+    // PortableExecutableInfo::FromBitReader (decompiled at 18004cda0):
+    //   Read64(0x40) = ImageBase
+    //   Read32(0x20) = field1 (zero for typical deltas)
+    //   Read32(0x20) = target TimeDateStamp
+    //   RiftTable::FromBitReader = PE-level rift table
+    //   CliMetadata::FromBitReader = CLI metadata
+    //
+    // Then PreProcessPEForApply reads more:
+    //   RiftTable::FromBitReader = second rift table
+    //   CliMap::FromBitReader = CLI map
+    //
+    // Full parsing of the rift tables and CLI metadata is needed for the
+    // complete PE transform pipeline. For now we only extract the fixed
+    // header fields and leave the rest unparsed.
+    let target_image_base = reader.read_bits(64)?;
+    let _target_field1 = reader.read_bits(32)?;
+    let target_timestamp = reader.read_bits(32)? as u32;
+
+    Ok(PePreprocess {
+        target_image_base,
+        target_timestamp,
+        pe_rift: crate::lzx::rift::RiftTable { entries: Vec::new() },
+        preprocess_rift: crate::lzx::rift::RiftTable { entries: Vec::new() },
+    })
+}
+
 /// Apply PE post-processing after LZX decompression.
 ///
-/// The PE transform pipeline normalizes certain fields before compression
-/// and restores them after. Currently only implements timestamp restoration
-/// (the encoder normalizes all PE timestamps to the source's value).
+/// The encoder normalizes timestamps in the source before compression.
+/// After decompression, the output has source timestamps that need
+/// replacing with target timestamps at PE-structural offsets.
 ///
-/// NOT YET IMPLEMENTED:
-/// - Inferred relocation reversal (absolute address denormalization)
-/// - Import table denormalization
-/// - Checksum recomputation (when flags enable it)
-/// - Full rift table integration for section-shifted PEs
+/// The preprocess buffer also contains rift tables needed for the full
+/// transform pipeline (not yet wired for inferred relocations).
 fn apply_pe_postprocess(
     reference: &[u8],
     preprocess: &[u8],
     output: &mut [u8],
 ) -> Result<()> {
-    use crate::bitstream::BitReader;
-
-    let mut reader = BitReader::new(preprocess)?;
-
-    // PortableExecutableInfo::FromBitReader (decompiled):
-    // Read64(0x40) = ImageBase
-    // Read32(0x20) = field (zero for typical deltas)
-    // Read32(0x20) = target TimeDateStamp
-    let _target_image_base = reader.read_bits(64)?;
-    let _target_field1 = reader.read_bits(32)? as u32;
-    let target_timestamp = reader.read_bits(32)? as u32;
+    let pp = parse_pe_preprocess(preprocess)?;
 
     let source_timestamp = pe_timestamp(reference);
-    if source_timestamp == 0 || source_timestamp == target_timestamp {
+    if source_timestamp == 0 || source_timestamp == pp.target_timestamp {
         return Ok(());
     }
 
-    let new_bytes = target_timestamp.to_le_bytes();
+    let new_bytes = pp.target_timestamp.to_le_bytes();
 
     for off in pe_timestamp_offsets(output) {
         if off + 4 <= output.len() {
