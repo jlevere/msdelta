@@ -1,4 +1,4 @@
-use crate::lzms::BackBits;
+use super::adaptive::{BackBits, BackBitsWriter};
 
 // Offset slot base values extracted from cabinet.dll (verified against wimlib).
 // Generated from group definitions: (num_slots, extra_bits) pairs.
@@ -88,7 +88,7 @@ pub fn find_offset_slot(offset: u32) -> usize {
     }
 }
 
-pub fn encode_offset_extra(offset: u32, slot: usize, bs: &mut super::BackBitsWriter) {
+pub fn encode_offset_extra(offset: u32, slot: usize, bs: &mut BackBitsWriter) {
     let t = &OFFSET_TABLE;
     let base = t.bases[slot];
     let eb = t.extra_bits(slot);
@@ -104,7 +104,7 @@ pub fn find_length_slot(length: u32) -> usize {
     }
 }
 
-pub fn encode_length_extra(length: u32, slot: usize, bs: &mut super::BackBitsWriter) {
+pub fn encode_length_extra(length: u32, slot: usize, bs: &mut BackBitsWriter) {
     let base = LENGTH_BASES[slot];
     let eb = LENGTH_EXTRA[slot] as u32;
     if eb > 0 {
