@@ -270,6 +270,7 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
 /// Parsed PE preprocess buffer from the delta.
 ///
 /// From decompiled PreProcessPEForApply + PortableExecutableInfo::FromBitReader.
+#[allow(dead_code)]
 struct PePreprocess {
     target_image_base: u64,
     target_timestamp: u32,
