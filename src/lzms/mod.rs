@@ -338,26 +338,28 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
             chain[pos] = head[h];
             head[h] = pos as u32;
 
-            // TODO: LZ match encoding has a Huffman sync bug — disabled for now
+            // LZ match encoding disabled: backward bitstream sync bug
+            // when mixing literal + match symbols. The match finder and
+            // encoder are structurally complete.
             let _ = (best_off, best_len);
             (0u32, 0u32)
         } else {
             (0, 0)
         };
-
         if match_len >= 3 {
             // Encode LZ match
             rc.encode_bit(1, &mut main_st, NUM_MAIN_PROBS, &mut probs.main);
             rc.encode_bit(0, &mut match_st, NUM_MATCH_PROBS, &mut probs.match_);
 
-            // Check if this offset is in the LRU queue
+            // Check if offset is in the 3 accessible LRU positions
+            // (4th entry is overflow, can't be encoded as repeat)
             let rep_idx = {
                 let adj_base = (prev_type & 1) as usize;
                 let mut found = None;
-                for qi in 0..3usize {
-                    let adj = (qi + adj_base).min(3);
+                for rep in 0..3usize {
+                    let adj = (rep + adj_base).min(3);
                     if lz_queue[adj] == match_offset {
-                        found = Some((qi, adj));
+                        found = Some((rep, adj));
                         break;
                     }
                 }
@@ -383,6 +385,11 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
                 // Explicit offset: symbol THEN extra bits
                 rc.encode_bit(0, &mut lz_st, NUM_LZ_PROBS, &mut probs.lz);
                 let off_slot = tables::find_offset_slot(match_offset);
+                if std::env::var("LZMS_ENC_DEBUG").is_ok() {
+                    eprintln!("ENC: LZ explicit off={match_offset} slot={off_slot} len_code={} off_code={}",
+                        length_code.lens.iter().take(54).map(|b| b.to_string()).collect::<Vec<_>>().join(","),
+                        lz_offset_code.lens.iter().take(num_offset_syms.min(10)).map(|b| b.to_string()).collect::<Vec<_>>().join(","));
+                }
                 lz_offset_code.encode_symbol(off_slot, &mut bs);
                 tables::encode_offset_extra(match_offset, off_slot, &mut bs);
                 queue_push(&mut lz_queue, match_offset);
@@ -410,12 +417,21 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
         }
     }
 
+    if std::env::var("LZMS_ENC_DEBUG").is_ok() {
+        eprintln!("ENC: before finish: bs_bits={} bs_words={}", bs.bits, bs.output.len() / 2);
+    }
+
     let mut out = Vec::new();
     rc.finish(&mut out);
+    let rc_len = out.len();
     bs.finish(&mut out);
 
     if out.len() % 2 != 0 {
         out.push(0);
+    }
+
+    if std::env::var("LZMS_ENC_DEBUG").is_ok() {
+        eprintln!("ENC: rc={rc_len}b bs={}b total={}b", out.len() - rc_len, out.len());
     }
 
     Ok(out)
@@ -521,11 +537,8 @@ impl BackBitsWriter {
     }
 
     fn finish(&self, out: &mut Vec<u8>) {
-        let mut final_buf = self.buf;
-        let final_bits = self.bits;
-        if final_bits > 0 {
-            final_buf <<= 16 - final_bits;
-            let word = final_buf as u16;
+        if self.bits > 0 {
+            let word = (self.buf << (16 - self.bits)) as u16;
             out.push(word as u8);
             out.push((word >> 8) as u8);
         }
