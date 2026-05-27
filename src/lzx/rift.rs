@@ -89,6 +89,52 @@ impl RiftTable {
     }
 }
 
+/// Accelerated rift offset lookup for the LZX decompressor.
+///
+/// Each entry maps a position range to a rift offset. For a given position,
+/// the offset tells the decompressor how to adjust copy operations.
+///
+/// Translated from OffsetRiftTable<unsigned __int64>::Init in msdelta.dll.
+pub struct OffsetRiftTable {
+    entries: Vec<(i64, i64)>, // (position, offset) sorted by position
+}
+
+impl OffsetRiftTable {
+    /// Build from a RiftTable.
+    ///
+    /// The boundary entry {source=ref_len, target=0} is expected to already
+    /// be in the rift table (added by the caller before this call).
+    pub fn from_rift_table(rift: &RiftTable) -> Self {
+        if rift.entries.is_empty() {
+            return OffsetRiftTable { entries: vec![(0, 0)] };
+        }
+
+        // Offset = entry.target - entry.source
+        // For from_reader entries: target is absolute, so this gives the displacement
+        // For boundary entry {ref_len, 0}: gives 0 - ref_len = -ref_len
+        let initial = {
+            let last = rift.entries.last().unwrap();
+            last.target - last.source
+        };
+
+        let mut entries = Vec::with_capacity(rift.entries.len() + 1);
+        entries.push((0i64, initial));
+        for e in &rift.entries {
+            entries.push((e.source, e.target - e.source));
+        }
+        OffsetRiftTable { entries }
+    }
+
+    /// Look up the rift offset for a position.
+    pub fn offset_at(&self, pos: i64) -> i64 {
+        match self.entries.binary_search_by_key(&pos, |&(p, _)| p) {
+            Ok(i) => self.entries[i].1,
+            Err(0) => self.entries[0].1,
+            Err(i) => self.entries[i - 1].1,
+        }
+    }
+}
+
 /// IntFormat: Huffman-coded signed integer encoding.
 ///
 /// 252 symbols split into two ranges:

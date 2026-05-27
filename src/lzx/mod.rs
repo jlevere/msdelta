@@ -224,7 +224,15 @@ fn decompress_into(
 
     let mut reader = BitReader::new(patch_data)?;
 
-    let _rift = RiftTable::from_reader(&mut reader)?;
+    let mut rift = RiftTable::from_reader(&mut reader)?;
+    // Add boundary entry at source_size. In msdelta.dll, ApplyForward calls
+    // RiftTable::Add(ref_len, 0) before passing to the decompressor.
+    // target=0 means the raw delta is 0; OffsetRiftTable computes
+    // offset = 0 - ref_len = -ref_len for the boundary zone.
+    let ref_len = reference.len();
+    rift.entries.push(rift::RiftEntry { source: ref_len as i64, target: 0 });
+    rift.entries.sort_by_key(|e| e.source);
+    let ort = rift::OffsetRiftTable::from_rift_table(&rift);
 
     let cf_simple = reader.read_bits(1)? != 0;
     let format = if cf_simple {
@@ -237,9 +245,6 @@ fn decompress_into(
     };
 
     let mut seg_idx = 0;
-
-    let ref_len = reference.len();
-    let signed_rift_offset = -(ref_len as i64);
     output.reserve(target_size);
     let mut lru: [i64; 3] = [0; 3];
     let mut pos: u64 = ref_len as u64;
@@ -269,11 +274,12 @@ fn decompress_into(
         }
         let copy_len = (match_len as u64).min(end - pos);
 
+        let rift_offset = ort.offset_at(pos as i64);
         let distance: i64;
         if raw_offset == SOURCE_COPY {
-            distance = ref_len as i64;
+            distance = -rift_offset;
         } else if raw_offset < SOURCE_COPY {
-            distance = raw_offset as i64 - OFFSET_BIAS as i64 - signed_rift_offset;
+            distance = raw_offset as i64 - OFFSET_BIAS as i64 - rift_offset;
         } else if (LRU_BASE..LRU_BASE + 3).contains(&raw_offset) {
             distance = lru[(raw_offset - LRU_BASE) as usize];
         } else {
