@@ -746,7 +746,35 @@ fn encode_match(
         }
         offset_slot = adj + 7;
     } else {
-        return Err(Error::Malformed("signed offset encoding not implemented"));
+        // Signed offset: raw_offset encodes distance via OFFSET_BIAS
+        let signed_dist = raw_offset as i32 - OFFSET_BIAS as i32;
+
+        // Slot 0: 14-bit range [-0x2000, 0x1FFF]
+        if signed_dist >= -0x2000 && signed_dist < 0x2000 {
+            offset_slot = 0;
+            let raw14 = (signed_dist + 0x2000) as u32;
+            offset_extra[n_extra] = (raw14 as u64, 14); n_extra += 1;
+        }
+        // Slot 1: 16-bit range [-0xA000, -0x2001] ∪ [0x2000, 0x5FFF]
+        else if signed_dist >= -0xA000 && signed_dist < 0x6000 {
+            offset_slot = 1;
+            let raw16 = if signed_dist < -0x2000 {
+                (signed_dist + 0xA000) as u32
+            } else {
+                (signed_dist + 0x6000) as u32
+            };
+            offset_extra[n_extra] = (raw16 as u64, 16); n_extra += 1;
+        }
+        // Slot 2: 18-bit range
+        else {
+            offset_slot = 2;
+            let raw18 = if signed_dist >= 0x6000 {
+                (signed_dist + 0x16000) as u32
+            } else {
+                (signed_dist + 0x2A000) as u32
+            };
+            offset_extra[n_extra] = ((raw18 & 0x3FFFF) as u64, 18); n_extra += 1;
+        }
     };
 
     // Compute length encoding
