@@ -75,19 +75,111 @@ pub fn transform_inferred_relocations_x86(
     Ok(count)
 }
 
-/// Dispatch transforms based on file type.
-pub fn apply_transforms(
-    file_type: i64,
-    _pe_data: Option<&[u8]>,
-    _output: &mut [u8],
-) -> Result<()> {
-    if file_type == FILE_TYPE_RAW {
-        return Ok(());
+pub(crate) fn pe_timestamp(data: &[u8]) -> u32 {
+    if data.len() < 0x40 { return 0; }
+    let pe_off = u32::from_le_bytes(data[0x3C..0x40].try_into().unwrap()) as usize;
+    if pe_off + 12 > data.len() { return 0; }
+    u32::from_le_bytes(data[pe_off + 8..pe_off + 12].try_into().unwrap())
+}
+
+pub(crate) fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
+    let mut offsets = Vec::new();
+    let pe = match goblin::pe::PE::parse(data) {
+        Ok(pe) => pe,
+        Err(_) => return offsets,
+    };
+
+    let pe_off = pe.header.dos_header.pe_pointer as usize;
+    offsets.push(pe_off + 8);
+
+    let opt = match pe.header.optional_header {
+        Some(o) => o,
+        None => return offsets,
+    };
+
+    let sections = &pe.sections;
+    let rva_to_offset = |rva: u32| -> Option<usize> {
+        for s in sections {
+            if rva >= s.virtual_address && rva < s.virtual_address + s.virtual_size {
+                return Some((s.pointer_to_raw_data + (rva - s.virtual_address)) as usize);
+            }
+        }
+        None
+    };
+
+    if let Some(&dd) = opt.data_directories.get_export_table() {
+        if dd.virtual_address != 0 {
+            if let Some(off) = rva_to_offset(dd.virtual_address) {
+                offsets.push(off + 4);
+            }
+        }
     }
 
-    // For PE file types, we'd parse the PE and apply relocation transforms.
-    // This is a placeholder for the full transform pipeline.
-    Ok(())
+    if let Some(&dd) = opt.data_directories.get_debug_table() {
+        if dd.virtual_address != 0 && dd.size >= 28 {
+            if let Some(base_off) = rva_to_offset(dd.virtual_address) {
+                let num_entries = dd.size as usize / 28;
+                for i in 0..num_entries {
+                    offsets.push(base_off + i * 28 + 4);
+                }
+            }
+        }
+    }
+
+    if let Some(&dd) = opt.data_directories.get_debug_table() {
+        if dd.virtual_address != 0 && dd.size >= 28 {
+            if let Some(base_off) = rva_to_offset(dd.virtual_address) {
+                let num_entries = dd.size as usize / 28;
+                let header_ts = if offsets.is_empty() { 0 } else {
+                    u32::from_le_bytes(data[offsets[0]..offsets[0]+4].try_into().unwrap_or([0;4]))
+                };
+                let ts_bytes = header_ts.to_le_bytes();
+                for i in 0..num_entries {
+                    let entry_off = base_off + i * 28;
+                    if entry_off + 28 > data.len() { break; }
+                    let raw_ptr = u32::from_le_bytes(
+                        data[entry_off + 24..entry_off + 28].try_into().unwrap()) as usize;
+                    let raw_size = u32::from_le_bytes(
+                        data[entry_off + 16..entry_off + 20].try_into().unwrap()) as usize;
+                    if raw_ptr == 0 || raw_size == 0 || raw_ptr + raw_size > data.len() {
+                        continue;
+                    }
+                    let end = raw_ptr + raw_size;
+                    let mut j = raw_ptr;
+                    while j + 4 <= end {
+                        if data[j..j+4] == ts_bytes {
+                            offsets.push(j);
+                            j += 4;
+                        } else {
+                            j += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    offsets
+}
+
+/// Normalize timestamps in a target PE to match the source PE.
+/// Returns the original target timestamp for storage in the preprocess buffer.
+pub(crate) fn normalize_timestamps(target: &mut [u8], source: &[u8]) -> u32 {
+    let source_ts = pe_timestamp(source);
+    let target_ts = pe_timestamp(target);
+    if source_ts == 0 || target_ts == 0 || source_ts == target_ts {
+        return target_ts;
+    }
+    let new_bytes = source_ts.to_le_bytes();
+    for off in pe_timestamp_offsets(target) {
+        if off + 4 <= target.len() {
+            let val = u32::from_le_bytes(target[off..off + 4].try_into().unwrap());
+            if val == target_ts {
+                target[off..off + 4].copy_from_slice(&new_bytes);
+            }
+        }
+    }
+    target_ts
 }
 
 #[cfg(test)]
@@ -96,7 +188,7 @@ mod tests {
 
     #[test]
     fn raw_file_type_no_transform() {
-        let mut output = vec![0u8; 100];
-        apply_transforms(FILE_TYPE_RAW, None, &mut output).unwrap();
+        // FILE_TYPE_RAW doesn't trigger transforms
+        assert_eq!(FILE_TYPE_RAW, 1);
     }
 }

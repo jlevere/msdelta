@@ -345,6 +345,24 @@ fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
     })
 }
 
+fn build_pe_preprocess(
+    target_image_base: u64,
+    target_timestamp: u32,
+    pe_rift: &crate::lzx::rift::RiftTable,
+    preprocess_rift: &crate::lzx::rift::RiftTable,
+) -> Vec<u8> {
+    use crate::bitstream::BitWriter;
+    let mut writer = BitWriter::new();
+    writer.write_bits(target_image_base, 64);
+    writer.write_bits(0, 32);
+    writer.write_bits(target_timestamp as u64, 32);
+    pe_rift.to_writer(&mut writer);
+    writer.write_bits(0, 1);
+    preprocess_rift.to_writer(&mut writer);
+    writer.write_bits(0, 1);
+    writer.finish()
+}
+
 /// Apply PE post-processing after LZX decompression.
 ///
 /// The encoder normalizes timestamps in the source before compression.
@@ -378,97 +396,11 @@ fn apply_pe_timestamp_fixup(
 }
 
 fn pe_timestamp(data: &[u8]) -> u32 {
-    if data.len() < 0x40 { return 0; }
-    let pe_off = u32::from_le_bytes(data[0x3C..0x40].try_into().unwrap()) as usize;
-    if pe_off + 12 > data.len() { return 0; }
-    u32::from_le_bytes(data[pe_off + 8..pe_off + 12].try_into().unwrap())
+    crate::pe::transform::pe_timestamp(data)
 }
 
-/// Collect file offsets of all TimeDateStamp fields in a PE image.
-/// Returns offsets for: COFF header, debug directory entries, export directory.
 fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
-    let mut offsets = Vec::new();
-    let pe = match goblin::pe::PE::parse(data) {
-        Ok(pe) => pe,
-        Err(_) => return offsets,
-    };
-
-    // 1. COFF header TimeDateStamp
-    let pe_off = pe.header.dos_header.pe_pointer as usize;
-    offsets.push(pe_off + 8);
-
-    let opt = match pe.header.optional_header {
-        Some(o) => o,
-        None => return offsets,
-    };
-
-    let sections = &pe.sections;
-    let rva_to_offset = |rva: u32| -> Option<usize> {
-        for s in sections {
-            if rva >= s.virtual_address && rva < s.virtual_address + s.virtual_size {
-                return Some((s.pointer_to_raw_data + (rva - s.virtual_address)) as usize);
-            }
-        }
-        None
-    };
-
-    // 2. Export directory TimeDateStamp (offset +4 from start)
-    if let Some(&dd) = opt.data_directories.get_export_table() {
-        if dd.virtual_address != 0 {
-            if let Some(off) = rva_to_offset(dd.virtual_address) {
-                offsets.push(off + 4);
-            }
-        }
-    }
-
-    // 3. Debug directory entries (each 28 bytes, TimeDateStamp at +4)
-    if let Some(&dd) = opt.data_directories.get_debug_table() {
-        if dd.virtual_address != 0 && dd.size >= 28 {
-            if let Some(base_off) = rva_to_offset(dd.virtual_address) {
-                let num_entries = dd.size as usize / 28;
-                for i in 0..num_entries {
-                    offsets.push(base_off + i * 28 + 4);
-                }
-            }
-        }
-    }
-
-    // 4. Debug data: scan for timestamp in each entry's raw data
-    if let Some(&dd) = opt.data_directories.get_debug_table() {
-        if dd.virtual_address != 0 && dd.size >= 28 {
-            if let Some(base_off) = rva_to_offset(dd.virtual_address) {
-                let num_entries = dd.size as usize / 28;
-                let header_ts = if offsets.is_empty() { 0 } else {
-                    u32::from_le_bytes(data[offsets[0]..offsets[0]+4].try_into().unwrap_or([0;4]))
-                };
-                let ts_bytes = header_ts.to_le_bytes();
-                for i in 0..num_entries {
-                    let entry_off = base_off + i * 28;
-                    if entry_off + 28 > data.len() { break; }
-                    let raw_ptr = u32::from_le_bytes(
-                        data[entry_off + 24..entry_off + 28].try_into().unwrap()) as usize;
-                    let raw_size = u32::from_le_bytes(
-                        data[entry_off + 16..entry_off + 20].try_into().unwrap()) as usize;
-                    if raw_ptr == 0 || raw_size == 0 || raw_ptr + raw_size > data.len() {
-                        continue;
-                    }
-                    // Scan the debug data for the PE timestamp
-                    let end = raw_ptr + raw_size;
-                    let mut j = raw_ptr;
-                    while j + 4 <= end {
-                        if data[j..j+4] == ts_bytes {
-                            offsets.push(j);
-                            j += 4;
-                        } else {
-                            j += 1;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    offsets
+    crate::pe::transform::pe_timestamp_offsets(data)
 }
 
 /// Encode `target` as a PA30 delta against `reference`.
@@ -487,16 +419,26 @@ pub enum Codec {
     BsDiff,
 }
 
+/// File type for delta creation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FileType {
+    #[default]
+    Raw,
+    /// Auto-detect: try PE, fall back to RAW.
+    Auto,
+}
+
 /// Options for creating a PA30 delta.
 #[derive(Debug, Clone)]
 pub struct CreateOptions {
     hash_alg: u32,
     codec: Codec,
+    file_type: FileType,
 }
 
 impl Default for CreateOptions {
     fn default() -> Self {
-        CreateOptions { hash_alg: HASH_ALG_NONE, codec: Codec::default() }
+        CreateOptions { hash_alg: HASH_ALG_NONE, codec: Codec::default(), file_type: FileType::default() }
     }
 }
 
@@ -518,21 +460,60 @@ impl CreateOptions {
         self
     }
 
+    /// Set the file type. `Auto` tries PE, falls back to RAW.
+    pub fn file_type(mut self, ft: FileType) -> Self {
+        self.file_type = ft;
+        self
+    }
+
     /// Build the delta.
     pub fn execute(&self, reference: &[u8], target: &[u8]) -> Result<Vec<u8>> {
         use crate::bitstream::BitWriter;
+        use crate::lzx::rift::RiftTable;
+        use crate::pe::{parse::PeInfo, rift_gen, transform};
 
-        let (patch_data, file_type_set, flags) = match self.codec {
-            Codec::PseudoLzx => {
-                let data = crate::lzx::compress(reference, target)?;
-                (data, 1i64, 0x20000i64)
-            }
-            Codec::BsDiff => {
-                let bsdiff_patch = crate::bsdiff::bscreate(reference, target)?;
-                let data = crate::lzms::compress_compression_api(&bsdiff_patch)?;
-                (data, 0x101i64, 0i64)
-            }
+        let pe_info = if self.file_type == FileType::Auto {
+            PeInfo::parse(reference).ok().and_then(|src| {
+                PeInfo::parse(target).ok().map(|tgt| (src, tgt))
+            })
+        } else {
+            None
         };
+
+        let (patch_data, file_type_set, file_type_val, flags, preprocess) =
+            if let Some((src_pe, tgt_pe)) = pe_info {
+                let mut normalized = target.to_vec();
+                let original_ts = transform::normalize_timestamps(&mut normalized, reference);
+
+                let section_rift = rift_gen::rift_from_sections(&src_pe, &tgt_pe);
+                let import_rift = rift_gen::rift_from_imports(reference, target);
+                let mut merged = section_rift;
+                for e in import_rift.entries {
+                    merged.entries.push(e);
+                }
+                merged.entries.sort_by_key(|e| e.source);
+                merged.entries.dedup_by_key(|e| e.source);
+
+                let patch_data = crate::lzx::compress(reference, &normalized)?;
+                let preprocess = build_pe_preprocess(
+                    tgt_pe.image_base, original_ts,
+                    &merged, &RiftTable { entries: vec![] },
+                );
+                let ft: i64 = if tgt_pe.is_64bit { 8 } else { 2 };
+                (patch_data, 0xFi64, ft, 0i64, preprocess)
+            } else {
+                match self.codec {
+                    Codec::PseudoLzx => {
+                        let data = crate::lzx::compress(reference, target)?;
+                        (data, 1i64, 1i64, 0x20000i64, vec![])
+                    }
+                    Codec::BsDiff => {
+                        let bsdiff_patch = crate::bsdiff::bscreate(reference, target)?;
+                        let data = crate::lzms::compress_compression_api(&bsdiff_patch)?;
+                        (data, 0x101i64, 1i64, 0i64, vec![])
+                    }
+                }
+            };
 
         let target_hash = if self.hash_alg != HASH_ALG_NONE {
             get_signature(target, self.hash_alg)?.hash
@@ -542,13 +523,13 @@ impl CreateOptions {
 
         let mut header_writer = BitWriter::new();
         header_writer.write_i64(file_type_set);
-        header_writer.write_i64(1);                       // FileType = RAW
+        header_writer.write_i64(file_type_val);
         header_writer.write_i64(flags);
-        header_writer.write_i64(target.len() as i64);     // TargetSize
-        header_writer.write_i64(self.hash_alg as i64);    // HashAlgId
-        header_writer.write_buffer(&target_hash);         // TargetHash
-        header_writer.write_buffer(&[]);                  // preprocess = empty
-        header_writer.write_buffer(&patch_data);          // patch data
+        header_writer.write_i64(target.len() as i64);
+        header_writer.write_i64(self.hash_alg as i64);
+        header_writer.write_buffer(&target_hash);
+        header_writer.write_buffer(&preprocess);
+        header_writer.write_buffer(&patch_data);
         let bitstream = header_writer.finish();
 
         let mut out = Vec::with_capacity(12 + bitstream.len());
@@ -951,6 +932,60 @@ mod tests {
         let delta = create(reference, b"").unwrap();
         let recovered = apply(reference, &delta).unwrap();
         assert!(recovered.is_empty());
+    }
+
+    #[test]
+    fn preprocess_buffer_roundtrip() {
+        use crate::lzx::rift::{RiftEntry, RiftTable};
+        let rift = RiftTable {
+            entries: vec![
+                RiftEntry { source: 0, target: 0 },
+                RiftEntry { source: 0x1000, target: 0x1200 },
+            ],
+        };
+        let empty_rift = RiftTable { entries: vec![] };
+        let buf = build_pe_preprocess(0x140000000, 0x12345678, &rift, &empty_rift);
+        let parsed = parse_pe_preprocess(&buf).unwrap();
+        assert_eq!(parsed.target_image_base, 0x140000000);
+        assert_eq!(parsed.target_timestamp, 0x12345678);
+        assert_eq!(parsed.pe_rift.entries.len(), 2);
+        assert_eq!(parsed.pe_rift.entries[0].source, 0);
+        assert_eq!(parsed.pe_rift.entries[0].target, 0);
+        assert_eq!(parsed.pe_rift.entries[1].source, 0x1000);
+        assert_eq!(parsed.pe_rift.entries[1].target, 0x1200);
+        assert!(parsed.preprocess_rift.entries.is_empty());
+    }
+
+    #[test]
+    fn roundtrip_pe_cmd_to_cmd_patched() {
+        if !PathBuf::from(DELTA_DIR).exists() { return; }
+        let src = delta_source("cmd.exe");
+        let tgt = delta_source("cmd_patched.exe");
+        let delta = CreateOptions::new()
+            .file_type(FileType::Auto)
+            .execute(&src, &tgt)
+            .unwrap();
+        let header = parse_header(&delta).unwrap();
+        assert_eq!(header.file_type, 8, "should detect AMD64");
+        let recovered = apply(&src, &delta).unwrap();
+        assert_eq!(recovered.len(), tgt.len());
+        assert_eq!(recovered, tgt);
+    }
+
+    #[test]
+    fn roundtrip_pe_advapi32() {
+        if !PathBuf::from(DELTA_DIR).exists() { return; }
+        let src = delta_source("advapi32_old.dll");
+        let tgt = delta_source("advapi32_new.dll");
+        let delta = CreateOptions::new()
+            .file_type(FileType::Auto)
+            .execute(&src, &tgt)
+            .unwrap();
+        let header = parse_header(&delta).unwrap();
+        assert_eq!(header.file_type, 8);
+        let recovered = apply(&src, &delta).unwrap();
+        assert_eq!(recovered.len(), tgt.len());
+        assert_eq!(recovered, tgt);
     }
 
     #[test]

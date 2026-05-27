@@ -1,0 +1,155 @@
+//! Rift table generation from comparing two PE binaries.
+
+use super::parse::PeInfo;
+use crate::lzx::rift::{RiftEntry, RiftTable};
+
+/// Generate a rift table from section header alignment between two PEs.
+///
+/// Matches sections by name and creates entries where the virtual address
+/// differs between source and target. Also matches data directory entries.
+pub fn rift_from_sections(source: &PeInfo, target: &PeInfo) -> RiftTable {
+    let mut entries = Vec::new();
+
+    for src_sec in &source.sections {
+        for tgt_sec in &target.sections {
+            if src_sec.name == tgt_sec.name
+                && src_sec.virtual_address > 0
+                && tgt_sec.virtual_address > 0
+                && src_sec.virtual_address != tgt_sec.virtual_address
+            {
+                entries.push(RiftEntry {
+                    source: src_sec.virtual_address as i64 - 1,
+                    target: tgt_sec.virtual_address as i64 - 1,
+                });
+                break;
+            }
+        }
+    }
+
+    let dd_count = source.data_directories.len().min(target.data_directories.len());
+    for i in 0..dd_count {
+        let (src_rva, src_size) = source.data_directories[i];
+        let (tgt_rva, tgt_size) = target.data_directories[i];
+        if src_rva > 0 && src_size > 0 && tgt_rva > 0 && tgt_size > 0
+            && src_rva != tgt_rva
+        {
+            entries.push(RiftEntry {
+                source: src_rva as i64,
+                target: tgt_rva as i64,
+            });
+        }
+    }
+
+    entries.sort_by_key(|e| e.source);
+    entries.dedup_by_key(|e| e.source);
+    RiftTable { entries }
+}
+
+/// Generate a rift table from import descriptor matching between two PEs.
+///
+/// Matches import descriptors by DLL name and creates entries for the
+/// import descriptor RVA, DLL name RVA, and IAT RVA.
+pub fn rift_from_imports(source_data: &[u8], target_data: &[u8]) -> RiftTable {
+    let mut entries = Vec::new();
+
+    let src_pe = match goblin::pe::PE::parse(source_data) {
+        Ok(pe) => pe,
+        Err(_) => return RiftTable { entries },
+    };
+    let tgt_pe = match goblin::pe::PE::parse(target_data) {
+        Ok(pe) => pe,
+        Err(_) => return RiftTable { entries },
+    };
+
+    let src_imports = &src_pe.imports;
+    let tgt_imports = &tgt_pe.imports;
+
+    for src_imp in src_imports {
+        for tgt_imp in tgt_imports {
+            if src_imp.dll == tgt_imp.dll {
+                if src_imp.offset != 0 && tgt_imp.offset != 0
+                    && src_imp.offset != tgt_imp.offset
+                {
+                    entries.push(RiftEntry {
+                        source: src_imp.offset as i64,
+                        target: tgt_imp.offset as i64,
+                    });
+                }
+                break;
+            }
+        }
+    }
+
+    entries.sort_by_key(|e| e.source);
+    entries.dedup_by_key(|e| e.source);
+    RiftTable { entries }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rift_from_sections_identical_pe() {
+        let pe = PeInfo {
+            image_base: 0x140000000,
+            size_of_image: 0x50000,
+            timestamp: 0x12345678,
+            is_64bit: true,
+            sections: vec![
+                super::super::parse::SectionInfo {
+                    name: ".text".to_string(),
+                    virtual_address: 0x1000,
+                    virtual_size: 0x10000,
+                    raw_offset: 0x400,
+                    raw_size: 0x10000,
+                    characteristics: 0,
+                },
+            ],
+            data_directories: vec![],
+        };
+        let rift = rift_from_sections(&pe, &pe);
+        assert!(rift.entries.is_empty(), "identical PEs produce empty rift");
+    }
+
+    #[test]
+    fn rift_from_sections_shifted() {
+        let source = PeInfo {
+            image_base: 0x140000000,
+            size_of_image: 0x50000,
+            timestamp: 0x11111111,
+            is_64bit: true,
+            sections: vec![
+                super::super::parse::SectionInfo {
+                    name: ".text".to_string(),
+                    virtual_address: 0x1000,
+                    virtual_size: 0x10000,
+                    raw_offset: 0x400,
+                    raw_size: 0x10000,
+                    characteristics: 0,
+                },
+            ],
+            data_directories: vec![],
+        };
+        let target = PeInfo {
+            image_base: 0x140000000,
+            size_of_image: 0x60000,
+            timestamp: 0x22222222,
+            is_64bit: true,
+            sections: vec![
+                super::super::parse::SectionInfo {
+                    name: ".text".to_string(),
+                    virtual_address: 0x2000,
+                    virtual_size: 0x10000,
+                    raw_offset: 0x600,
+                    raw_size: 0x10000,
+                    characteristics: 0,
+                },
+            ],
+            data_directories: vec![],
+        };
+        let rift = rift_from_sections(&source, &target);
+        let text_entry = rift.entries.iter().find(|e| e.source == 0xFFF).unwrap();
+        assert_eq!(text_entry.target, 0x1FFF);
+    }
+}

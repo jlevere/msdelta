@@ -7,8 +7,10 @@ use crate::{Error, Result};
 pub struct PeInfo {
     pub image_base: u64,
     pub size_of_image: u32,
+    pub timestamp: u32,
     pub is_64bit: bool,
     pub sections: Vec<SectionInfo>,
+    pub data_directories: Vec<(u32, u32)>,
 }
 
 #[derive(Debug, Clone)]
@@ -35,6 +37,13 @@ impl PeInfo {
         let is_64bit = opt.standard_fields.magic == goblin::pe::optional_header::MAGIC_64;
         let image_base = opt.windows_fields.image_base;
         let size_of_image = opt.windows_fields.size_of_image;
+        let timestamp = header.coff_header.time_date_stamp;
+
+        let data_directories: Vec<(u32, u32)> = opt
+            .data_directories
+            .dirs()
+            .map(|(_, dd)| (dd.virtual_address, dd.size))
+            .collect();
 
         let sections = pe
             .sections
@@ -58,8 +67,10 @@ impl PeInfo {
         Ok(PeInfo {
             image_base,
             size_of_image,
+            timestamp,
             is_64bit,
             sections,
+            data_directories,
         })
     }
 

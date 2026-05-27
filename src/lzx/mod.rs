@@ -467,7 +467,7 @@ pub fn compress(reference: &[u8], target: &[u8]) -> Result<Vec<u8>> {
             hash_table[h] = combined_pos as u32;
         }
 
-        if best_len >= 2 {
+        if best_len >= 2 && match_fits_table(best_offset) {
             symbols.push(MatchSymbol {
                 raw_offset: best_offset,
                 length: best_len,
@@ -676,6 +676,31 @@ fn compute_length_slot(length: u32) -> u32 {
 fn compute_length_extra(length: u32) -> u16 {
     let len_sym = (length - 1).saturating_sub(7);
     if len_sym > 0 && len_sym <= 255 { len_sym as u16 } else { 0 }
+}
+
+fn match_fits_table(raw_offset: u32) -> bool {
+    if raw_offset < 0x100 || raw_offset == SOURCE_COPY
+        || (LRU_BASE..LRU_BASE + 3).contains(&raw_offset)
+    {
+        return true;
+    }
+    if raw_offset >= RAW_OFFSET_BASE {
+        let dist = raw_offset - RAW_OFFSET_BASE;
+        if dist == 0 { return false; }
+        let slot = if dist <= 3 {
+            dist + 7
+        } else {
+            let high = 31 - dist.leading_zeros();
+            let adj = 2 * high + ((dist >> (high - 1)) & 1);
+            adj + 7
+        };
+        let main_sym = 0x100 + (slot << 3);
+        return main_sym < MAIN_SYMBOLS as u32;
+    }
+    if raw_offset < SOURCE_COPY {
+        return true;
+    }
+    true
 }
 
 fn encode_match(
