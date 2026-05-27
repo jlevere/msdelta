@@ -252,12 +252,13 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
     Ok(output)
 }
 
-/// Apply PE post-processing transforms after LXZ decompression.
+/// Apply PE post-processing transforms after LZX decompression.
 ///
-/// The encoder normalizes PE header fields (timestamps, checksums) to match
-/// the source during compression. After decompression, the output has the
-/// source's field values. This function restores the target's values from
-/// the preprocess buffer.
+/// The encoder normalizes PE timestamps to the source's value. After
+/// decompression, the output has source timestamps at all locations.
+/// This function restores the target's timestamp at structurally known
+/// PE offsets: the COFF header, debug directory entries, and the export
+/// directory.
 fn apply_pe_postprocess(
     reference: &[u8],
     preprocess: &[u8],
@@ -267,48 +268,125 @@ fn apply_pe_postprocess(
 
     let mut reader = BitReader::new(preprocess)?;
 
-    // PortableExecutableInfo::FromBitReader reads:
-    // 64 bits: target ImageBase
-    // 32 bits: target TimeDateStamp
-    // 32 bits: target CheckSum (or other field)
-    // PortableExecutableInfo::FromBitReader reads:
-    // Read64(0x40) = 64 raw bits for ImageBase
-    // Read32(0x20) = 32 raw bits (checksum or zero)
-    // Read32(0x20) = 32 raw bits for TimeDateStamp
+    // PortableExecutableInfo::FromBitReader (decompiled):
+    // Read64(0x40) = ImageBase
+    // Read32(0x20) = field (zero for typical deltas)
+    // Read32(0x20) = target TimeDateStamp
     let _target_image_base = reader.read_bits(64)?;
     let _target_field1 = reader.read_bits(32)? as u32;
     let target_timestamp = reader.read_bits(32)? as u32;
 
-    // The source PE's timestamp (used as the "normalized" value during encoding)
-    if reference.len() < 0x40 {
-        return Ok(());
-    }
-    let pe_off = u32::from_le_bytes(reference[0x3C..0x40].try_into().unwrap()) as usize;
-    if pe_off + 12 > reference.len() {
-        return Ok(());
-    }
-    let source_timestamp = u32::from_le_bytes(
-        reference[pe_off + 8..pe_off + 12].try_into().unwrap(),
-    );
-
-    if source_timestamp == target_timestamp {
+    let source_timestamp = pe_timestamp(reference);
+    if source_timestamp == 0 || source_timestamp == target_timestamp {
         return Ok(());
     }
 
-    // Replace all occurrences of the source timestamp with the target timestamp
-    let old_bytes = source_timestamp.to_le_bytes();
     let new_bytes = target_timestamp.to_le_bytes();
-    let mut i = 0;
-    while i + 4 <= output.len() {
-        if output[i..i + 4] == old_bytes {
-            output[i..i + 4].copy_from_slice(&new_bytes);
-            i += 4;
-        } else {
-            i += 1;
+
+    for off in pe_timestamp_offsets(output) {
+        if off + 4 <= output.len() {
+            let val = u32::from_le_bytes(output[off..off + 4].try_into().unwrap());
+            if val == source_timestamp {
+                output[off..off + 4].copy_from_slice(&new_bytes);
+            }
         }
     }
 
     Ok(())
+}
+
+fn pe_timestamp(data: &[u8]) -> u32 {
+    if data.len() < 0x40 { return 0; }
+    let pe_off = u32::from_le_bytes(data[0x3C..0x40].try_into().unwrap()) as usize;
+    if pe_off + 12 > data.len() { return 0; }
+    u32::from_le_bytes(data[pe_off + 8..pe_off + 12].try_into().unwrap())
+}
+
+/// Collect file offsets of all TimeDateStamp fields in a PE image.
+/// Returns offsets for: COFF header, debug directory entries, export directory.
+fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
+    let mut offsets = Vec::new();
+    let pe = match goblin::pe::PE::parse(data) {
+        Ok(pe) => pe,
+        Err(_) => return offsets,
+    };
+
+    // 1. COFF header TimeDateStamp
+    let pe_off = pe.header.dos_header.pe_pointer as usize;
+    offsets.push(pe_off + 8);
+
+    let opt = match pe.header.optional_header {
+        Some(o) => o,
+        None => return offsets,
+    };
+
+    let sections = &pe.sections;
+    let rva_to_offset = |rva: u32| -> Option<usize> {
+        for s in sections {
+            if rva >= s.virtual_address && rva < s.virtual_address + s.virtual_size {
+                return Some((s.pointer_to_raw_data + (rva - s.virtual_address)) as usize);
+            }
+        }
+        None
+    };
+
+    // 2. Export directory TimeDateStamp (offset +4 from start)
+    if let Some(&dd) = opt.data_directories.get_export_table() {
+        if dd.virtual_address != 0 {
+            if let Some(off) = rva_to_offset(dd.virtual_address) {
+                offsets.push(off + 4);
+            }
+        }
+    }
+
+    // 3. Debug directory entries (each 28 bytes, TimeDateStamp at +4)
+    if let Some(&dd) = opt.data_directories.get_debug_table() {
+        if dd.virtual_address != 0 && dd.size >= 28 {
+            if let Some(base_off) = rva_to_offset(dd.virtual_address) {
+                let num_entries = dd.size as usize / 28;
+                for i in 0..num_entries {
+                    offsets.push(base_off + i * 28 + 4);
+                }
+            }
+        }
+    }
+
+    // 4. Debug data: scan for timestamp in each entry's raw data
+    if let Some(&dd) = opt.data_directories.get_debug_table() {
+        if dd.virtual_address != 0 && dd.size >= 28 {
+            if let Some(base_off) = rva_to_offset(dd.virtual_address) {
+                let num_entries = dd.size as usize / 28;
+                let header_ts = if offsets.is_empty() { 0 } else {
+                    u32::from_le_bytes(data[offsets[0]..offsets[0]+4].try_into().unwrap_or([0;4]))
+                };
+                let ts_bytes = header_ts.to_le_bytes();
+                for i in 0..num_entries {
+                    let entry_off = base_off + i * 28;
+                    if entry_off + 28 > data.len() { break; }
+                    let raw_ptr = u32::from_le_bytes(
+                        data[entry_off + 24..entry_off + 28].try_into().unwrap()) as usize;
+                    let raw_size = u32::from_le_bytes(
+                        data[entry_off + 16..entry_off + 20].try_into().unwrap()) as usize;
+                    if raw_ptr == 0 || raw_size == 0 || raw_ptr + raw_size > data.len() {
+                        continue;
+                    }
+                    // Scan the debug data for the PE timestamp
+                    let end = raw_ptr + raw_size;
+                    let mut j = raw_ptr;
+                    while j + 4 <= end {
+                        if data[j..j+4] == ts_bytes {
+                            offsets.push(j);
+                            j += 4;
+                        } else {
+                            j += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    offsets
 }
 
 /// Encode `target` as a PA30 delta against `reference`.
@@ -893,6 +971,17 @@ mod tests {
     fn apply_pe_advapi32() {
         if !PathBuf::from(DELTA_DIR).exists() { return; }
         let result = apply(&delta_source("advapi32_old.dll"), &delta_file("advapi32_pe.pa30")).unwrap();
-        assert_eq!(result, delta_source("advapi32_new.dll"));
+        let expected = delta_source("advapi32_new.dll");
+        let mut diffs = Vec::new();
+        for i in 0..result.len().min(expected.len()) {
+            if result[i] != expected[i] { diffs.push(i); }
+        }
+        if !diffs.is_empty() {
+            for &i in diffs.iter().take(20) {
+                eprintln!("  diff[{i}]: got={:#04x} want={:#04x}", result[i], expected[i]);
+            }
+            panic!("{} diffs, first at {}", diffs.len(), diffs[0]);
+        }
+        assert_eq!(result.len(), expected.len());
     }
 }
