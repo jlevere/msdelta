@@ -100,6 +100,9 @@ pub(crate) fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
     let sections = &pe.sections;
     let rva_to_offset = |rva: u32| -> Option<usize> {
         for s in sections {
+            if s.pointer_to_raw_data == 0 || s.size_of_raw_data == 0 {
+                continue;
+            }
             if rva >= s.virtual_address && rva < s.virtual_address + s.virtual_size {
                 return Some((s.pointer_to_raw_data + (rva - s.virtual_address)) as usize);
             }

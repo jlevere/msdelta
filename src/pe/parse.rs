@@ -39,11 +39,13 @@ impl PeInfo {
         let size_of_image = opt.windows_fields.size_of_image;
         let timestamp = header.coff_header.time_date_stamp;
 
-        let data_directories: Vec<(u32, u32)> = opt
-            .data_directories
-            .dirs()
-            .map(|(_, dd)| (dd.virtual_address, dd.size))
-            .collect();
+        let mut data_directories = vec![(0u32, 0u32); 16];
+        for (dtype, dd) in opt.data_directories.dirs() {
+            let idx = dtype as usize;
+            if idx < 16 {
+                data_directories[idx] = (dd.virtual_address, dd.size);
+            }
+        }
 
         let sections = pe
             .sections
