@@ -6,7 +6,7 @@
 //!
 //! PDB-confirmed: `RiftTable`, `IntFormat`, `OffsetRiftTable`.
 
-use crate::bitstream::BitReader;
+use crate::bitstream::{BitReader, BitWriter};
 use crate::huffman::HuffmanTable;
 use crate::{Error, Result};
 
@@ -66,6 +66,40 @@ impl RiftTable {
         entries.sort_by_key(|e| e.source);
 
         Ok(RiftTable { entries })
+    }
+
+    /// Serialize a rift table to the bitstream.
+    pub fn to_writer(&self, writer: &mut BitWriter) {
+        if self.entries.is_empty() {
+            writer.write_bits(0, 1);
+            return;
+        }
+        writer.write_bits(1, 1);
+
+        let mut src_deltas = Vec::with_capacity(self.entries.len());
+        let mut dst_deltas = Vec::with_capacity(self.entries.len());
+        let mut src_acc: i64 = 0;
+        let mut dst_acc: i64 = 0;
+        for e in &self.entries {
+            let sd = e.source - src_acc;
+            src_acc = e.source;
+            let target_delta = (e.target - e.source) - dst_acc;
+            dst_acc = e.target - e.source;
+            src_deltas.push(sd);
+            dst_deltas.push(target_delta);
+        }
+
+        let fmt_src = IntFormat::from_values(&src_deltas);
+        let fmt_dst = IntFormat::from_values(&dst_deltas);
+
+        fmt_src.to_writer(writer);
+        fmt_dst.to_writer(writer);
+        writer.write_i64(self.entries.len() as i64);
+
+        for (sd, dd) in src_deltas.iter().zip(dst_deltas.iter()) {
+            fmt_src.write_number(writer, *sd);
+            fmt_dst.write_number(writer, *dd);
+        }
     }
 
     /// Look up the rift offset for a given source position.
@@ -144,6 +178,8 @@ impl OffsetRiftTable {
 /// Values > 3 have extra bits read via the base/half scheme.
 struct IntFormat {
     table: HuffmanTable,
+    num_pos: usize,
+    num_neg: usize,
 }
 
 impl IntFormat {
@@ -216,7 +252,7 @@ impl IntFormat {
         }
 
         let table = HuffmanTable::from_lengths(&lengths)?;
-        Ok(IntFormat { table })
+        Ok(IntFormat { table, num_pos, num_neg })
     }
 
     fn read_number(&self, reader: &mut BitReader) -> Result<i64> {
@@ -243,6 +279,73 @@ impl IntFormat {
             Ok(value)
         }
     }
+
+    fn value_to_symbol(value: i64) -> (u32, u32, u32) {
+        let (magnitude, is_neg) = if value < 0 {
+            (!value as u64, true)
+        } else {
+            (value as u64, false)
+        };
+
+        let (sym_idx, extra_val, extra_bits) = if magnitude <= 3 {
+            (magnitude as u32, 0u32, 0u32)
+        } else {
+            let high_bit = 63 - magnitude.leading_zeros();
+            let half = high_bit - 1;
+            let base_bit = (magnitude >> half) & 1;
+            let sym_idx = 2 * (half + 1) + base_bit as u32;
+            let extra_val = (magnitude & ((1u64 << half) - 1)) as u32;
+            (sym_idx, extra_val, half)
+        };
+
+        let symbol = if is_neg {
+            sym_idx + INT_FORMAT_HALF as u32
+        } else {
+            sym_idx
+        };
+        (symbol, extra_val, extra_bits)
+    }
+
+    fn from_values(values: &[i64]) -> Self {
+        let mut freqs = vec![1u32; INT_FORMAT_SYMBOLS];
+        for &v in values {
+            let (sym, _, _) = Self::value_to_symbol(v);
+            freqs[sym as usize] += 1;
+        }
+
+        let max_len: u8 = 15;
+        let table = HuffmanTable::from_frequencies(&freqs, max_len)
+            .unwrap_or_else(|_| {
+                let uniform = vec![8u8; INT_FORMAT_SYMBOLS];
+                HuffmanTable::from_lengths(&uniform).unwrap()
+            });
+
+        IntFormat { table, num_pos: INT_FORMAT_HALF, num_neg: INT_FORMAT_HALF }
+    }
+
+    fn to_writer(&self, writer: &mut BitWriter) {
+        writer.write_bits(INT_FORMAT_HALF as u64, 8);   // num_pos = 126 (all explicit)
+        writer.write_bits(INT_FORMAT_HALF as u64, 8);   // num_neg = 126 (all explicit)
+        writer.write_bits(0u64, 8);                      // num_default = 0
+
+        for i in 0..INT_FORMAT_HALF {
+            let len = self.table.lengths[i].max(1);
+            writer.write_bits((len - 1) as u64, 4);
+        }
+        for i in INT_FORMAT_HALF..INT_FORMAT_SYMBOLS {
+            let len = self.table.lengths[i].max(1);
+            writer.write_bits((len - 1) as u64, 4);
+        }
+        writer.write_bits(0u64, 4); // default_len (unused but required by format)
+    }
+
+    fn write_number(&self, writer: &mut BitWriter, value: i64) {
+        let (symbol, extra_val, extra_bits) = Self::value_to_symbol(value);
+        self.table.write_symbol(writer, symbol as u16);
+        if extra_bits > 0 {
+            writer.write_bits(extra_val as u64, extra_bits);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -256,6 +359,97 @@ mod tests {
         let mut reader = BitReader::new(&data).unwrap();
         let table = RiftTable::from_reader(&mut reader).unwrap();
         assert!(table.entries.is_empty());
+    }
+
+    #[test]
+    fn rift_table_roundtrip_empty() {
+        let table = RiftTable { entries: Vec::new() };
+        let mut w = BitWriter::new();
+        table.to_writer(&mut w);
+        let data = w.finish();
+        let mut r = BitReader::new(&data).unwrap();
+        let decoded = RiftTable::from_reader(&mut r).unwrap();
+        assert!(decoded.entries.is_empty());
+    }
+
+    #[test]
+    fn rift_table_roundtrip_single() {
+        let table = RiftTable {
+            entries: vec![RiftEntry { source: 100, target: 200 }],
+        };
+        let mut w = BitWriter::new();
+        table.to_writer(&mut w);
+        let data = w.finish();
+        let mut r = BitReader::new(&data).unwrap();
+        let decoded = RiftTable::from_reader(&mut r).unwrap();
+        assert_eq!(decoded.entries.len(), 1);
+        assert_eq!(decoded.entries[0].source, 100);
+        assert_eq!(decoded.entries[0].target, 200);
+    }
+
+    #[test]
+    fn rift_table_roundtrip_multiple() {
+        let table = RiftTable {
+            entries: vec![
+                RiftEntry { source: 0, target: 0 },
+                RiftEntry { source: 0x1000, target: 0x2000 },
+                RiftEntry { source: 0x5000, target: 0x5800 },
+                RiftEntry { source: 0x10000, target: 0x10000 },
+            ],
+        };
+        let mut w = BitWriter::new();
+        table.to_writer(&mut w);
+        let data = w.finish();
+        let mut r = BitReader::new(&data).unwrap();
+        let decoded = RiftTable::from_reader(&mut r).unwrap();
+        assert_eq!(decoded.entries.len(), table.entries.len());
+        for (a, b) in decoded.entries.iter().zip(table.entries.iter()) {
+            assert_eq!(a.source, b.source, "source mismatch");
+            assert_eq!(a.target, b.target, "target mismatch");
+        }
+    }
+
+    #[test]
+    fn rift_table_roundtrip_negative_deltas() {
+        let table = RiftTable {
+            entries: vec![
+                RiftEntry { source: 100, target: 50 },
+                RiftEntry { source: 200, target: 180 },
+                RiftEntry { source: 300, target: 350 },
+            ],
+        };
+        let mut w = BitWriter::new();
+        table.to_writer(&mut w);
+        let data = w.finish();
+        let mut r = BitReader::new(&data).unwrap();
+        let decoded = RiftTable::from_reader(&mut r).unwrap();
+        assert_eq!(decoded.entries.len(), 3);
+        for (a, b) in decoded.entries.iter().zip(table.entries.iter()) {
+            assert_eq!(a.source, b.source);
+            assert_eq!(a.target, b.target);
+        }
+    }
+
+    #[test]
+    fn int_format_value_symbol_roundtrip() {
+        for &val in &[0i64, 1, 2, 3, 4, 5, 7, 8, 15, 16, 100, 1000, 65535, -1, -2, -3, -4, -100, -65536] {
+            let (sym, extra, ebits) = IntFormat::value_to_symbol(val);
+            assert!(
+                (sym as usize) < INT_FORMAT_SYMBOLS,
+                "symbol {sym} out of range for value {val}"
+            );
+            let is_neg = sym >= INT_FORMAT_HALF as u32;
+            let mag_idx = if is_neg { sym - INT_FORMAT_HALF as u32 } else { sym };
+            let reconstructed = if mag_idx <= 3 {
+                mag_idx as i64
+            } else {
+                let half = (mag_idx >> 1) - 1;
+                let base = (mag_idx & 1) as i64 + 2;
+                (base << half) | extra as i64
+            };
+            let result = if is_neg { !reconstructed } else { reconstructed };
+            assert_eq!(result, val, "roundtrip failed for {val}: sym={sym} extra={extra} ebits={ebits}");
+        }
     }
 
     #[test]
