@@ -64,8 +64,10 @@ impl<'a> BitReader<'a> {
     /// Load bytes into the accumulator until it has ≥56 bits (or data is exhausted).
     #[inline]
     pub fn refill(&mut self) {
+        if self.bits == 0 {
+            self.accum = 0;
+        }
         if self.pos + 8 <= self.data.len() {
-            // Fast path: unaligned 64-bit load
             let bytes = &self.data[self.pos..self.pos + 8];
             let word = u64::from_le_bytes([
                 bytes[0], bytes[1], bytes[2], bytes[3],
@@ -78,7 +80,6 @@ impl<'a> BitReader<'a> {
             self.pos += byte_advance;
             self.bits += byte_advance as u32 * 8;
         } else {
-            // Slow path: byte-at-a-time for tail
             while self.bits <= 56 && self.pos < self.data.len() {
                 self.accum |= (self.data[self.pos] as u64) << self.bits;
                 self.pos += 1;
@@ -515,5 +516,78 @@ mod tests {
         assert_eq!(r.read_i64().unwrap(), 9066);
         assert_eq!(r.read_buffer().unwrap(), b"test");
         assert_eq!(r.read_i64().unwrap(), 0);
+    }
+
+    #[test]
+    fn writer_buffer_then_zero() {
+        let payload = vec![0xABu8; 32];
+        let mut w = BitWriter::new();
+        w.write_buffer(&payload);
+        w.write_i64(0);
+        let data = w.finish();
+        let mut r = BitReader::new(&data).unwrap();
+        let buf = r.read_buffer().unwrap();
+        assert_eq!(buf, payload);
+        let val = r.read_i64().unwrap();
+        assert_eq!(val, 0, "expected 0, got {val}");
+    }
+
+    #[test]
+    fn writer_bsdiff_header_progressive() {
+        let hash = vec![0xABu8; 32];
+
+        for &(label, vals) in &[
+            ("2 vals", &[0x101i64, 0x800C][..]),
+            ("3 vals", &[0x101i64, 1, 0x800C][..]),
+            ("4a vals", &[0x101i64, 1, 0, 0x800C][..]),
+            ("4b vals", &[0x101i64, 1, 52, 0x800C][..]),
+            ("5 vals", &[0x101i64, 1, 0, 52, 0x800C][..]),
+        ] {
+            let mut w = BitWriter::new();
+            for &v in vals { w.write_i64(v); }
+            w.write_buffer(&hash);
+            w.write_i64(0);
+            let data = w.finish();
+
+            let mut r = BitReader::new(&data).unwrap();
+            for &v in vals {
+                let got = r.read_i64().unwrap();
+                assert_eq!(got, v, "{label}: i64 mismatch");
+            }
+            let h = r.read_buffer().unwrap();
+            assert_eq!(h.len(), 32, "{label}: hash len");
+            let pp = r.read_i64().unwrap();
+            assert_eq!(pp, 0, "{label}: preprocess size should be 0, got {pp}");
+        }
+    }
+
+    #[test]
+    fn writer_roundtrip_bsdiff_header() {
+        let hash = vec![0xABu8; 32];
+        let patch = vec![0xCDu8; 40];
+
+        let mut w = BitWriter::new();
+        w.write_i64(0x101);
+        w.write_i64(1);
+        w.write_i64(0);
+        w.write_i64(52);
+        w.write_i64(0x800C);
+        w.write_buffer(&hash);
+        w.write_buffer(&[]);
+        w.write_buffer(&patch);
+        let data = w.finish();
+
+        let mut r = BitReader::new(&data).unwrap();
+        assert_eq!(r.read_i64().unwrap(), 0x101);
+        assert_eq!(r.read_i64().unwrap(), 1);
+        assert_eq!(r.read_i64().unwrap(), 0);
+        assert_eq!(r.read_i64().unwrap(), 52);
+        assert_eq!(r.read_i64().unwrap(), 0x800C);
+        let h = r.read_buffer().unwrap();
+        assert_eq!(h, hash);
+        let pp = r.read_buffer().unwrap();
+        assert!(pp.is_empty());
+        let pd = r.read_buffer().unwrap();
+        assert_eq!(pd, patch);
     }
 }

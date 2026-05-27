@@ -39,22 +39,10 @@ impl RiftTable {
             });
         }
 
-        if std::env::var("RIFT_DEBUG").is_ok() {
-            eprintln!("  rift: parsing IntFormats, {} bits remaining", reader.remaining());
-        }
         let fmt_src = IntFormat::from_reader(reader)?;
-        if std::env::var("RIFT_DEBUG").is_ok() {
-            eprintln!("  rift: after fmt_src, {} bits remaining", reader.remaining());
-        }
         let fmt_dst = IntFormat::from_reader(reader)?;
-        if std::env::var("RIFT_DEBUG").is_ok() {
-            eprintln!("  rift: after fmt_dst, {} bits remaining", reader.remaining());
-        }
 
         let count = reader.read_i64()?;
-        if std::env::var("RIFT_DEBUG").is_ok() {
-            eprintln!("  rift: flag=1, count={count}, remaining={}", reader.remaining());
-        }
         if !(0..=0x0FFFFFFFFFFFFFFF).contains(&count) {
             return Err(Error::Malformed("rift table entry count out of range"));
         }

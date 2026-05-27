@@ -41,16 +41,33 @@ pub fn decompress_compression_api(data: &[u8]) -> Result<Vec<u8>> {
     if payload_end > data.len() {
         return Err(Error::Truncated);
     }
+    if chunk_compressed == uncompressed_size {
+        return Ok(data[payload_start..payload_end].to_vec());
+    }
     decompress(&data[payload_start..payload_end], uncompressed_size)
+}
+
+/// Compress data into the Windows Compression API (cabinet.dll) LZMS format.
+///
+/// Produces the same format that `decompress_compression_api` reads:
+/// 24-byte header + chunk-size + LZMS-compressed payload.
+pub fn compress_compression_api(data: &[u8]) -> Result<Vec<u8>> {
+    let compressed = compress(data)?;
+    let payload = if compressed.len() < data.len() { &compressed } else { data };
+    let mut out = Vec::with_capacity(COMPRESSION_API_HEADER_SIZE + 4 + payload.len());
+    out.extend_from_slice(&COMPRESSION_API_MAGIC.to_le_bytes());
+    out.extend_from_slice(&0u32.to_le_bytes());
+    out.extend_from_slice(&(data.len() as u64).to_le_bytes());
+    out.extend_from_slice(&0u64.to_le_bytes());
+    out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    out.extend_from_slice(payload);
+    Ok(out)
 }
 
 /// Decompress a raw LZMS bitstream.
 pub fn decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>> {
     if data.is_empty() || output_size == 0 {
         return Ok(Vec::new());
-    }
-    if data.len() == output_size {
-        return Ok(data.to_vec());
     }
     if data.len() < 4 || data.len() % 2 != 0 {
         return Err(Error::Malformed("LZMS: need >= 4 even bytes"));
@@ -426,22 +443,51 @@ fn match_length(data: &[u8], src: usize, dst: usize, limit: usize) -> u32 {
 struct RangeEncoder {
     low: u64,
     range: u32,
+    cache: u16,
+    cache_count: u32,
+    first: bool,
     output: Vec<u8>,
 }
 
 impl RangeEncoder {
     fn new() -> Self {
-        RangeEncoder { low: 0, range: 0xFFFF_FFFF, output: Vec::new() }
+        RangeEncoder {
+            low: 0, range: 0xFFFF_FFFF,
+            cache: 0, cache_count: 0, first: true,
+            output: Vec::new(),
+        }
+    }
+
+    fn emit(&mut self, word: u16) {
+        self.output.push(word as u8);
+        self.output.push((word >> 8) as u8);
+    }
+
+    #[inline]
+    fn shift_low(&mut self) {
+        let overflow = (self.low >> 32) != 0;
+        if self.low < 0xFFFF_0000 || overflow {
+            if !self.first {
+                self.emit(self.cache.wrapping_add(overflow as u16));
+                let fill = if overflow { 0u16 } else { 0xFFFFu16 };
+                for _ in 0..self.cache_count {
+                    self.emit(fill.wrapping_add(overflow as u16));
+                }
+            }
+            self.first = false;
+            self.cache = ((self.low >> 16) & 0xFFFF) as u16;
+            self.cache_count = 0;
+        } else {
+            self.cache_count += 1;
+        }
+        self.low = (self.low & 0xFFFF) << 16;
+        self.range <<= 16;
     }
 
     #[inline]
     fn normalize(&mut self) {
         while self.range < 0x10000 {
-            let word = (self.low >> 48) as u16;
-            self.output.push(word as u8);
-            self.output.push((word >> 8) as u8);
-            self.low <<= 16;
-            self.range <<= 16;
+            self.shift_low();
         }
     }
 
@@ -458,7 +504,7 @@ impl RangeEncoder {
         if bit == 0 {
             self.range = bound;
         } else {
-            self.low += (bound as u64) << 32;
+            self.low += bound as u64;
             self.range -= bound;
         }
         probs[*state as usize].update(bit);
@@ -466,11 +512,8 @@ impl RangeEncoder {
     }
 
     fn finish(&mut self, out: &mut Vec<u8>) {
-        for _ in 0..2 {
-            let word = (self.low >> 48) as u16;
-            self.output.push(word as u8);
-            self.output.push((word >> 8) as u8);
-            self.low <<= 16;
+        for _ in 0..4 {
+            self.shift_low();
         }
         out.splice(0..0, self.output.drain(..));
     }
@@ -1074,5 +1117,24 @@ mod tests {
         let compressed = compress(&original).unwrap();
         let decompressed = decompress(&compressed, original.len()).unwrap();
         assert_eq!(decompressed, original);
+    }
+
+    #[test]
+    fn compression_api_roundtrip() {
+        let original = b"Compression API wrapper roundtrip test data with some repetition repetition";
+        let wrapped = compress_compression_api(original).unwrap();
+        assert!(wrapped.len() >= COMPRESSION_API_HEADER_SIZE + 4);
+        let magic = u32::from_le_bytes(wrapped[0..4].try_into().unwrap());
+        assert_eq!(magic, COMPRESSION_API_MAGIC);
+        let recovered = decompress_compression_api(&wrapped).unwrap();
+        assert_eq!(recovered, original);
+    }
+
+    #[test]
+    fn compression_api_roundtrip_large() {
+        let original: Vec<u8> = (0..8192).map(|i| (i * 3 + 7) as u8).collect();
+        let wrapped = compress_compression_api(&original).unwrap();
+        let recovered = decompress_compression_api(&wrapped).unwrap();
+        assert_eq!(recovered, original);
     }
 }

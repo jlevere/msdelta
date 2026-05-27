@@ -256,9 +256,14 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
         (None, None)
     };
 
-    let mut output = crate::lzx::decompress_with_rift(
-        reference, &parsed.patch_data, target_size, caller_rift.as_ref(),
-    )?;
+    let mut output = if parsed.header.file_type_set & 0x100 != 0 {
+        let decompressed = crate::lzms::decompress_compression_api(&parsed.patch_data)?;
+        crate::bsdiff::bspatch(reference, target_size, &decompressed)?
+    } else {
+        crate::lzx::decompress_with_rift(
+            reference, &parsed.patch_data, target_size, caller_rift.as_ref(),
+        )?
+    };
 
     if let Some(pp) = &pp {
         apply_pe_timestamp_fixup(reference, pp, &mut output)?;
@@ -474,15 +479,24 @@ pub fn create(reference: &[u8], target: &[u8]) -> Result<Vec<u8>> {
     CreateOptions::default().execute(reference, target)
 }
 
+/// Compression codec for delta creation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Codec {
+    #[default]
+    PseudoLzx,
+    BsDiff,
+}
+
 /// Options for creating a PA30 delta.
 #[derive(Debug, Clone)]
 pub struct CreateOptions {
     hash_alg: u32,
+    codec: Codec,
 }
 
 impl Default for CreateOptions {
     fn default() -> Self {
-        CreateOptions { hash_alg: HASH_ALG_NONE }
+        CreateOptions { hash_alg: HASH_ALG_NONE, codec: Codec::default() }
     }
 }
 
@@ -498,11 +512,27 @@ impl CreateOptions {
         self
     }
 
+    /// Set the compression codec.
+    pub fn codec(mut self, codec: Codec) -> Self {
+        self.codec = codec;
+        self
+    }
+
     /// Build the delta.
     pub fn execute(&self, reference: &[u8], target: &[u8]) -> Result<Vec<u8>> {
         use crate::bitstream::BitWriter;
 
-        let patch_data = crate::lzx::compress(reference, target)?;
+        let (patch_data, file_type_set, flags) = match self.codec {
+            Codec::PseudoLzx => {
+                let data = crate::lzx::compress(reference, target)?;
+                (data, 1i64, 0x20000i64)
+            }
+            Codec::BsDiff => {
+                let bsdiff_patch = crate::bsdiff::bscreate(reference, target)?;
+                let data = crate::lzms::compress_compression_api(&bsdiff_patch)?;
+                (data, 0x101i64, 0i64)
+            }
+        };
 
         let target_hash = if self.hash_alg != HASH_ALG_NONE {
             get_signature(target, self.hash_alg)?.hash
@@ -511,9 +541,9 @@ impl CreateOptions {
         };
 
         let mut header_writer = BitWriter::new();
-        header_writer.write_i64(1);                       // FileTypeSet = RAW
+        header_writer.write_i64(file_type_set);
         header_writer.write_i64(1);                       // FileType = RAW
-        header_writer.write_i64(0x20000);                 // Flags
+        header_writer.write_i64(flags);
         header_writer.write_i64(target.len() as i64);     // TargetSize
         header_writer.write_i64(self.hash_alg as i64);    // HashAlgId
         header_writer.write_buffer(&target_hash);         // TargetHash
@@ -853,6 +883,58 @@ mod tests {
 
         let recovered = apply(reference, &delta).unwrap();
         assert_eq!(recovered, target, "round-trip failed");
+    }
+
+    #[test]
+    fn roundtrip_bsdiff_simple() {
+        let reference = b"Hello, this is a reference buffer with some repeated content. Hello again!";
+        let target = b"Hello, this is a modified buffer with some repeated content. Goodbye!";
+
+        let delta = CreateOptions::new()
+            .codec(Codec::BsDiff)
+            .execute(reference, target)
+            .unwrap();
+        assert!(delta.starts_with(b"PA30"));
+
+        let header = parse_header(&delta).unwrap();
+        assert_eq!(header.file_type_set & 0x100, 0x100);
+
+        let recovered = apply(reference, &delta).unwrap();
+        assert_eq!(recovered, target);
+    }
+
+    #[test]
+    fn roundtrip_bsdiff_empty_target() {
+        let reference = b"some reference data here";
+        let delta = CreateOptions::new()
+            .codec(Codec::BsDiff)
+            .execute(reference, b"")
+            .unwrap();
+        let recovered = apply(reference, &delta).unwrap();
+        assert!(recovered.is_empty());
+    }
+
+    #[test]
+    fn roundtrip_bsdiff_with_hash() {
+        let reference = b"reference for bsdiff hash test";
+        let target = b"target for bsdiff hash test with integrity checking";
+
+        let delta = CreateOptions::new()
+            .codec(Codec::BsDiff)
+            .hash_algorithm(HASH_ALG_SHA256)
+            .execute(reference, target)
+            .unwrap();
+
+        let header = parse_header(&delta).unwrap();
+        assert_eq!(header.hash_alg_id, HASH_ALG_SHA256 as i32);
+        assert_eq!(header.file_type_set & 0x100, 0x100);
+
+        let header2 = parse_header(&delta).unwrap();
+        assert_eq!(header2.target_size, target.len() as i64);
+        assert_eq!(header2.target_hash.len(), 32);
+
+        let recovered = apply(reference, &delta).unwrap();
+        assert_eq!(recovered, target);
     }
 
     #[test]
