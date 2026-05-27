@@ -243,30 +243,98 @@ pub(super) fn write_composite_format(
     all_lengths.extend_from_slice(&tables.lengths.lengths);
     all_lengths.extend_from_slice(&tables.aligned.lengths);
 
-    // For the pre-tree, we use a simple encoding: write each length as a raw symbol.
-    // The pre-tree itself encodes how lengths are stored. Symbols 0-16 = raw lengths.
-    // We compute pre-tree frequencies from the actual lengths.
+    let prev_lengths = vec![0u8; TOTAL_LENGTHS];
+    let pretree_syms = encode_compression_lengths(&all_lengths, &prev_lengths);
+
     let mut pretree_freq = [0u32; PRETREE_SYMBOLS];
-    for &l in &all_lengths {
-        pretree_freq[l as usize] += 1;
+    for &(sym, _) in &pretree_syms {
+        pretree_freq[sym as usize] += 1;
     }
 
-    // Build pre-tree from frequencies (max length 15)
     let pretree = HuffmanTable::from_frequencies(&pretree_freq, 15)?;
 
-    // Write 39 pre-tree lengths (4 bits each)
     for i in 0..PRETREE_SYMBOLS {
         writer.write_bits(pretree.lengths[i] as u64, 4);
     }
 
-    // Write compression lengths using the pre-tree
-    // For simplicity, write each as a raw symbol (no delta encoding, no run-length).
-    // Previous lengths are all zeros (initial state).
-    for &l in &all_lengths {
-        pretree.write_symbol(writer, l as u16);
+    for &(sym, extra) in &pretree_syms {
+        pretree.write_symbol(writer, sym);
+        if let Some((val, bits)) = extra {
+            writer.write_bits(val as u64, bits);
+        }
     }
 
     Ok(())
+}
+
+fn encode_compression_lengths(
+    lengths: &[u8],
+    prev: &[u8],
+) -> Vec<(u16, Option<(u32, u32)>)> {
+    let mut syms = Vec::new();
+    let mut i = 0;
+
+    while i < lengths.len() {
+        // Try run-length: repeat of previous value from prev[]
+        if i + 3 < lengths.len() {
+            let mut run = 0;
+            while i + run < lengths.len() && lengths[i + run] == prev[i + run] && run < 127 {
+                run += 1;
+            }
+            if run >= 4 {
+                let (sym_base, extra) = encode_run_count(run);
+                syms.push((sym_base + 8 + 23, extra));
+                i += run;
+                continue;
+            }
+        }
+
+        // Try run-length: repeat of result[i-1]
+        if i > 0 {
+            let fill = lengths[i - 1];
+            let mut run = 0;
+            while i + run < lengths.len() && lengths[i + run] == fill && run < 127 {
+                run += 1;
+            }
+            if run >= 4 {
+                let (sym_base, extra) = encode_run_count(run);
+                syms.push((sym_base + 23, extra));
+                i += run;
+                continue;
+            }
+        }
+
+        // Try delta from previous
+        let diff = lengths[i] as i16 - prev[i] as i16;
+        match diff {
+            1 => { syms.push((17, None)); i += 1; continue; }
+            2 => { syms.push((18, None)); i += 1; continue; }
+            3 => { syms.push((19, None)); i += 1; continue; }
+            -1 => { syms.push((20, None)); i += 1; continue; }
+            -2 => { syms.push((21, None)); i += 1; continue; }
+            -3 => { syms.push((22, None)); i += 1; continue; }
+            _ => {}
+        }
+
+        // Raw code length
+        syms.push((lengths[i] as u16, None));
+        i += 1;
+    }
+
+    syms
+}
+
+fn encode_run_count(count: usize) -> (u16, Option<(u32, u32)>) {
+    match count {
+        1 => (0, None),
+        2 => (1, None),
+        3 => (2, None),
+        4..=7 => (3, Some(((count - 4) as u32, 2))),
+        8..=15 => (4, Some(((count - 8) as u32, 3))),
+        16..=31 => (5, Some(((count - 16) as u32, 4))),
+        32..=63 => (6, Some(((count - 32) as u32, 5))),
+        _ => (7, Some(((count - 64).min(63) as u32, 6))),
+    }
 }
 
 pub(super) fn compute_symbol_info(raw_offset: u32, _length: u32) -> (u32, u32, bool) {
