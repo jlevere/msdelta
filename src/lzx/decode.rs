@@ -45,6 +45,9 @@ pub(super) fn read_composite_format(reader: &mut BitReader) -> Result<CompositeF
         segments.push(tables);
     }
 
+    if std::env::var("LZX_SEG_DEBUG").is_ok() {
+        eprintln!("LZX: {num_segments} segments, boundaries={boundaries:?}");
+    }
     Ok(CompositeFormat {
         segments,
         boundaries,
@@ -396,8 +399,5 @@ fn decode_extra_value(adj_slot: u32, reader: &mut BitReader) -> Result<u32> {
         let val = reader.read_bits(4)? as u32;
         val + 8 + 4 + 0x24
     };
-    if std::env::var("LZX_DEBUG").is_ok() {
-        eprintln!("  decode_extra_value(0) = {result}");
-    }
     Ok(result)
 }
