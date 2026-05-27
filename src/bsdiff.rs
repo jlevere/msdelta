@@ -17,6 +17,9 @@ use crate::{Error, Result};
 ///
 /// The seek_distance advances the source pointer for the next block.
 pub fn bspatch(source: &[u8], target_size: usize, patch_data: &[u8]) -> Result<Vec<u8>> {
+    if target_size > 64 * 1024 * 1024 {
+        return Err(Error::Malformed("bspatch: target size exceeds 256 MB limit"));
+    }
     let mut target = vec![0u8; target_size];
     let mut patch_pos: usize = 0;
     let mut old_pos: i64 = 0;

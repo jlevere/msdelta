@@ -243,6 +243,11 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
     let parsed = parse(delta)?;
     let target_size = parsed.header.target_size as usize;
 
+    const MAX_TARGET_SIZE: usize = 64 * 1024 * 1024;
+    if target_size > MAX_TARGET_SIZE {
+        return Err(Error::Malformed("target size exceeds 256 MB limit"));
+    }
+
     let (caller_rift, pp) = if parsed.header.file_type != 1 && !parsed.preprocess.is_empty() {
         let pp = parse_pe_preprocess(&parsed.preprocess)?;
         // Combine PE rift + preprocess rift into one table for the decompressor
@@ -1162,6 +1167,20 @@ mod tests {
     fn reject_bad_magic() {
         let data = b"XX30\x00\x00\x00\x00\x00\x00\x00\x00\x00";
         assert!(matches!(parse_header(data), Err(Error::BadMagic { .. })));
+    }
+
+    #[test]
+    fn fuzz_crash_no_panic() {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
+        let reference = b"minimal reference buffer for fuzzing";
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.file_name().unwrap().to_str().unwrap().starts_with("fuzz_crash") {
+                let data = std::fs::read(&path).unwrap();
+                let result = apply(reference, &data);
+                assert!(result.is_err(), "malformed input {} should return Err", path.display());
+            }
+        }
     }
 
     #[test]

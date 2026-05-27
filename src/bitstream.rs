@@ -101,7 +101,7 @@ impl<'a> BitReader<'a> {
     #[inline]
     pub fn consume_unchecked(&mut self, n: u32) {
         self.accum >>= n;
-        self.bits -= n;
+        self.bits = self.bits.saturating_sub(n);
     }
 
     /// Ensure at least `n` bits are available, refilling if needed.
@@ -234,6 +234,10 @@ impl<'a> BitReader<'a> {
             return Err(Error::Malformed("negative buffer size"));
         }
         let size = size as usize;
+        let available = (self.remaining() / 8) as usize + (self.bits / 8) as usize;
+        if size > available + 8 {
+            return Err(Error::Malformed("buffer size exceeds available data"));
+        }
 
         self.align_to_byte();
 

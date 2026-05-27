@@ -1,0 +1,49 @@
+[package]
+name = "msdelta-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.msdelta]
+path = ".."
+
+[[bin]]
+name = "fuzz_apply"
+path = "fuzz_targets/fuzz_apply.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_roundtrip_lzx"
+path = "fuzz_targets/fuzz_roundtrip_lzx.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_roundtrip_bsdiff"
+path = "fuzz_targets/fuzz_roundtrip_bsdiff.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_lzms"
+path = "fuzz_targets/fuzz_lzms.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_rift_roundtrip"
+path = "fuzz_targets/fuzz_rift_roundtrip.rs"
+test = false
+doc = false
+bench = false

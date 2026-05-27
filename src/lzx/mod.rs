@@ -313,7 +313,7 @@ fn decompress_into(
         }
 
         let src_start = (pos as i64 - distance) as u64;
-        if src_start + copy_len <= ref_len as u64 {
+        if src_start.checked_add(copy_len).is_some_and(|end| end <= ref_len as u64) {
             // Entire copy from reference — bulk copy
             let start = src_start as usize;
             let end = start + copy_len as usize;

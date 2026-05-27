@@ -54,12 +54,12 @@ impl RiftTable {
 
         for _ in 0..count {
             let src_delta = fmt_src.read_number(reader)?;
-            src_acc += src_delta;
+            src_acc = src_acc.wrapping_add(src_delta);
             let dst_delta = fmt_dst.read_number(reader)?;
-            dst_acc += dst_delta;
+            dst_acc = dst_acc.wrapping_add(dst_delta);
             entries.push(RiftEntry {
                 source: src_acc,
-                target: dst_acc + src_acc,
+                target: dst_acc.wrapping_add(src_acc),
             });
         }
 
@@ -148,13 +148,13 @@ impl OffsetRiftTable {
         // For boundary entry {ref_len, 0}: gives 0 - ref_len = -ref_len
         let initial = {
             let last = rift.entries.last().unwrap();
-            last.target - last.source
+            last.target.wrapping_sub(last.source)
         };
 
         let mut entries = Vec::with_capacity(rift.entries.len() + 1);
         entries.push((0i64, initial));
         for e in &rift.entries {
-            entries.push((e.source, e.target - e.source));
+            entries.push((e.source, e.target.wrapping_sub(e.source)));
         }
         OffsetRiftTable { entries }
     }
@@ -229,7 +229,7 @@ impl IntFormat {
             for i in num_pos..INT_FORMAT_HALF {
                 if remaining == 0 {
                     len = len.saturating_sub(1);
-                    remaining = INT_FORMAT_SYMBOLS - num_pos - num_neg - i;
+                    remaining = (INT_FORMAT_SYMBOLS - num_pos - num_neg).saturating_sub(i);
                 }
                 lengths[i] = len;
                 remaining = remaining.saturating_sub(1);
@@ -244,7 +244,7 @@ impl IntFormat {
             for i in (INT_FORMAT_HALF + num_neg)..INT_FORMAT_SYMBOLS {
                 if remaining == 0 {
                     len = len.saturating_sub(1);
-                    remaining = INT_FORMAT_HALF - (i - INT_FORMAT_HALF);
+                    remaining = INT_FORMAT_HALF.saturating_sub(i - INT_FORMAT_HALF);
                 }
                 lengths[i] = len;
                 remaining = remaining.saturating_sub(1);

@@ -69,6 +69,9 @@ pub fn decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>> {
     if data.is_empty() || output_size == 0 {
         return Ok(Vec::new());
     }
+    if output_size > 64 * 1024 * 1024 {
+        return Err(Error::Malformed("LZMS: output size exceeds 256 MB limit"));
+    }
     if data.len() < 4 || data.len() % 2 != 0 {
         return Err(Error::Malformed("LZMS: need >= 4 even bytes"));
     }
