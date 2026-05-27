@@ -252,13 +252,17 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
     Ok(output)
 }
 
-/// Apply PE post-processing transforms after LZX decompression.
+/// Apply PE post-processing after LZX decompression.
 ///
-/// The encoder normalizes PE timestamps to the source's value. After
-/// decompression, the output has source timestamps at all locations.
-/// This function restores the target's timestamp at structurally known
-/// PE offsets: the COFF header, debug directory entries, and the export
-/// directory.
+/// The PE transform pipeline normalizes certain fields before compression
+/// and restores them after. Currently only implements timestamp restoration
+/// (the encoder normalizes all PE timestamps to the source's value).
+///
+/// NOT YET IMPLEMENTED:
+/// - Inferred relocation reversal (absolute address denormalization)
+/// - Import table denormalization
+/// - Checksum recomputation (when flags enable it)
+/// - Full rift table integration for section-shifted PEs
 fn apply_pe_postprocess(
     reference: &[u8],
     preprocess: &[u8],
