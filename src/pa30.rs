@@ -264,7 +264,21 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
         apply_pe_timestamp_fixup(reference, pp, &mut output)?;
     }
 
+    if parsed.header.hash_alg_id != 0 && !parsed.header.target_hash.is_empty() {
+        let computed = get_signature(&output, parsed.header.hash_alg_id as u32)?;
+        if computed.hash != parsed.header.target_hash {
+            return Err(Error::HashMismatch {
+                expected: hex_str(&parsed.header.target_hash),
+                got: hex_str(&computed.hash),
+            });
+        }
+    }
+
     Ok(output)
+}
+
+fn hex_str(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// Parsed PE preprocess buffer from the delta.
@@ -337,7 +351,7 @@ fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
 fn apply_pe_timestamp_fixup(
     reference: &[u8],
     pp: &PePreprocess,
-    output: &mut Vec<u8>,
+    output: &mut [u8],
 ) -> Result<()> {
     let source_timestamp = pe_timestamp(reference);
     if source_timestamp == 0 || source_timestamp == pp.target_timestamp {
@@ -457,30 +471,63 @@ fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
 /// Equivalent to `CreateDeltaB(...)` on Windows. Produces a format-compatible
 /// delta decodable by both this crate and msdelta.dll.
 pub fn create(reference: &[u8], target: &[u8]) -> Result<Vec<u8>> {
-    use crate::bitstream::BitWriter;
+    CreateOptions::default().execute(reference, target)
+}
 
-    // Compress target using PseudoLzx
-    let patch_data = crate::lzx::compress(reference, target)?;
+/// Options for creating a PA30 delta.
+#[derive(Debug, Clone)]
+pub struct CreateOptions {
+    hash_alg: u32,
+}
 
-    // Build the outer PA30 bitstream
-    let mut header_writer = BitWriter::new();
-    header_writer.write_i64(1);                   // FileTypeSet = RAW
-    header_writer.write_i64(1);                    // FileType = RAW
-    header_writer.write_i64(0x20000);              // Flags
-    header_writer.write_i64(target.len() as i64);  // TargetSize
-    header_writer.write_i64(0);                    // HashAlgId = none
-    header_writer.write_buffer(&[]);               // TargetHash = empty
-    header_writer.write_buffer(&[]);               // preprocess = empty
-    header_writer.write_buffer(&patch_data);       // patch data
-    let bitstream = header_writer.finish();
+impl Default for CreateOptions {
+    fn default() -> Self {
+        CreateOptions { hash_alg: HASH_ALG_NONE }
+    }
+}
 
-    // Assemble PA30: magic + FILETIME + bitstream
-    let mut out = Vec::with_capacity(12 + bitstream.len());
-    out.extend_from_slice(MAGIC);
-    out.extend_from_slice(&0u64.to_le_bytes()); // FILETIME = 0
-    out.extend_from_slice(&bitstream);
+impl CreateOptions {
+    pub fn new() -> Self {
+        Self::default()
+    }
 
-    Ok(out)
+    /// Set the hash algorithm for target integrity verification.
+    /// Use `HASH_ALG_MD5`, `HASH_ALG_SHA256`, or `HASH_ALG_NONE`.
+    pub fn hash_algorithm(mut self, alg: u32) -> Self {
+        self.hash_alg = alg;
+        self
+    }
+
+    /// Build the delta.
+    pub fn execute(&self, reference: &[u8], target: &[u8]) -> Result<Vec<u8>> {
+        use crate::bitstream::BitWriter;
+
+        let patch_data = crate::lzx::compress(reference, target)?;
+
+        let target_hash = if self.hash_alg != HASH_ALG_NONE {
+            get_signature(target, self.hash_alg)?.hash
+        } else {
+            Vec::new()
+        };
+
+        let mut header_writer = BitWriter::new();
+        header_writer.write_i64(1);                       // FileTypeSet = RAW
+        header_writer.write_i64(1);                       // FileType = RAW
+        header_writer.write_i64(0x20000);                 // Flags
+        header_writer.write_i64(target.len() as i64);     // TargetSize
+        header_writer.write_i64(self.hash_alg as i64);    // HashAlgId
+        header_writer.write_buffer(&target_hash);         // TargetHash
+        header_writer.write_buffer(&[]);                  // preprocess = empty
+        header_writer.write_buffer(&patch_data);          // patch data
+        let bitstream = header_writer.finish();
+
+        let mut out = Vec::with_capacity(12 + bitstream.len());
+        out.extend_from_slice(MAGIC);
+        out.extend_from_slice(&0u64.to_le_bytes());
+        out.extend_from_slice(&bitstream);
+
+        Ok(out)
+    }
 }
 
 /// Apply a delta AND generate a reverse delta.
@@ -822,6 +869,42 @@ mod tests {
         let delta = create(reference, b"").unwrap();
         let recovered = apply(reference, &delta).unwrap();
         assert!(recovered.is_empty());
+    }
+
+    #[test]
+    fn roundtrip_with_md5() {
+        let reference = b"reference data for hash test";
+        let target = b"target data that should be integrity-checked with MD5";
+
+        let delta = CreateOptions::new()
+            .hash_algorithm(HASH_ALG_MD5)
+            .execute(reference, target)
+            .unwrap();
+
+        let header = parse_header(&delta).unwrap();
+        assert_eq!(header.hash_alg_id, HASH_ALG_MD5 as i32);
+        assert_eq!(header.target_hash.len(), 16);
+
+        let recovered = apply(reference, &delta).unwrap();
+        assert_eq!(recovered, target);
+    }
+
+    #[test]
+    fn roundtrip_with_sha256() {
+        let reference = b"reference data for hash test";
+        let target = b"target data that should be integrity-checked with SHA256";
+
+        let delta = CreateOptions::new()
+            .hash_algorithm(HASH_ALG_SHA256)
+            .execute(reference, target)
+            .unwrap();
+
+        let header = parse_header(&delta).unwrap();
+        assert_eq!(header.hash_alg_id, HASH_ALG_SHA256 as i32);
+        assert_eq!(header.target_hash.len(), 32);
+
+        let recovered = apply(reference, &delta).unwrap();
+        assert_eq!(recovered, target);
     }
 
     #[test]

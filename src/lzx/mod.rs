@@ -750,13 +750,13 @@ fn encode_match(
         let signed_dist = raw_offset as i32 - OFFSET_BIAS as i32;
 
         // Slot 0: 14-bit range [-0x2000, 0x1FFF]
-        if signed_dist >= -0x2000 && signed_dist < 0x2000 {
+        if (-0x2000..0x2000).contains(&signed_dist) {
             offset_slot = 0;
             let raw14 = (signed_dist + 0x2000) as u32;
             offset_extra[n_extra] = (raw14 as u64, 14); n_extra += 1;
         }
         // Slot 1: 16-bit range [-0xA000, -0x2001] ∪ [0x2000, 0x5FFF]
-        else if signed_dist >= -0xA000 && signed_dist < 0x6000 {
+        else if (-0xA000..0x6000).contains(&signed_dist) {
             offset_slot = 1;
             let raw16 = if signed_dist < -0x2000 {
                 (signed_dist + 0xA000) as u32

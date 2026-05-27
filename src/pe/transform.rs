@@ -59,13 +59,11 @@ pub fn transform_inferred_relocations_x86(
             ]);
 
             if out_val & RELOC_CHECK == 0 {
-                let marked = out_val | RELOC_MARKER;
-                output_buf[pos..pos + 4].copy_from_slice(&marked.to_le_bytes());
-
                 let rva = (val - image_base) as u64;
                 let mapped = rift_map(rva);
                 let new_val = (mapped as i32 + new_image_base as i32) as u32;
-                let _ = new_val; // TODO: wire up remapped value writing
+                let rebased = new_val | RELOC_MARKER;
+                output_buf[pos..pos + 4].copy_from_slice(&rebased.to_le_bytes());
                 count += 1;
                 pos += 4;
                 continue;

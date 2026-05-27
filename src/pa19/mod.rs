@@ -19,8 +19,8 @@ use crate::{Error, Result};
 
 pub const MAGIC: &[u8; 4] = b"PA19";
 
-pub mod header;
-pub mod lzx;
+pub(crate) mod header;
+pub(crate) mod lzx;
 
 /// PA19 patch header.
 #[derive(Debug, Clone)]

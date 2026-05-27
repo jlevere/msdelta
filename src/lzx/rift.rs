@@ -106,7 +106,7 @@ impl RiftTable {
 /// Each entry maps a position range to a rift offset. For a given position,
 /// the offset tells the decompressor how to adjust copy operations.
 ///
-/// Translated from OffsetRiftTable<unsigned __int64>::Init in msdelta.dll.
+/// Translated from `OffsetRiftTable<unsigned __int64>::Init` in msdelta.dll.
 pub struct OffsetRiftTable {
     entries: Vec<(i64, i64)>, // (position, offset) sorted by position
 }
@@ -201,6 +201,7 @@ impl IntFormat {
         {
             let mut len = default_len;
             let mut remaining = num_default;
+            #[allow(clippy::needless_range_loop)]
             for i in num_pos..INT_FORMAT_HALF {
                 if remaining == 0 {
                     len = len.saturating_sub(1);
@@ -215,6 +216,7 @@ impl IntFormat {
         {
             let mut len = default_len;
             let mut remaining = num_default.saturating_sub(INT_FORMAT_HALF - num_pos);
+            #[allow(clippy::needless_range_loop)]
             for i in (INT_FORMAT_HALF + num_neg)..INT_FORMAT_SYMBOLS {
                 if remaining == 0 {
                     len = len.saturating_sub(1);

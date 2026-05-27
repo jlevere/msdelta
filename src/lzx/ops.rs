@@ -54,15 +54,15 @@ impl CopyOffset {
     }
 
     /// Convert to the raw wire offset value for encoding.
-    pub fn to_raw(&self, _ref_len: usize) -> u32 {
+    pub fn to_raw(self, _ref_len: usize) -> u32 {
         match self {
             CopyOffset::SourceCopy => SOURCE_COPY_RAW,
-            CopyOffset::Lru(idx) => LRU_BASE_RAW + *idx as u32,
+            CopyOffset::Lru(idx) => LRU_BASE_RAW + idx as u32,
             CopyOffset::Distance(dist) => {
-                if *dist >= 0 {
-                    *dist as u32 + RAW_OFFSET_BASE
+                if dist >= 0 {
+                    dist as u32 + RAW_OFFSET_BASE
                 } else {
-                    (*dist + OFFSET_BIAS as i64) as u32
+                    (dist + OFFSET_BIAS as i64) as u32
                 }
             }
         }

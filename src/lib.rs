@@ -16,6 +16,13 @@
 //!
 //! // Create a delta
 //! let delta = msdelta::pa30::create(&old_file, &new_file).unwrap();
+//!
+//! // Create a delta with integrity hash
+//! use msdelta::pa30::{CreateOptions, HASH_ALG_SHA256};
+//! let delta = CreateOptions::new()
+//!     .hash_algorithm(HASH_ALG_SHA256)
+//!     .execute(&old_file, &new_file)
+//!     .unwrap();
 //! ```
 
 #![forbid(unsafe_code)]
@@ -39,18 +46,26 @@ pub enum Error {
     HashTooLarge { size: usize, max: usize },
     #[error("malformed stream: {0}")]
     Malformed(&'static str),
+    #[error("target hash mismatch (expected {expected}, got {got})")]
+    HashMismatch { expected: String, got: String },
     #[error("PA19: {0}")]
     Pa19(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-pub mod bitstream;
-pub mod bsdiff;
+#[allow(dead_code)]
+pub(crate) mod bitstream;
+#[allow(dead_code)]
+pub(crate) mod bsdiff;
 pub mod dcm;
-pub mod huffman;
-pub mod lzx;
-pub mod lzms;
+#[allow(dead_code)]
+pub(crate) mod huffman;
+#[allow(dead_code)]
+pub(crate) mod lzx;
+#[allow(dead_code)]
+pub(crate) mod lzms;
 pub mod pa19;
 pub mod pa30;
-pub mod pe;
+#[allow(dead_code)]
+pub(crate) mod pe;

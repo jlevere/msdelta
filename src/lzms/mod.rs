@@ -214,21 +214,14 @@ fn x86_filter_impl(data: &mut [u8], undo: bool) {
                     continue;
                 }
             }
-            0xFF => {
-                if data[(i + 1) as usize] == 0x15 {
-                    (2, X86_MAX_TRANSLATION_OFFSET)
-                } else {
-                    i += 1;
-                    continue;
-                }
+            0xFF if data[(i + 1) as usize] == 0x15 => {
+                (2, X86_MAX_TRANSLATION_OFFSET)
             }
-            0xF0 => {
-                if data[(i + 1) as usize] == 0x83 && (data[(i + 2) as usize] & 0x07) == 0x05 {
-                    (3, X86_MAX_TRANSLATION_OFFSET)
-                } else {
-                    i += 1;
-                    continue;
-                }
+            0xF0
+                if data[(i + 1) as usize] == 0x83
+                    && (data[(i + 2) as usize] & 0x07) == 0x05 =>
+            {
+                (3, X86_MAX_TRANSLATION_OFFSET)
             }
             0xE9 => {
                 i += 5;
@@ -242,22 +235,18 @@ fn x86_filter_impl(data: &mut [u8], undo: bool) {
 
         let p = (i + nbytes) as usize;
         let active = i - last_x86_pos <= max_off;
-        if undo {
-            if active {
-                let n = u32::from_le_bytes(data[p..p + 4].try_into().unwrap());
-                data[p..p + 4].copy_from_slice(&n.wrapping_sub(i as u32).to_le_bytes());
-            }
+        if undo && active {
+            let n = u32::from_le_bytes(data[p..p + 4].try_into().unwrap());
+            data[p..p + 4].copy_from_slice(&n.wrapping_sub(i as u32).to_le_bytes());
         }
         let target16 = (i as u16).wrapping_add(u16::from_le_bytes(
             data[p..p + 2].try_into().unwrap(),
         ));
-        if !undo {
-            if active {
-                let n = u32::from_le_bytes(data[p..p + 4].try_into().unwrap());
-                data[p..p + 4].copy_from_slice(&n.wrapping_add(i as u32).to_le_bytes());
-            }
+        if !undo && active {
+            let n = u32::from_le_bytes(data[p..p + 4].try_into().unwrap());
+            data[p..p + 4].copy_from_slice(&n.wrapping_add(i as u32).to_le_bytes());
         }
-        let end_pos = i + nbytes as i32 + 3;
+        let end_pos = i + nbytes + 3;
         if end_pos - last_target_usages[target16 as usize] <= X86_ID_WINDOW_SIZE {
             last_x86_pos = end_pos;
         }
@@ -338,11 +327,7 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
             chain[pos] = head[h];
             head[h] = pos as u32;
 
-            // LZ match encoding disabled: backward bitstream sync bug
-            // when mixing literal + match symbols. The match finder and
-            // encoder are structurally complete.
-            let _ = (best_off, best_len);
-            (0u32, 0u32)
+            (best_off, best_len)
         } else {
             (0, 0)
         };
@@ -367,7 +352,6 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
             };
 
             if let Some((rep, adj)) = rep_idx {
-                // Repeat offset
                 rc.encode_bit(1, &mut lz_st, NUM_LZ_PROBS, &mut probs.lz);
                 match rep {
                     0 => rc.encode_bit(0, &mut lz_rep_st[0], NUM_LZ_REP_PROBS, &mut probs.lz_rep[0]),
@@ -385,11 +369,6 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
                 // Explicit offset: symbol THEN extra bits
                 rc.encode_bit(0, &mut lz_st, NUM_LZ_PROBS, &mut probs.lz);
                 let off_slot = tables::find_offset_slot(match_offset);
-                if std::env::var("LZMS_ENC_DEBUG").is_ok() {
-                    eprintln!("ENC: LZ explicit off={match_offset} slot={off_slot} len_code={} off_code={}",
-                        length_code.lens.iter().take(54).map(|b| b.to_string()).collect::<Vec<_>>().join(","),
-                        lz_offset_code.lens.iter().take(num_offset_syms.min(10)).map(|b| b.to_string()).collect::<Vec<_>>().join(","));
-                }
                 lz_offset_code.encode_symbol(off_slot, &mut bs);
                 tables::encode_offset_extra(match_offset, off_slot, &mut bs);
                 queue_push(&mut lz_queue, match_offset);
@@ -417,21 +396,12 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
         }
     }
 
-    if std::env::var("LZMS_ENC_DEBUG").is_ok() {
-        eprintln!("ENC: before finish: bs_bits={} bs_words={}", bs.bits, bs.output.len() / 2);
-    }
-
     let mut out = Vec::new();
     rc.finish(&mut out);
-    let rc_len = out.len();
     bs.finish(&mut out);
 
     if out.len() % 2 != 0 {
         out.push(0);
-    }
-
-    if std::env::var("LZMS_ENC_DEBUG").is_ok() {
-        eprintln!("ENC: rc={rc_len}b bs={}b total={}b", out.len() - rc_len, out.len());
     }
 
     Ok(out)
@@ -467,7 +437,7 @@ impl RangeEncoder {
     #[inline]
     fn normalize(&mut self) {
         while self.range < 0x10000 {
-            let word = (self.low >> 32) as u16;
+            let word = (self.low >> 48) as u16;
             self.output.push(word as u8);
             self.output.push((word >> 8) as u8);
             self.low <<= 16;
@@ -488,7 +458,7 @@ impl RangeEncoder {
         if bit == 0 {
             self.range = bound;
         } else {
-            self.low += bound as u64;
+            self.low += (bound as u64) << 32;
             self.range -= bound;
         }
         probs[*state as usize].update(bit);
@@ -496,17 +466,12 @@ impl RangeEncoder {
     }
 
     fn finish(&mut self, out: &mut Vec<u8>) {
-        // Flush remaining state: force 2 more normalize outputs
-        // to ensure the final interval is fully encoded
         for _ in 0..2 {
-            let word = (self.low >> 32) as u16;
+            let word = (self.low >> 48) as u16;
             self.output.push(word as u8);
             self.output.push((word >> 8) as u8);
             self.low <<= 16;
         }
-        // The output is the complete encoded stream:
-        // first 4 bytes = initial code for decoder
-        // remaining bytes = normalization refills
         out.splice(0..0, self.output.drain(..));
     }
 }
