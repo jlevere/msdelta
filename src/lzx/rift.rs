@@ -280,7 +280,7 @@ impl IntFormat {
         }
     }
 
-    fn value_to_symbol(value: i64) -> (u32, u32, u32) {
+    fn value_to_symbol(value: i64) -> (u32, u64, u32) {
         let (magnitude, is_neg) = if value < 0 {
             (!value as u64, true)
         } else {
@@ -288,13 +288,13 @@ impl IntFormat {
         };
 
         let (sym_idx, extra_val, extra_bits) = if magnitude <= 3 {
-            (magnitude as u32, 0u32, 0u32)
+            (magnitude as u32, 0u64, 0u32)
         } else {
             let high_bit = 63 - magnitude.leading_zeros();
             let half = high_bit - 1;
             let base_bit = (magnitude >> half) & 1;
             let sym_idx = 2 * (half + 1) + base_bit as u32;
-            let extra_val = (magnitude & ((1u64 << half) - 1)) as u32;
+            let extra_val = magnitude & ((1u64 << half) - 1);
             (sym_idx, extra_val, half)
         };
 
@@ -343,7 +343,7 @@ impl IntFormat {
         let (symbol, extra_val, extra_bits) = Self::value_to_symbol(value);
         self.table.write_symbol(writer, symbol as u16);
         if extra_bits > 0 {
-            writer.write_bits(extra_val as u64, extra_bits);
+            writer.write_bits(extra_val, extra_bits);
         }
     }
 }

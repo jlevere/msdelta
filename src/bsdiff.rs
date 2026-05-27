@@ -98,7 +98,7 @@ fn read_i64(data: &[u8]) -> Result<i64> {
 
 fn write_i64(buf: &mut Vec<u8>, val: i64) {
     let (magnitude, sign) = if val < 0 {
-        ((-val) as u64, true)
+        ((val as u64).wrapping_neg(), true)
     } else {
         (val as u64, false)
     };
@@ -125,7 +125,7 @@ pub fn bscreate(source: &[u8], target: &[u8]) -> Result<Vec<u8>> {
     let mut patch = Vec::new();
     let mut scan: usize = 0;
     let mut last_scan: usize = 0;
-    let mut last_pos: usize = 0;
+    let mut last_pos: i64 = 0;
     let mut last_offset: i64 = 0;
     let min_match = 8usize;
 
@@ -164,10 +164,9 @@ pub fn bscreate(source: &[u8], target: &[u8]) -> Result<Vec<u8>> {
         {
             let mut s = 0i64;
             let mut best_s = 0i64;
-            let limit = scan.min(last_scan + (scan - last_scan));
-            for i in 0..(limit - last_scan) {
+            for i in 0..(scan - last_scan) {
                 let j = last_scan + i;
-                let sp = last_pos as i64 + i as i64;
+                let sp = last_pos + i as i64;
                 if sp >= 0 && (sp as usize) < source.len()
                     && source[sp as usize] == target[j]
                 {
@@ -209,12 +208,12 @@ pub fn bscreate(source: &[u8], target: &[u8]) -> Result<Vec<u8>> {
         write_i64(&mut patch, add_len as i64);
         write_i64(&mut patch, insert_len as i64);
         let new_pos = best_pos as i64 - lenb as i64;
-        let seek = new_pos - (last_pos as i64 + add_len as i64);
+        let seek = new_pos - (last_pos + add_len as i64);
         write_i64(&mut patch, seek);
 
         for i in 0..add_len {
             let j = last_scan + i;
-            let sp = last_pos as i64 + i as i64;
+            let sp = last_pos + i as i64;
             let src_byte = if sp >= 0 && (sp as usize) < source.len() {
                 source[sp as usize]
             } else {
@@ -228,7 +227,7 @@ pub fn bscreate(source: &[u8], target: &[u8]) -> Result<Vec<u8>> {
         }
 
         last_scan = scan - lenb;
-        last_pos = (new_pos.max(0)) as usize;
+        last_pos = new_pos;
         last_offset = best_pos as i64 - scan as i64;
         scan = last_scan + best_len;
     }
@@ -239,7 +238,7 @@ pub fn bscreate(source: &[u8], target: &[u8]) -> Result<Vec<u8>> {
         write_i64(&mut patch, 0);
         write_i64(&mut patch, 0);
         for i in 0..add_len {
-            let sp = last_pos as i64 + i as i64;
+            let sp = last_pos + i as i64;
             let src_byte = if sp >= 0 && (sp as usize) < source.len() {
                 source[sp as usize]
             } else {
@@ -282,8 +281,9 @@ fn suffix_array(data: &[u8]) -> Vec<i64> {
             let prev = sa[i - 1] as usize;
             let curr = sa[i] as usize;
             let same = r[prev] == r[curr]
-                && prev + kk < n && curr + kk < n
-                && r[prev + kk] == r[curr + kk];
+                && ((prev + kk >= n && curr + kk >= n)
+                    || (prev + kk < n && curr + kk < n
+                        && r[prev + kk] == r[curr + kk]));
             tmp[curr] = tmp[prev] + if same { 0 } else { 1 };
         }
         rank.copy_from_slice(&tmp);

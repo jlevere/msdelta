@@ -471,7 +471,7 @@ impl RangeEncoder {
                 self.emit(self.cache.wrapping_add(overflow as u16));
                 let fill = if overflow { 0u16 } else { 0xFFFFu16 };
                 for _ in 0..self.cache_count {
-                    self.emit(fill.wrapping_add(overflow as u16));
+                    self.emit(fill);
                 }
             }
             self.first = false;
