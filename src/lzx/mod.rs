@@ -239,6 +239,7 @@ fn decompress_into(
     let mut seg_idx = 0;
 
     let ref_len = reference.len();
+    let signed_rift_offset = -(ref_len as i64);
     output.reserve(target_size);
     let mut lru: [i64; 3] = [0; 3];
     let mut pos: u64 = ref_len as u64;
@@ -272,7 +273,7 @@ fn decompress_into(
         if raw_offset == SOURCE_COPY {
             distance = ref_len as i64;
         } else if raw_offset < SOURCE_COPY {
-            distance = raw_offset as i64 - OFFSET_BIAS as i64;
+            distance = raw_offset as i64 - OFFSET_BIAS as i64 - signed_rift_offset;
         } else if (LRU_BASE..LRU_BASE + 3).contains(&raw_offset) {
             distance = lru[(raw_offset - LRU_BASE) as usize];
         } else {
@@ -303,7 +304,7 @@ fn decompress_into(
             // Entire copy from output — may overlap (like LZ back-reference)
             let out_start = (src_start - ref_len as u64) as usize;
             if out_start >= output.len() {
-                return Err(Error::Malformed("back-reference out of output bounds"));
+                    return Err(Error::Malformed("back-reference out of output bounds"));
             }
             if out_start + (copy_len as usize) <= output.len() {
                 // Non-overlapping: bulk copy via extend_from_within
@@ -326,15 +327,11 @@ fn decompress_into(
             let ref_bytes = (ref_len as u64 - src_start) as usize;
             let out_bytes = copy_len as usize - ref_bytes;
             output.extend_from_slice(&reference[src_start as usize..ref_len]);
-            // Remaining bytes from output start
-            for _ in 0..out_bytes {
-                let idx = output.len() - ref_len; // should be 0..out_bytes
-                let byte = if idx < output.len() {
-                    output[idx]
-                } else {
+            for i in 0..out_bytes {
+                if i >= output.len() {
                     return Err(Error::Malformed("back-reference out of output bounds"));
-                };
-                output.push(byte);
+                }
+                output.push(output[i]);
             }
             pos += copy_len;
         }
@@ -812,6 +809,7 @@ fn read_symbol(tables: &SegmentTables, reader: &mut BitReader) -> Result<(u32, u
 
     let offset = decode_offset(offset_slot, tables, reader)?;
 
+
     let length = if length_slot == 0 {
         let len_sym = tables.lengths.read_symbol(reader)?;
         if len_sym == 0 {
@@ -897,41 +895,25 @@ fn decode_offset(slot: u32, tables: &SegmentTables, reader: &mut BitReader) -> R
     }
 }
 
-/// Decode the extra value for generic offset slots.
-/// For adj_slot != 0: the value IS adj_slot directly.
-/// For adj_slot == 0: read a variable-length value from the bitstream.
-/// Decode the extra value for generic offset adj_slot == 0.
-/// Uses a single peek + lookup instead of sequential 1-bit reads.
-///
-/// Prefix encoding (7 bits max):
-///   0xx      → val = xx + 0x24           (3 bits consumed)
-///   10xxx    → val = xxx + 4 + 0x24      (5 bits consumed)
-///   11xxxx   → val = xxxx + 12 + 0x24    (6 bits consumed)
 #[inline]
 fn decode_extra_value(adj_slot: u32, reader: &mut BitReader) -> Result<u32> {
     if adj_slot != 0 {
         return Ok(adj_slot);
     }
-
-    reader.ensure_bits(6)?;
-    let peek = reader.peek(6) as u32;
-
-    if peek & 1 == 0 {
-        // 0xx: consume 3 bits
-        let val = (peek >> 1) & 3;
-        reader.consume_unchecked(3);
-        Ok(val + 0x24)
-    } else if peek & 2 == 0 {
-        // 10xxx: consume 5 bits
-        let val = (peek >> 2) & 7;
-        reader.consume_unchecked(5);
-        Ok(val + 4 + 0x24)
+    let result = if reader.read_bits(1)? == 0 {
+        let val = reader.read_bits(2)? as u32;
+        val + 0x24
+    } else if reader.read_bits(1)? == 0 {
+        let val = reader.read_bits(3)? as u32;
+        val + 4 + 0x24
     } else {
-        // 11xxxx: consume 6 bits
-        let val = (peek >> 2) & 0xF;
-        reader.consume_unchecked(6);
-        Ok(val + 8 + 4 + 0x24)
+        let val = reader.read_bits(4)? as u32;
+        val + 8 + 4 + 0x24
+    };
+    if std::env::var("LZX_DEBUG").is_ok() {
+        eprintln!("  decode_extra_value(0) = {result}");
     }
+    Ok(result)
 }
 
 #[cfg(test)]

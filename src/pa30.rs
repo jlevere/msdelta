@@ -242,7 +242,73 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
 
     let parsed = parse(delta)?;
     let target_size = parsed.header.target_size as usize;
-    crate::lzx::decompress(reference, &parsed.patch_data, target_size)
+
+    let mut output = crate::lzx::decompress(reference, &parsed.patch_data, target_size)?;
+
+    if parsed.header.file_type != 1 && !parsed.preprocess.is_empty() {
+        apply_pe_postprocess(reference, &parsed.preprocess, &mut output)?;
+    }
+
+    Ok(output)
+}
+
+/// Apply PE post-processing transforms after LXZ decompression.
+///
+/// The encoder normalizes PE header fields (timestamps, checksums) to match
+/// the source during compression. After decompression, the output has the
+/// source's field values. This function restores the target's values from
+/// the preprocess buffer.
+fn apply_pe_postprocess(
+    reference: &[u8],
+    preprocess: &[u8],
+    output: &mut [u8],
+) -> Result<()> {
+    use crate::bitstream::BitReader;
+
+    let mut reader = BitReader::new(preprocess)?;
+
+    // PortableExecutableInfo::FromBitReader reads:
+    // 64 bits: target ImageBase
+    // 32 bits: target TimeDateStamp
+    // 32 bits: target CheckSum (or other field)
+    // PortableExecutableInfo::FromBitReader reads:
+    // Read64(0x40) = 64 raw bits for ImageBase
+    // Read32(0x20) = 32 raw bits (checksum or zero)
+    // Read32(0x20) = 32 raw bits for TimeDateStamp
+    let _target_image_base = reader.read_bits(64)?;
+    let _target_field1 = reader.read_bits(32)? as u32;
+    let target_timestamp = reader.read_bits(32)? as u32;
+
+    // The source PE's timestamp (used as the "normalized" value during encoding)
+    if reference.len() < 0x40 {
+        return Ok(());
+    }
+    let pe_off = u32::from_le_bytes(reference[0x3C..0x40].try_into().unwrap()) as usize;
+    if pe_off + 12 > reference.len() {
+        return Ok(());
+    }
+    let source_timestamp = u32::from_le_bytes(
+        reference[pe_off + 8..pe_off + 12].try_into().unwrap(),
+    );
+
+    if source_timestamp == target_timestamp {
+        return Ok(());
+    }
+
+    // Replace all occurrences of the source timestamp with the target timestamp
+    let old_bytes = source_timestamp.to_le_bytes();
+    let new_bytes = target_timestamp.to_le_bytes();
+    let mut i = 0;
+    while i + 4 <= output.len() {
+        if output[i..i + 4] == old_bytes {
+            output[i..i + 4].copy_from_slice(&new_bytes);
+            i += 4;
+        } else {
+            i += 1;
+        }
+    }
+
+    Ok(())
 }
 
 /// Encode `target` as a PA30 delta against `reference`.
@@ -755,5 +821,78 @@ mod tests {
     fn reject_bad_magic() {
         let data = b"XX30\x00\x00\x00\x00\x00\x00\x00\x00\x00";
         assert!(matches!(parse_header(data), Err(Error::BadMagic { .. })));
+    }
+
+    #[test]
+    fn apply_pe_amd64_delta() {
+        let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/deltas"));
+        if !dir.exists() { return; }
+        let src = std::fs::read(dir.join("sources/cmd.exe")).unwrap();
+        let tgt = std::fs::read(dir.join("sources/cmd_patched.exe")).unwrap();
+        let delta = std::fs::read(dir.join("cmd__to__cmd_patched__pe_amd64.pa30")).unwrap();
+        let result = apply(&src, &delta).unwrap();
+        assert_eq!(result, tgt);
+    }
+
+    const DELTA_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/deltas");
+
+    fn delta_source(name: &str) -> Vec<u8> {
+        std::fs::read(PathBuf::from(DELTA_DIR).join("sources").join(name)).unwrap()
+    }
+
+    fn delta_file(name: &str) -> Vec<u8> {
+        std::fs::read(PathBuf::from(DELTA_DIR).join(name)).unwrap()
+    }
+
+    #[test]
+    fn apply_raw_cmd_to_where() {
+        if !PathBuf::from(DELTA_DIR).exists() { return; }
+        let result = apply(&delta_source("cmd.exe"), &delta_file("cmd__to__where__raw.pa30")).unwrap();
+        let expected = delta_source("where.exe");
+        assert_eq!(result.len(), expected.len(), "size mismatch");
+        let mut diffs = 0;
+        let mut first = None;
+        for i in 0..result.len() {
+            if result[i] != expected[i] {
+                if first.is_none() { first = Some(i); }
+                diffs += 1;
+            }
+        }
+        assert_eq!(diffs, 0, "first diff at {:?}, total {diffs} diffs out of {}", first, result.len());
+    }
+
+    #[test]
+    fn apply_raw_cmd_to_notepad() {
+        if !PathBuf::from(DELTA_DIR).exists() { return; }
+        let result = apply(&delta_source("cmd.exe"), &delta_file("cmd__to__notepad__raw.pa30")).unwrap();
+        assert_eq!(result, delta_source("notepad.exe"));
+    }
+
+    #[test]
+    fn apply_raw_cmd_to_notepad_flag0x20000() {
+        if !PathBuf::from(DELTA_DIR).exists() { return; }
+        let result = apply(&delta_source("cmd.exe"), &delta_file("cmd__to__notepad__raw_flag0x20000.pa30")).unwrap();
+        assert_eq!(result, delta_source("notepad.exe"));
+    }
+
+    #[test]
+    fn apply_prsm_cmd_to_notepad() {
+        if !PathBuf::from(DELTA_DIR).exists() { return; }
+        let result = apply(&delta_source("cmd.exe"), &delta_file("cmd__to__notepad__raw_bsdiff_flag0x100.pa30")).unwrap();
+        assert_eq!(result, delta_source("notepad.exe"));
+    }
+
+    #[test]
+    fn apply_raw_advapi32() {
+        if !PathBuf::from(DELTA_DIR).exists() { return; }
+        let result = apply(&delta_source("advapi32_old.dll"), &delta_file("advapi32_raw.pa30")).unwrap();
+        assert_eq!(result, delta_source("advapi32_new.dll"));
+    }
+
+    #[test]
+    fn apply_pe_advapi32() {
+        if !PathBuf::from(DELTA_DIR).exists() { return; }
+        let result = apply(&delta_source("advapi32_old.dll"), &delta_file("advapi32_pe.pa30")).unwrap();
+        assert_eq!(result, delta_source("advapi32_new.dll"));
     }
 }
