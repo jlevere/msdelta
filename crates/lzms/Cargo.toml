@@ -16,3 +16,10 @@ exclude = ["tests/fixtures"]
 
 [dev-dependencies]
 proptest = "1"
+criterion = "0.8"
+
+# Register the benchmark explicitly so `corpus.rs` (a shared `include!`d helper,
+# not a standalone bench) is not auto-discovered as its own bench target.
+[[bench]]
+name = "throughput"
+harness = false
