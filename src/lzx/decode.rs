@@ -19,7 +19,12 @@ pub(super) fn read_composite_format(reader: &mut BitReader) -> Result<CompositeF
     let mut acc = 0i64;
     for _ in 0..num_segments {
         let delta = reader.read_i64()?;
-        acc += delta;
+        // Attacker-controlled deltas can overflow the accumulator; a valid
+        // boundary sequence stays within the output size, so treat overflow
+        // as malformed rather than wrapping into a bogus position.
+        acc = acc
+            .checked_add(delta)
+            .ok_or(Error::Malformed("segment boundary overflow"))?;
         boundaries.push(acc as u64);
     }
 
@@ -307,7 +312,12 @@ pub(super) fn read_symbol(tables: &SegmentTables, reader: &mut BitReader) -> Res
             if big_len < 256 {
                 return Err(Error::Malformed("ReadNumber returned value < 256"));
             }
-            big_len + 7
+            // Crafted input can set big_len near u32::MAX; the +7 (and the +1
+            // below) would overflow. Such a length is never valid (output is
+            // size-bounded), so report malformed rather than wrapping.
+            big_len
+                .checked_add(7)
+                .ok_or(Error::Malformed("LZX match length overflow"))?
         } else {
             len_sym as u32 + 7
         }
@@ -315,7 +325,10 @@ pub(super) fn read_symbol(tables: &SegmentTables, reader: &mut BitReader) -> Res
         length_slot
     };
 
-    Ok((offset, length + 1))
+    let length = length
+        .checked_add(1)
+        .ok_or(Error::Malformed("LZX match length overflow"))?;
+    Ok((offset, length))
 }
 
 #[inline]
@@ -381,7 +394,8 @@ fn decode_offset(slot: u32, tables: &SegmentTables, reader: &mut BitReader) -> R
             }
         };
 
-        Ok(dist + RAW_OFFSET_BASE)
+        dist.checked_add(RAW_OFFSET_BASE)
+            .ok_or(Error::Malformed("LZX offset overflow"))
     }
 }
 
