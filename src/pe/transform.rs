@@ -75,6 +75,46 @@ pub fn transform_inferred_relocations_x86(
     Ok(count)
 }
 
+/// Apply inferred relocations for AMD64 PE binaries.
+///
+/// Scans for 64-bit pointer values within the PE's image range.
+pub fn transform_inferred_relocations_amd64(
+    pe: &PeInfo,
+    source_buf: &[u8],
+    output_buf: &mut [u8],
+    new_image_base: u64,
+    rift_map: impl Fn(u64) -> i64,
+) -> Result<u32> {
+    let image_base = pe.image_base;
+    let image_end = image_base.wrapping_add(pe.size_of_image as u64);
+    let mut count = 0u32;
+
+    let mut pos: usize = 0;
+    while pos + 8 <= source_buf.len() && pos + 8 <= output_buf.len() {
+        let val = u64::from_le_bytes(source_buf[pos..pos + 8].try_into().unwrap());
+
+        if val > image_base && val < image_end {
+            let out_val = u64::from_le_bytes(output_buf[pos..pos + 8].try_into().unwrap());
+            let check64 = RELOC_CHECK as u64 | ((RELOC_CHECK as u64) << 32);
+
+            if out_val & check64 == 0 {
+                let rva = val - image_base;
+                let mapped = rift_map(rva);
+                let new_val = (mapped as i64 + new_image_base as i64) as u64;
+                let marker64 = RELOC_MARKER as u64 | ((RELOC_MARKER as u64) << 32);
+                let rebased = new_val | marker64;
+                output_buf[pos..pos + 8].copy_from_slice(&rebased.to_le_bytes());
+                count += 1;
+                pos += 8;
+                continue;
+            }
+        }
+        pos += 1;
+    }
+
+    Ok(count)
+}
+
 pub(crate) fn pe_timestamp(data: &[u8]) -> u32 {
     if data.len() < 0x40 { return 0; }
     let pe_off = u32::from_le_bytes(data[0x3C..0x40].try_into().unwrap()) as usize;

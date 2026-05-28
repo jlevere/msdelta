@@ -1,6 +1,6 @@
 //! PE preprocessing for PA30 deltas.
 
-use crate::{Error, Result};
+use crate::Result;
 
 /// Parsed PE preprocess buffer from the delta.
 ///
@@ -36,20 +36,18 @@ pub(crate) fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
 
     let pe_rift = crate::lzx::rift::RiftTable::from_reader(&mut reader)?;
 
-    // CliMetadata: 1-bit flag (0 = empty for native PEs)
     let cli_flag = reader.read_bits(1)?;
     if cli_flag != 0 {
-        return Err(Error::Malformed("CLI metadata in preprocess not supported"));
+        let _cli_metadata = reader.read_buffer()?;
     }
 
     // Second rift table from PreProcessPEForApply
     let preprocess_rift = crate::lzx::rift::RiftTable::from_reader(&mut reader)?;
 
-    // CliMap: 1-bit flag (0 = empty for native PEs)
     if reader.remaining() > 0 {
         let climap_flag = reader.read_bits(1)?;
         if climap_flag != 0 {
-            return Err(Error::Malformed("CLI map in preprocess not supported"));
+            let _cli_map = reader.read_buffer()?;
         }
     }
 

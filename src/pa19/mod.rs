@@ -109,6 +109,14 @@ fn e8_transform_decode(data: &mut [u8]) {
     }
 }
 
+/// Compute the PA19-style CRC32 signature of data.
+///
+/// Returns the raw CRC32 register value (before final XOR with 0xFFFFFFFF).
+/// This matches the convention used in PA19 patch headers.
+pub fn crc32_signature(data: &[u8]) -> u32 {
+    !crc32(data)
+}
+
 fn crc32(data: &[u8]) -> u32 {
     let mut crc: u32 = 0xFFFFFFFF;
     for &byte in data {
