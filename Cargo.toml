@@ -8,6 +8,9 @@ repository = "https://github.com/jlevere/msdelta"
 description = "Pure-Rust encoder and decoder for Microsoft's MSDelta (PA30/PA31/PA19) binary patch format."
 categories = ["compression", "parser-implementations", "os::windows-apis"]
 keywords = ["windows", "delta", "patch", "manifest", "winsxs"]
+# Keep the published tarball lean: real WinSxS manifest fixtures and the fuzz
+# corpus are needed for development from a git checkout, not by consumers.
+exclude = ["tests/fixtures", "fuzz"]
 
 [features]
 default = ["cli"]
@@ -20,9 +23,9 @@ cli = ["dep:clap", "dep:clap_complete", "dep:anyhow"]
 thiserror = "2"
 goblin = { version = "0.10", default-features = false, features = ["pe64", "pe32"] }
 lzxd = "0.2"
-md-5 = "0.10"
-sha2 = "0.10"
-digest = "0.10"
+md-5 = "0.11"
+sha2 = "0.11"
+digest = "0.11"
 clap = { version = "4", features = ["derive"], optional = true }
 clap_complete = { version = "4", optional = true }
 anyhow = { version = "1", optional = true }

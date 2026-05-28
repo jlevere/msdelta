@@ -610,7 +610,11 @@ mod tests {
             let pa30 = strip_dcm(&data);
             let output = apply(&base, pa30).unwrap();
 
-            let hash = format!("{:X}", Md5::digest(&output));
+            // digest 0.11's output array no longer implements UpperHex.
+            let hash: String = Md5::digest(&output)
+                .iter()
+                .map(|b| format!("{b:02X}"))
+                .collect();
             let file_size = data.len();
             let key = format!("{file_size}|");
 
