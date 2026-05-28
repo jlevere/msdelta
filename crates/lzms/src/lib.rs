@@ -133,8 +133,21 @@ pub fn decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>> {
                 }
                 let n = length.min(output_size - pos);
                 let src = pos - offset as usize;
-                for i in 0..n {
-                    out[pos + i] = out[src + i];
+                let off = offset as usize;
+                if off >= n {
+                    // Non-overlapping: one memmove instead of a checked byte loop.
+                    out.copy_within(src..src + n, pos);
+                } else {
+                    // Overlapping run: replicate the `off`-byte pattern, doubling
+                    // the copied span each step so every copy is a memmove
+                    // (O(log n) copies even for offset 1).
+                    out.copy_within(src..src + off, pos);
+                    let mut done = off;
+                    while done < n {
+                        let chunk = (n - done).min(done);
+                        out.copy_within(pos..pos + chunk, pos + done);
+                        done += chunk;
+                    }
                 }
                 pos += n;
                 prev_type = 1;
@@ -296,7 +309,11 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
         let mut delta_len = 0u32;
         let mut delta_offset = 0u32;
         let mut delta_power = 0u32;
-        if pos + 2 < d.len() {
+        // Delta search is expensive (8 powers x associative probe per position)
+        // and rarely beats a usable LZ match, so only run it where LZ found
+        // nothing usable (match_len < 3) -- which is exactly the delta-favorable
+        // data (e.g. strided/incrementing) where deltas matter.
+        if match_len < 3 && pos + 2 < d.len() {
             for power in 0..8u32 {
                 let span = 1usize << power;
                 if span > pos {
