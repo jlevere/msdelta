@@ -11,6 +11,10 @@ keywords = ["lzms", "compression", "windows", "wim", "cabinet"]
 # The test fixtures are real LZMS buffers needed for development from a git
 # checkout, not by consumers of the published crate.
 exclude = ["tests/fixtures"]
+# `benches/corpus.rs` is an `include!`d helper, not its own target; disable
+# bench auto-discovery so only the explicitly-registered `throughput` bench
+# (and `examples/ratio_report.rs`) build.
+autobenches = false
 
 [dependencies]
 
