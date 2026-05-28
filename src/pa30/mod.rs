@@ -53,7 +53,7 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
     };
 
     let mut output = if parsed.header.file_type_set & 0x100 != 0 {
-        let decompressed = crate::lzms::decompress_compression_api(&parsed.patch_data)?;
+        let decompressed = lzms::decompress_compression_api(&parsed.patch_data)?;
         crate::bsdiff::bspatch(reference, target_size, &decompressed)?
     } else {
         crate::lzx::decompress_with_rift(

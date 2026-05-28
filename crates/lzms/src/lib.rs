@@ -1,4 +1,44 @@
-use crate::{Error, Result};
+//! Pure-Rust encoder and decoder for Microsoft's LZMS compression format.
+//!
+//! LZMS is the algorithm behind the Windows Compression API
+//! (`COMPRESS_ALGORITHM_LZMS` in `cabinet.dll`), and it also underlies WIM
+//! image compression and the LZMS-wrapped payloads inside MSDelta patches.
+//! This crate has no dependencies and reads or writes both the raw bitstream
+//! ([`decompress`] / [`compress`]) and the Compression API container
+//! ([`decompress_compression_api`] / [`compress_compression_api`]).
+//!
+//! ```
+//! let original = b"LZMS roundtrip with some repetition repetition repetition";
+//! let wrapped = lzms::compress_compression_api(original).unwrap();
+//! let recovered = lzms::decompress_compression_api(&wrapped).unwrap();
+//! assert_eq!(recovered, original);
+//! ```
+
+#![forbid(unsafe_code)]
+
+/// Errors produced while decoding or encoding an LZMS stream.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Error {
+    /// The input ended before a complete stream could be read.
+    Truncated,
+    /// The stream was structurally invalid; the message names the failed check.
+    Malformed(&'static str),
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::Truncated => f.write_str("input too short"),
+            Error::Malformed(msg) => write!(f, "malformed LZMS stream: {msg}"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+/// Convenience alias for results from this crate.
+pub type Result<T> = std::result::Result<T, Error>;
 
 mod adaptive;
 mod range_coder;
