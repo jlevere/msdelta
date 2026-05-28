@@ -335,6 +335,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "616ec5685824bcc94416c6d4a7a446eea774a31efd7062c8480ba6fd06d7a6e5"
 
 [[package]]
+name = "lzms"
+version = "0.1.0"
+
+[[package]]
 name = "lzxd"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -366,6 +370,7 @@ dependencies = [
  "digest",
  "goblin",
  "insta",
+ "lzms",
  "lzxd",
  "md-5",
  "sha2",

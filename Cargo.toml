@@ -1,3 +1,7 @@
+[workspace]
+members = ["crates/lzms"]
+resolver = "2"
+
 [package]
 name = "msdelta"
 version = "0.1.0"
@@ -21,6 +25,7 @@ cli = ["dep:clap", "dep:clap_complete", "dep:anyhow"]
 
 [dependencies]
 thiserror = "2"
+lzms = { version = "0.1", path = "crates/lzms" }
 goblin = { version = "0.10", default-features = false, features = ["pe64", "pe32"] }
 lzxd = "0.2"
 md-5 = "0.11"

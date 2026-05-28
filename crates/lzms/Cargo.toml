@@ -1,0 +1,15 @@
+[package]
+name = "lzms"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/jlevere/msdelta"
+description = "Pure-Rust encoder and decoder for Microsoft's LZMS compression format (Windows Compression API / cabinet.dll, WIM, msdelta)."
+categories = ["compression", "os::windows-apis"]
+keywords = ["lzms", "compression", "windows", "wim", "cabinet"]
+# The test fixtures are real LZMS buffers needed for development from a git
+# checkout, not by consumers of the published crate.
+exclude = ["tests/fixtures"]
+
+[dependencies]

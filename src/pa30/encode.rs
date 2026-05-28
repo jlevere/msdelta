@@ -138,7 +138,7 @@ impl CreateOptions {
                     }
                     Codec::BsDiff => {
                         let bsdiff_patch = crate::bsdiff::bscreate(reference, target)?;
-                        let data = crate::lzms::compress_compression_api(&bsdiff_patch)?;
+                        let data = lzms::compress_compression_api(&bsdiff_patch)?;
                         (data, 0x101i64, 1i64, 0i64, vec![])
                     }
                 }

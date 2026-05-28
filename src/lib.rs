@@ -50,6 +50,8 @@ pub enum Error {
     HashMismatch { expected: String, got: String },
     #[error("PA19: {0}")]
     Pa19(String),
+    #[error(transparent)]
+    Lzms(#[from] lzms::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -61,8 +63,6 @@ pub(crate) mod bsdiff;
 pub mod dcm;
 #[allow(dead_code)]
 pub(crate) mod huffman;
-#[allow(dead_code)]
-pub(crate) mod lzms;
 #[allow(dead_code)]
 pub(crate) mod lzx;
 pub mod pa19;
