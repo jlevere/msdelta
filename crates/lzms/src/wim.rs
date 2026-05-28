@@ -28,6 +28,12 @@ use crate::{compress, decompress, Error, Result};
 /// Microsoft writes for LZMS).
 const SOLID_FORMAT_LZMS: u32 = 3;
 
+/// Upper bound on the up-front output-buffer preallocation. A single LZMS
+/// stream decodes at most one 64 MiB chunk, so capping the initial capacity
+/// here keeps a bogus header-declared total from triggering a giant
+/// allocation; the buffer still grows as further chunks decode.
+const MAX_WIM_CAPACITY: usize = 0x0400_0000;
+
 /// Last-chunk uncompressed length: the remainder, or a full chunk when the
 /// total divides evenly.
 fn last_chunk_len(uncompressed_size: usize, chunk_size: usize) -> usize {
@@ -99,6 +105,8 @@ pub fn decompress_wim(
 
     let (table, chunk_data) = resource.split_at(table_bytes);
 
+    // `num_chunks` is bounded by the table fitting in `resource`, so this is
+    // safe to size up front.
     let mut offsets = Vec::with_capacity(num_chunks + 1);
     offsets.push(0usize);
     for i in 0..num_chunks - 1 {
@@ -111,7 +119,10 @@ pub fn decompress_wim(
     }
     offsets.push(chunk_data.len());
 
-    let mut out = Vec::with_capacity(uncompressed_size);
+    // `uncompressed_size` is attacker-controlled out-of-band metadata; cap the
+    // preallocation at one chunk (64 MiB max) so a bogus total can't OOM. The
+    // buffer still grows as chunks decode.
+    let mut out = Vec::with_capacity(uncompressed_size.min(MAX_WIM_CAPACITY));
     for i in 0..num_chunks {
         let start = offsets[i];
         let end = offsets[i + 1];
@@ -212,7 +223,11 @@ pub fn decompress_wim_solid(resource: &[u8]) -> Result<Vec<u8>> {
     let table = &resource[SOLID_HEADER_SIZE..data_start];
     let chunk_data = &resource[data_start..];
 
-    let mut out = Vec::with_capacity(uncompressed_size);
+    // `uncompressed_size` comes straight from the resource header; with a large
+    // `chunk_size` the chunk table stays small, so a bogus total would otherwise
+    // request an enormous allocation. Cap at one chunk (64 MiB max); the buffer
+    // grows as chunks decode.
+    let mut out = Vec::with_capacity(uncompressed_size.min(MAX_WIM_CAPACITY));
     let mut cursor = 0usize;
     for i in 0..num_chunks {
         let compressed_size =
@@ -307,5 +322,35 @@ mod tests {
     #[test]
     fn rejects_zero_chunk_size() {
         assert!(decompress_wim(b"\x00\x00\x00\x00", 0, 10).is_err());
+    }
+
+    /// A solid header declaring a huge uncompressed size with an equally huge
+    /// chunk size yields a single-entry chunk table, so it fits in a tiny
+    /// resource yet would request a multi-terabyte preallocation. Must fail
+    /// cleanly without aborting on the allocation.
+    #[test]
+    fn solid_huge_uncompressed_size_does_not_oom() {
+        // A chunk size >= the total collapses to a single chunk, so the table is
+        // just one 4-byte entry and the 20-byte resource is well-formed up to the
+        // preallocation. With the cap removed this would request 1 TiB.
+        let mut res = vec![0u8; SOLID_HEADER_SIZE + 4];
+        res[0..8].copy_from_slice(&(1u64 << 40).to_le_bytes()); // 1 TiB total
+        res[8..12].copy_from_slice(&u32::MAX.to_le_bytes()); // chunk >= total -> 1 chunk
+        res[12..16].copy_from_slice(&SOLID_FORMAT_LZMS.to_le_bytes());
+        // Single table entry of compressed_size 0 -> empty chunk; rejected by the
+        // decode/verbatim length check, but only after the (now capped) alloc.
+        assert!(decompress_wim_solid(&res).is_err());
+    }
+
+    /// The non-solid reader takes its total uncompressed size as a parameter;
+    /// a huge value with a huge chunk size yields a single chunk (empty table),
+    /// so it must not preallocate the full declared total.
+    #[test]
+    fn nonsolid_huge_uncompressed_size_does_not_oom() {
+        // num_chunks = 1 -> table_bytes = 0, so the empty resource fits. The
+        // preallocation must be capped so this returns (Ok or Err) rather than
+        // aborting on a multi-terabyte allocation.
+        let res: &[u8] = &[];
+        let _ = decompress_wim(res, 1usize << 40, 1usize << 40);
     }
 }
