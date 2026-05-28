@@ -31,6 +31,44 @@ let delta = CreateOptions::new()
     .execute(&old_file, &new_file)?;
 ```
 
+## Command-line tool
+
+The crate ships an `msdelta` binary (enabled by default via the `cli` feature):
+
+```sh
+cargo install msdelta          # or: cargo build, then target/release/msdelta
+```
+
+```sh
+# Decompress a WinSxS manifest (DCM wrapper and delta format auto-detected)
+msdelta apply base_manifest.bin core.manifest -o core.xml
+
+# Create a delta, with an embedded SHA-256 integrity hash
+msdelta create old.bin new.bin -o patch.delta --hash sha256
+
+# Apply a delta and also emit the reverse delta (target -> reference)
+msdelta reverse old.bin patch.delta -o reverse.delta --target new.bin
+
+# Inspect a delta header (works on raw PA30/PA31/PA19 or DCM)
+msdelta info core.manifest
+
+# Hash a buffer (--normalize zeroes volatile PE fields first)
+msdelta signature mydll.dll --hash sha256 --normalize
+
+# Shell completions
+msdelta completions zsh > ~/.zsh/completions/_msdelta
+```
+
+Output goes to stdout when `-o` is omitted, so commands compose in pipelines;
+the tool refuses to dump a binary delta onto an interactive terminal. Run
+`msdelta <command> --help` for the full option set.
+
+Library-only consumers can drop the clap/anyhow dependencies entirely:
+
+```toml
+msdelta = { version = "0.1", default-features = false }
+```
+
 ## What's implemented
 
 | | Decode | Encode |
@@ -64,11 +102,12 @@ Equivalent to the core `msdelta.dll` exports:
 ## Building
 
 ```sh
-cargo build
+cargo build                       # library + msdelta binary
+cargo build --no-default-features # library only (no clap/anyhow)
 cargo test
 ```
 
-MSRV: 1.82
+MSRV: 1.85
 
 ## Known limitations
 

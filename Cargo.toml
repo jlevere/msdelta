@@ -2,12 +2,19 @@
 name = "msdelta"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/jlevere/msdelta"
 description = "Pure-Rust encoder and decoder for Microsoft's MSDelta (PA30/PA31/PA19) binary patch format."
 categories = ["compression", "parser-implementations", "os::windows-apis"]
 keywords = ["windows", "delta", "patch", "manifest", "winsxs"]
+
+[features]
+default = ["cli"]
+# The `msdelta` binary. Kept in `default` so `cargo build`/`run`/`install`
+# work out of the box; library consumers that want a lean tree can build with
+# `--no-default-features`.
+cli = ["dep:clap", "dep:clap_complete", "dep:anyhow"]
 
 [dependencies]
 thiserror = "2"
@@ -16,6 +23,13 @@ lzxd = "0.2"
 md-5 = "0.10"
 sha2 = "0.10"
 digest = "0.10"
+clap = { version = "4", features = ["derive"], optional = true }
+clap_complete = { version = "4", optional = true }
+anyhow = { version = "1", optional = true }
+
+[[bin]]
+name = "msdelta"
+required-features = ["cli"]
 
 [dev-dependencies]
 anyhow = "1"
