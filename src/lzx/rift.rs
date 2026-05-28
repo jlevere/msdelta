@@ -43,12 +43,20 @@ impl RiftTable {
         let fmt_dst = IntFormat::from_reader(reader)?;
 
         let count = reader.read_i64()?;
-        if !(0..=0x0FFFFFFFFFFFFFFF).contains(&count) {
-            return Err(Error::Malformed("rift table entry count out of range"));
+        // Each entry reads at least one bit per encoded number, so a well-formed
+        // table can never claim more entries than there are bits left in the
+        // stream. Reject anything larger instead of allocating on an
+        // attacker-controlled count: without this bound a crafted delta drives
+        // an unbounded `Vec` growth (multi-GB OOM), since the bit reader yields
+        // zero past end-of-stream rather than erroring.
+        if count < 0 || count as u64 > u64::from(reader.remaining()) {
+            return Err(Error::Malformed(
+                "rift table entry count exceeds available input",
+            ));
         }
         let count = count as usize;
 
-        let mut entries = Vec::with_capacity(count.min(1_000_000));
+        let mut entries = Vec::with_capacity(count);
         let mut src_acc: i64 = 0;
         let mut dst_acc: i64 = 0;
 
