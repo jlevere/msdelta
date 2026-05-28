@@ -88,9 +88,9 @@ impl CreateOptions {
         use crate::pe::{parse::PeInfo, rift_gen, transform};
 
         let pe_info = if self.file_type == FileType::Auto {
-            PeInfo::parse(reference).ok().and_then(|src| {
-                PeInfo::parse(target).ok().map(|tgt| (src, tgt))
-            })
+            PeInfo::parse(reference)
+                .ok()
+                .and_then(|src| PeInfo::parse(target).ok().map(|tgt| (src, tgt)))
         } else {
             None
         };
@@ -108,7 +108,9 @@ impl CreateOptions {
                     rift_gen::rift_from_resources(&src_pe, &tgt_pe),
                     rift_gen::rift_from_pdata(&src_pe, &tgt_pe),
                 ];
-                let mut merged = RiftTable { entries: Vec::new() };
+                let mut merged = RiftTable {
+                    entries: Vec::new(),
+                };
                 for r in rifts {
                     merged.entries.extend(r.entries);
                 }
@@ -121,8 +123,10 @@ impl CreateOptions {
                     crate::lzx::compress_with_rift(reference, &normalized, &merged)?
                 };
                 let preprocess = build_pe_preprocess(
-                    tgt_pe.image_base, original_ts,
-                    &merged, &RiftTable { entries: vec![] },
+                    tgt_pe.image_base,
+                    original_ts,
+                    &merged,
+                    &RiftTable { entries: vec![] },
                 );
                 let ft: i64 = if tgt_pe.is_64bit { 8 } else { 2 };
                 (patch_data, 0xFi64, ft, 0i64, preprocess)

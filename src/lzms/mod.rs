@@ -7,9 +7,8 @@ mod x86_filter;
 
 use adaptive::{AdaptiveCode, BackBits, BackBitsWriter};
 use range_coder::{
-    ProbEntry, ProbTables, RangeDecoder, RangeEncoder,
-    NUM_DELTA_PROBS, NUM_DELTA_REP_PROBS, NUM_LZ_PROBS, NUM_LZ_REP_PROBS,
-    NUM_MAIN_PROBS, NUM_MATCH_PROBS,
+    ProbEntry, ProbTables, RangeDecoder, RangeEncoder, NUM_DELTA_PROBS, NUM_DELTA_REP_PROBS,
+    NUM_LZ_PROBS, NUM_LZ_REP_PROBS, NUM_MAIN_PROBS, NUM_MATCH_PROBS,
 };
 use x86_filter::{x86_filter, x86_filter_impl};
 
@@ -48,7 +47,11 @@ pub fn decompress_compression_api(data: &[u8]) -> Result<Vec<u8>> {
 /// 24-byte header + chunk-size + LZMS-compressed payload.
 pub fn compress_compression_api(data: &[u8]) -> Result<Vec<u8>> {
     let compressed = compress(data)?;
-    let payload = if compressed.len() < data.len() { &compressed } else { data };
+    let payload = if compressed.len() < data.len() {
+        &compressed
+    } else {
+        data
+    };
     let mut out = Vec::with_capacity(COMPRESSION_API_HEADER_SIZE + 4 + payload.len());
     out.extend_from_slice(&COMPRESSION_API_MAGIC.to_le_bytes());
     out.extend_from_slice(&0u32.to_le_bytes());
@@ -106,8 +109,7 @@ pub fn decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>> {
             pos += 1;
             prev_type = 0;
         } else {
-            let match_bit =
-                rc.decode_bit(&mut match_st, NUM_MATCH_PROBS, &mut probs.match_);
+            let match_bit = rc.decode_bit(&mut match_st, NUM_MATCH_PROBS, &mut probs.match_);
 
             if match_bit == 0 {
                 let lz_bit = rc.decode_bit(&mut lz_st, NUM_LZ_PROBS, &mut probs.lz);
@@ -118,9 +120,7 @@ pub fn decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>> {
                     offset = tables::decode_offset(slot, &mut bs);
                     queue_push(&mut lz_queue, offset);
                 } else {
-                    let rep = decode_rep(
-                        &mut rc, &mut lz_rep_st, &mut probs.lz_rep,
-                    );
+                    let rep = decode_rep(&mut rc, &mut lz_rep_st, &mut probs.lz_rep);
                     let adj = (rep + (prev_type & 1) as usize).min(3);
                     offset = lz_queue[adj];
                     queue_mtf(&mut lz_queue, adj);
@@ -140,22 +140,17 @@ pub fn decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>> {
                 pos += n;
                 prev_type = 1;
             } else {
-                let delta_bit =
-                    rc.decode_bit(&mut delta_st, NUM_DELTA_PROBS, &mut probs.delta);
+                let delta_bit = rc.decode_bit(&mut delta_st, NUM_DELTA_PROBS, &mut probs.delta);
 
                 let power;
                 let raw_offset;
                 if delta_bit == 0 {
                     power = delta_power_code.decode_symbol(&mut bs)? as u32;
-                    raw_offset = tables::decode_offset(
-                        delta_offset_code.decode_symbol(&mut bs)?,
-                        &mut bs,
-                    );
+                    raw_offset =
+                        tables::decode_offset(delta_offset_code.decode_symbol(&mut bs)?, &mut bs);
                     queue_push_pair(&mut delta_queue, (raw_offset, power));
                 } else {
-                    let rep = decode_rep(
-                        &mut rc, &mut delta_rep_st, &mut probs.delta_rep,
-                    );
+                    let rep = decode_rep(&mut rc, &mut delta_rep_st, &mut probs.delta_rep);
                     let adj = (rep + ((prev_type >> 1) & 1) as usize).min(3);
                     let pair = delta_queue[adj];
                     raw_offset = pair.0;
@@ -163,10 +158,8 @@ pub fn decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>> {
                     queue_mtf_pair(&mut delta_queue, adj);
                 }
 
-                let length = tables::decode_length(
-                    length_code.decode_symbol(&mut bs)?,
-                    &mut bs,
-                ) as usize;
+                let length =
+                    tables::decode_length(length_code.decode_symbol(&mut bs)?, &mut bs) as usize;
 
                 let span = 1usize << power;
                 let offset = (raw_offset as usize)
@@ -283,19 +276,25 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
         if pos >= 2 {
             for power in 0..3u32 {
                 let span = 1usize << power;
-                if span > pos { break; }
+                if span > pos {
+                    break;
+                }
                 for try_off in 1..pos.min(32) {
                     let off = try_off << power;
-                    if off + span > pos { continue; }
+                    if off + span > pos {
+                        continue;
+                    }
                     let mut ml = 0u32;
                     while pos + (ml as usize) < d.len() && ml < 1046 {
                         let p = pos + ml as usize;
                         let s = p - off;
-                        if p < span || s < span { break; }
-                        let expected = d[s]
-                            .wrapping_add(d[p - span])
-                            .wrapping_sub(d[s - span]);
-                        if d[p] != expected { break; }
+                        if p < span || s < span {
+                            break;
+                        }
+                        let expected = d[s].wrapping_add(d[p - span]).wrapping_sub(d[s - span]);
+                        if d[p] != expected {
+                            break;
+                        }
                         ml += 1;
                     }
                     if ml > delta_len && ml >= 3 {
@@ -330,14 +329,39 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
             if let Some((rep, adj)) = rep_idx {
                 rc.encode_bit(1, &mut delta_st, NUM_DELTA_PROBS, &mut probs.delta);
                 match rep {
-                    0 => rc.encode_bit(0, &mut delta_rep_st[0], NUM_LZ_REP_PROBS, &mut probs.delta_rep[0]),
+                    0 => rc.encode_bit(
+                        0,
+                        &mut delta_rep_st[0],
+                        NUM_LZ_REP_PROBS,
+                        &mut probs.delta_rep[0],
+                    ),
                     1 => {
-                        rc.encode_bit(1, &mut delta_rep_st[0], NUM_LZ_REP_PROBS, &mut probs.delta_rep[0]);
-                        rc.encode_bit(0, &mut delta_rep_st[1], NUM_DELTA_REP_PROBS, &mut probs.delta_rep[1]);
+                        rc.encode_bit(
+                            1,
+                            &mut delta_rep_st[0],
+                            NUM_LZ_REP_PROBS,
+                            &mut probs.delta_rep[0],
+                        );
+                        rc.encode_bit(
+                            0,
+                            &mut delta_rep_st[1],
+                            NUM_DELTA_REP_PROBS,
+                            &mut probs.delta_rep[1],
+                        );
                     }
                     _ => {
-                        rc.encode_bit(1, &mut delta_rep_st[0], NUM_LZ_REP_PROBS, &mut probs.delta_rep[0]);
-                        rc.encode_bit(1, &mut delta_rep_st[1], NUM_DELTA_REP_PROBS, &mut probs.delta_rep[1]);
+                        rc.encode_bit(
+                            1,
+                            &mut delta_rep_st[0],
+                            NUM_LZ_REP_PROBS,
+                            &mut probs.delta_rep[0],
+                        );
+                        rc.encode_bit(
+                            1,
+                            &mut delta_rep_st[1],
+                            NUM_DELTA_REP_PROBS,
+                            &mut probs.delta_rep[1],
+                        );
                     }
                 }
                 queue_mtf_pair(&mut delta_queue, adj);
@@ -379,14 +403,26 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
             if let Some((rep, adj)) = rep_idx {
                 rc.encode_bit(1, &mut lz_st, NUM_LZ_PROBS, &mut probs.lz);
                 match rep {
-                    0 => rc.encode_bit(0, &mut lz_rep_st[0], NUM_LZ_REP_PROBS, &mut probs.lz_rep[0]),
+                    0 => {
+                        rc.encode_bit(0, &mut lz_rep_st[0], NUM_LZ_REP_PROBS, &mut probs.lz_rep[0])
+                    }
                     1 => {
                         rc.encode_bit(1, &mut lz_rep_st[0], NUM_LZ_REP_PROBS, &mut probs.lz_rep[0]);
-                        rc.encode_bit(0, &mut lz_rep_st[1], NUM_DELTA_REP_PROBS, &mut probs.lz_rep[1]);
+                        rc.encode_bit(
+                            0,
+                            &mut lz_rep_st[1],
+                            NUM_DELTA_REP_PROBS,
+                            &mut probs.lz_rep[1],
+                        );
                     }
                     _ => {
                         rc.encode_bit(1, &mut lz_rep_st[0], NUM_LZ_REP_PROBS, &mut probs.lz_rep[0]);
-                        rc.encode_bit(1, &mut lz_rep_st[1], NUM_DELTA_REP_PROBS, &mut probs.lz_rep[1]);
+                        rc.encode_bit(
+                            1,
+                            &mut lz_rep_st[1],
+                            NUM_DELTA_REP_PROBS,
+                            &mut probs.lz_rep[1],
+                        );
                     }
                 }
                 queue_mtf(&mut lz_queue, adj);
@@ -438,34 +474,46 @@ fn match_length(data: &[u8], src: usize, dst: usize, limit: usize) -> u32 {
     len
 }
 
-fn decode_rep(
-    rc: &mut RangeDecoder,
-    st: &mut [u32; 2],
-    probs: &mut [Vec<ProbEntry>; 2],
-) -> usize {
+fn decode_rep(rc: &mut RangeDecoder, st: &mut [u32; 2], probs: &mut [Vec<ProbEntry>; 2]) -> usize {
     let b0 = rc.decode_bit(&mut st[0], NUM_LZ_REP_PROBS, &mut probs[0]);
-    if b0 == 0 { return 0; }
+    if b0 == 0 {
+        return 0;
+    }
     let b1 = rc.decode_bit(&mut st[1], NUM_DELTA_REP_PROBS, &mut probs[1]);
-    if b1 == 0 { 1 } else { 2 }
+    if b1 == 0 {
+        1
+    } else {
+        2
+    }
 }
 
 fn queue_push(q: &mut [u32; 4], val: u32) {
-    q[3] = q[2]; q[2] = q[1]; q[1] = q[0]; q[0] = val;
+    q[3] = q[2];
+    q[2] = q[1];
+    q[1] = q[0];
+    q[0] = val;
 }
 
 fn queue_mtf(q: &mut [u32; 4], idx: usize) {
     let val = q[idx];
-    for i in (1..=idx).rev() { q[i] = q[i - 1]; }
+    for i in (1..=idx).rev() {
+        q[i] = q[i - 1];
+    }
     q[0] = val;
 }
 
 fn queue_push_pair(q: &mut [(u32, u32); 4], val: (u32, u32)) {
-    q[3] = q[2]; q[2] = q[1]; q[1] = q[0]; q[0] = val;
+    q[3] = q[2];
+    q[2] = q[1];
+    q[1] = q[0];
+    q[0] = val;
 }
 
 fn queue_mtf_pair(q: &mut [(u32, u32); 4], idx: usize) {
     let val = q[idx];
-    for i in (1..=idx).rev() { q[i] = q[i - 1]; }
+    for i in (1..=idx).rev() {
+        q[i] = q[i - 1];
+    }
     q[0] = val;
 }
 
@@ -480,7 +528,9 @@ mod tests {
         let lzms_path = Path::new(FIXTURES).join(format!("{name}.lzms"));
         let raw_path = Path::new(FIXTURES).join(format!("{name}.raw"));
 
-        if !lzms_path.exists() { return; }
+        if !lzms_path.exists() {
+            return;
+        }
 
         let compressed = std::fs::read(&lzms_path).unwrap();
         let expected = std::fs::read(&raw_path).unwrap();
@@ -490,9 +540,7 @@ mod tests {
                 assert_eq!(output.len(), expected.len(), "{name}: size mismatch");
                 for (i, (&got, &want)) in output.iter().zip(expected.iter()).enumerate() {
                     if got != want {
-                        panic!(
-                            "{name}: first diff at byte {i}: got {got:#04x}, want {want:#04x}"
-                        );
+                        panic!("{name}: first diff at byte {i}: got {got:#04x}, want {want:#04x}");
                     }
                 }
             }
@@ -500,13 +548,34 @@ mod tests {
         }
     }
 
-    #[test] fn zeros() { check("zeros"); }
-    #[test] fn sequential() { check("sequential"); }
-    #[test] fn pattern() { check("pattern"); }
-    #[test] fn single_byte() { check("single_byte"); }
-    #[test] fn english() { check("english"); }
-    #[test] fn small() { check("small"); }
-    #[test] fn random() { check("random"); }
+    #[test]
+    fn zeros() {
+        check("zeros");
+    }
+    #[test]
+    fn sequential() {
+        check("sequential");
+    }
+    #[test]
+    fn pattern() {
+        check("pattern");
+    }
+    #[test]
+    fn single_byte() {
+        check("single_byte");
+    }
+    #[test]
+    fn english() {
+        check("english");
+    }
+    #[test]
+    fn small() {
+        check("small");
+    }
+    #[test]
+    fn random() {
+        check("random");
+    }
 
     #[test]
     fn x86_filter_roundtrip() {
@@ -526,7 +595,10 @@ mod tests {
         let original = data.clone();
 
         x86_filter_impl(&mut data, false);
-        assert_ne!(data, original, "x86 filter should modify data with repeated call targets");
+        assert_ne!(
+            data, original,
+            "x86 filter should modify data with repeated call targets"
+        );
 
         x86_filter_impl(&mut data, true);
         assert_eq!(data, original, "x86 filter roundtrip failed");
@@ -566,7 +638,8 @@ mod tests {
 
     #[test]
     fn compression_api_roundtrip() {
-        let original = b"Compression API wrapper roundtrip test data with some repetition repetition";
+        let original =
+            b"Compression API wrapper roundtrip test data with some repetition repetition";
         let wrapped = compress_compression_api(original).unwrap();
         assert!(wrapped.len() >= COMPRESSION_API_HEADER_SIZE + 4);
         let magic = u32::from_le_bytes(wrapped[0..4].try_into().unwrap());

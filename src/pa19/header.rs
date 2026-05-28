@@ -3,8 +3,8 @@
 //! The PA19 header contains patch metadata immediately after the magic.
 //! Fields are mostly fixed-width little-endian integers.
 
-use crate::{Error, Result};
 use super::PatchHeader;
+use crate::{Error, Result};
 
 /// Decode the PA19 patch header.
 pub fn decode(patch: &[u8]) -> Result<PatchHeader> {

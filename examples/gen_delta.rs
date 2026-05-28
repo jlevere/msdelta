@@ -6,5 +6,9 @@ fn main() {
     let target = msdelta::pa30::apply(&base, &fixture[4..]).unwrap();
     let delta = msdelta::pa30::create(&base, &target).unwrap();
     fs::write("/tmp/custom_huffman.pa30", &delta).unwrap();
-    println!("Custom Huffman delta: {} bytes (target: {} bytes)", delta.len(), target.len());
+    println!(
+        "Custom Huffman delta: {} bytes (target: {} bytes)",
+        delta.len(),
+        target.len()
+    );
 }

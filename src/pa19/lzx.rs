@@ -27,7 +27,9 @@ pub fn decompress_delta(
         0x10000 => lzxd::WindowSize::KB64,
         0x20000 => lzxd::WindowSize::KB128,
         other => {
-            return Err(Error::Pa19(format!("unsupported LZX window size: {other:#x}")));
+            return Err(Error::Pa19(format!(
+                "unsupported LZX window size: {other:#x}"
+            )));
         }
     };
     let mut decoder = lzxd::Lzxd::new(ws);

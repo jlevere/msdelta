@@ -26,13 +26,14 @@ pub fn rift_from_sections(source: &PeInfo, target: &PeInfo) -> RiftTable {
         }
     }
 
-    let dd_count = source.data_directories.len().min(target.data_directories.len());
+    let dd_count = source
+        .data_directories
+        .len()
+        .min(target.data_directories.len());
     for i in 0..dd_count {
         let (src_rva, src_size) = source.data_directories[i];
         let (tgt_rva, tgt_size) = target.data_directories[i];
-        if src_rva > 0 && src_size > 0 && tgt_rva > 0 && tgt_size > 0
-            && src_rva != tgt_rva
-        {
+        if src_rva > 0 && src_size > 0 && tgt_rva > 0 && tgt_size > 0 && src_rva != tgt_rva {
             entries.push(RiftEntry {
                 source: src_rva as i64,
                 target: tgt_rva as i64,
@@ -67,9 +68,7 @@ pub fn rift_from_imports(source_data: &[u8], target_data: &[u8]) -> RiftTable {
     for src_imp in src_imports {
         for tgt_imp in tgt_imports {
             if src_imp.dll == tgt_imp.dll {
-                if src_imp.offset != 0 && tgt_imp.offset != 0
-                    && src_imp.offset != tgt_imp.offset
-                {
+                if src_imp.offset != 0 && tgt_imp.offset != 0 && src_imp.offset != tgt_imp.offset {
                     entries.push(RiftEntry {
                         source: src_imp.offset as i64,
                         target: tgt_imp.offset as i64,
@@ -187,9 +186,7 @@ pub fn rift_from_import_thunks(source_data: &[u8], target_data: &[u8]) -> RiftTa
     for src_imp in &src_pe.imports {
         for tgt_imp in &tgt_pe.imports {
             if src_imp.dll == tgt_imp.dll && src_imp.name == tgt_imp.name {
-                if src_imp.offset != 0 && tgt_imp.offset != 0
-                    && src_imp.offset != tgt_imp.offset
-                {
+                if src_imp.offset != 0 && tgt_imp.offset != 0 && src_imp.offset != tgt_imp.offset {
                     entries.push(RiftEntry {
                         source: src_imp.offset as i64,
                         target: tgt_imp.offset as i64,
@@ -216,16 +213,14 @@ mod tests {
             size_of_image: 0x50000,
             timestamp: 0x12345678,
             is_64bit: true,
-            sections: vec![
-                super::super::parse::SectionInfo {
-                    name: ".text".to_string(),
-                    virtual_address: 0x1000,
-                    virtual_size: 0x10000,
-                    raw_offset: 0x400,
-                    raw_size: 0x10000,
-                    characteristics: 0,
-                },
-            ],
+            sections: vec![super::super::parse::SectionInfo {
+                name: ".text".to_string(),
+                virtual_address: 0x1000,
+                virtual_size: 0x10000,
+                raw_offset: 0x400,
+                raw_size: 0x10000,
+                characteristics: 0,
+            }],
             data_directories: vec![],
         };
         let rift = rift_from_sections(&pe, &pe);
@@ -239,16 +234,14 @@ mod tests {
             size_of_image: 0x50000,
             timestamp: 0x11111111,
             is_64bit: true,
-            sections: vec![
-                super::super::parse::SectionInfo {
-                    name: ".text".to_string(),
-                    virtual_address: 0x1000,
-                    virtual_size: 0x10000,
-                    raw_offset: 0x400,
-                    raw_size: 0x10000,
-                    characteristics: 0,
-                },
-            ],
+            sections: vec![super::super::parse::SectionInfo {
+                name: ".text".to_string(),
+                virtual_address: 0x1000,
+                virtual_size: 0x10000,
+                raw_offset: 0x400,
+                raw_size: 0x10000,
+                characteristics: 0,
+            }],
             data_directories: vec![],
         };
         let target = PeInfo {
@@ -256,16 +249,14 @@ mod tests {
             size_of_image: 0x60000,
             timestamp: 0x22222222,
             is_64bit: true,
-            sections: vec![
-                super::super::parse::SectionInfo {
-                    name: ".text".to_string(),
-                    virtual_address: 0x2000,
-                    virtual_size: 0x10000,
-                    raw_offset: 0x600,
-                    raw_size: 0x10000,
-                    characteristics: 0,
-                },
-            ],
+            sections: vec![super::super::parse::SectionInfo {
+                name: ".text".to_string(),
+                virtual_address: 0x2000,
+                virtual_size: 0x10000,
+                raw_offset: 0x600,
+                raw_size: 0x10000,
+                characteristics: 0,
+            }],
             data_directories: vec![],
         };
         let rift = rift_from_sections(&source, &target);

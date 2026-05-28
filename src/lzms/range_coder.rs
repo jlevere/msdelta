@@ -26,8 +26,11 @@ pub(super) struct RangeEncoder {
 impl RangeEncoder {
     pub(super) fn new() -> Self {
         RangeEncoder {
-            low: 0, range: 0xFFFF_FFFF,
-            cache: 0, cache_count: 0, first: true,
+            low: 0,
+            range: 0xFFFF_FFFF,
+            cache: 0,
+            cache_count: 0,
+            first: true,
             output: Vec::new(),
         }
     }
@@ -106,7 +109,12 @@ impl<'a> RangeDecoder<'a> {
     pub(super) fn new(data: &'a [u8]) -> Self {
         let hi = le16(data, 0) as u32;
         let lo = le16(data, 2) as u32;
-        RangeDecoder { data, pos: 4, range: 0xFFFF_FFFF, code: (hi << 16) | lo }
+        RangeDecoder {
+            data,
+            pos: 4,
+            range: 0xFFFF_FFFF,
+            code: (hi << 16) | lo,
+        }
     }
 
     #[inline]
@@ -157,7 +165,10 @@ pub(super) struct ProbEntry {
 
 impl ProbEntry {
     pub(super) fn new() -> Self {
-        ProbEntry { num_zeros: INITIAL_PROB, recent: INITIAL_RECENT_BITS }
+        ProbEntry {
+            num_zeros: INITIAL_PROB,
+            recent: INITIAL_RECENT_BITS,
+        }
     }
 
     #[inline]
@@ -169,8 +180,12 @@ impl ProbEntry {
     pub(super) fn update(&mut self, bit: u32) {
         let oldest = (self.recent >> 63) as u32;
         self.recent = (self.recent << 1) | bit as u64;
-        if oldest == 0 { self.num_zeros -= 1; }
-        if bit == 0 { self.num_zeros += 1; }
+        if oldest == 0 {
+            self.num_zeros -= 1;
+        }
+        if bit == 0 {
+            self.num_zeros += 1;
+        }
     }
 }
 

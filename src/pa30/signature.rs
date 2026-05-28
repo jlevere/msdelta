@@ -53,7 +53,9 @@ pub fn normalize_for_signature(data: &mut [u8]) {
     use crate::pe::transform::{pe_timestamp, pe_timestamp_offsets};
 
     let ts = pe_timestamp(data);
-    if ts == 0 { return; }
+    if ts == 0 {
+        return;
+    }
 
     let zeros = [0u8; 4];
     for off in pe_timestamp_offsets(data) {

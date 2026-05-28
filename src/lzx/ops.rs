@@ -12,10 +12,7 @@ pub enum MatchOp {
     /// Emit a literal byte.
     Literal(u8),
     /// Copy `length` bytes from a source at the given offset.
-    Copy {
-        offset: CopyOffset,
-        length: u32,
-    },
+    Copy { offset: CopyOffset, length: u32 },
 }
 
 /// Where a copy operation reads from.
