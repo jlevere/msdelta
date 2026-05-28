@@ -11,9 +11,17 @@ use super::format::{
 use super::ops::{RAW_OFFSET_BASE, OFFSET_BIAS};
 use super::format::{SOURCE_COPY, LRU_BASE};
 
+fn write_rift(writer: &mut BitWriter, rift: Option<&super::rift::RiftTable>) {
+    if let Some(r) = rift {
+        r.to_writer(writer);
+    } else {
+        writer.write_bits(0, 1);
+    }
+}
+
 /// Core compression implementation. Produces a bitstream that `decompress`
 /// (and msdelta.dll) can decode.
-pub(super) fn compress_inner(reference: &[u8], target: &[u8]) -> Result<Vec<u8>> {
+pub(super) fn compress_inner(reference: &[u8], target: &[u8], rift: Option<&super::rift::RiftTable>) -> Result<Vec<u8>> {
     let ref_len = reference.len();
 
     // Two-pass: first find all symbols and collect frequencies, then
@@ -256,7 +264,7 @@ pub(super) fn compress_inner(reference: &[u8], target: &[u8]) -> Result<Vec<u8>>
 
         // Encode
         let mut writer = BitWriter::new();
-        writer.write_bits(0, 1); // empty rift
+        write_rift(&mut writer, rift);
         writer.write_bits(0, 1); // complex mode
 
         write_composite_format_multi(&mut writer, &seg_tables, &seg_boundaries)?;

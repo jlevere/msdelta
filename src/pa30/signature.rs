@@ -43,3 +43,33 @@ pub fn get_signature(data: &[u8], hash_alg_id: u32) -> Result<DeltaHash> {
 pub(super) fn hex_str(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
+
+/// Normalize a buffer for stable signature computation.
+///
+/// Equivalent to `DeltaNormalizeProvidedB(...)` on Windows.
+/// Zeroes volatile PE fields (timestamps, checksums) so that
+/// `get_signature` produces stable results across rebuilds.
+pub fn normalize_for_signature(data: &mut [u8]) {
+    use crate::pe::transform::{pe_timestamp, pe_timestamp_offsets};
+
+    let ts = pe_timestamp(data);
+    if ts == 0 { return; }
+
+    let zeros = [0u8; 4];
+    for off in pe_timestamp_offsets(data) {
+        if off + 4 <= data.len() {
+            let val = u32::from_le_bytes(data[off..off + 4].try_into().unwrap());
+            if val == ts {
+                data[off..off + 4].copy_from_slice(&zeros);
+            }
+        }
+    }
+
+    if data.len() >= 0x40 {
+        let pe_off = u32::from_le_bytes(data[0x3C..0x40].try_into().unwrap()) as usize;
+        let cksum_off = pe_off + 0x58;
+        if cksum_off + 4 <= data.len() {
+            data[cksum_off..cksum_off + 4].copy_from_slice(&zeros);
+        }
+    }
+}

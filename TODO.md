@@ -11,7 +11,7 @@ UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 |--------|--------|-------|
 | `ApplyDeltaB` | **done** | `pa30::apply()` |
 | `ApplyDeltaGetReverseB` | **done** | `pa30::apply_get_reverse()` |
-| `ApplyDeltaProvidedB` | missing | caller-provided output buffer variant |
+| `ApplyDeltaProvidedB` | **done** | caller-provided output buffer variant |
 | `ApplyDeltaA` / `ApplyDeltaW` | n/a | ANSI/Unicode file-path wrappers, not relevant for a library |
 | `CreateDeltaB` | **done** | `pa30::create()` / `CreateOptions` |
 | `CreateDeltaA` / `CreateDeltaW` | n/a | ANSI/Unicode file-path wrappers |
@@ -26,7 +26,7 @@ UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 
 | Export | Status | Notes |
 |--------|--------|-------|
-| `GetDeltaInfoExB` | missing | returns PA31 extended fields (field1/field2/field3 + extra hash) |
+| `GetDeltaInfoExB` | **done** | returns PA31 extended fields (field1/field2/field3 + extra hash) |
 
 ### mspatcha.dll / mspatchc.dll (PA19 legacy)
 
@@ -77,7 +77,7 @@ UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 | Source-copy (rift-aware) | done | done | encoder doesn't do rift-aware match finding, but writes empty rift |
 | Signed offsets (slots 0-2) | done | done | |
 | Aligned-offset extra bits | done | done | |
-| Multi-segment composite format | done | partial | encoder always writes 1 segment |
+| Multi-segment composite format | done | **done** | encoder always writes 1 segment |
 | Pre-tree delta/RLE encoding | done | done | delta/RLE symbols 17-38 |
 | Rift table in patch bitstream | done | **missing** | encoder writes empty rift; PE rift goes in preprocess only |
 
@@ -86,7 +86,7 @@ UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 | Feature | Decode | Encode | Notes |
 |---------|--------|--------|-------|
 | LZ matches | done | done | |
-| Delta matches | done | **missing** | encoder never emits delta matches |
+| Delta matches | done | **done** | encoder never emits delta matches |
 | X86 E8/E9 filter | done | done | |
 | Adaptive Huffman rebuild | done | done | |
 | Compression API wrapper | done | done | 24-byte header format |
@@ -121,9 +121,9 @@ UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 | Data directory rift generation | **done** | match by fixed index |
 | Import descriptor rift | **done** | match by DLL name (simplified) |
 | Export table rift | **done** | match by function name |
-| Resource section rift | missing | `RiftTableFromResourcesFactory` |
-| Pdata/exception rift | missing | `RiftTableFromPdatasFactory` |
-| Import thunk-level rift | missing | per-function IAT matching within each DLL |
+| Resource section rift | **done** | `RiftTableFromResourcesFactory` |
+| Pdata/exception rift | **done** | `RiftTableFromPdatasFactory` |
+| Import thunk-level rift | **done** | per-function IAT matching within each DLL |
 | Rift-aware match finding | missing | encoder ignores rift during LZX compression |
 
 ---

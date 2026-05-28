@@ -115,7 +115,11 @@ impl CreateOptions {
                 merged.entries.sort_by_key(|e| e.source);
                 merged.entries.dedup_by_key(|e| e.source);
 
-                let patch_data = crate::lzx::compress(reference, &normalized)?;
+                let patch_data = if merged.entries.is_empty() {
+                    crate::lzx::compress(reference, &normalized)?
+                } else {
+                    crate::lzx::compress_with_rift(reference, &normalized, &merged)?
+                };
                 let preprocess = build_pe_preprocess(
                     tgt_pe.image_base, original_ts,
                     &merged, &RiftTable { entries: vec![] },

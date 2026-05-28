@@ -50,10 +50,13 @@ pub fn decompress_partial(
 /// Compress `target` as a PseudoLzx patch against `reference`.
 ///
 /// Produces a bitstream that `decompress` (and msdelta.dll) can decode.
-/// Uses simple-mode (flat Huffman tables, single segment) for format
-/// compatibility without needing custom Huffman tree serialization.
 pub fn compress(reference: &[u8], target: &[u8]) -> Result<Vec<u8>> {
-    encode::compress_inner(reference, target)
+    encode::compress_inner(reference, target, None)
+}
+
+/// Compress with a rift table embedded in the patch bitstream.
+pub fn compress_with_rift(reference: &[u8], target: &[u8], rift: &RiftTable) -> Result<Vec<u8>> {
+    encode::compress_inner(reference, target, Some(rift))
 }
 
 #[cfg(test)]

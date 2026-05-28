@@ -69,14 +69,44 @@ pub fn apply(old_file: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
         hdr.lzx_window_size,
     )?;
 
-    // Verify CRC. The header stores the raw CRC register value (ones' complement
-    // of the standard finalized CRC32). Our crc32() also returns the raw register.
+    let mut new_file = new_file;
+    if hdr.flags & 2 != 0 {
+        e8_transform_decode(&mut new_file);
+    }
+
     let crc = crc32(&new_file);
     if crc != hdr.new_file_crc {
         return Err(Error::Malformed("PA19: CRC mismatch"));
     }
 
     Ok(new_file)
+}
+
+/// Reverse the E8 (CALL relative) instruction transform applied during PA19 compression.
+///
+/// Standard LZX E8 processing: for each 0xE8 byte in the first 32KB, the following
+/// 4-byte relative offset is converted from absolute to relative form.
+fn e8_transform_decode(data: &mut [u8]) {
+    let file_size = data.len() as i32;
+    let limit = data.len().min(32768);
+    let mut i = 0;
+    while i + 5 <= limit {
+        if data[i] == 0xE8 {
+            let abs_offset = i32::from_le_bytes(data[i + 1..i + 5].try_into().unwrap());
+            let rel_offset = if abs_offset >= 0 && abs_offset < file_size {
+                abs_offset - i as i32
+            } else if abs_offset.wrapping_neg() <= i as i32 {
+                abs_offset + file_size
+            } else {
+                i += 1;
+                continue;
+            };
+            data[i + 1..i + 5].copy_from_slice(&rel_offset.to_le_bytes());
+            i += 5;
+        } else {
+            i += 1;
+        }
+    }
 }
 
 fn crc32(data: &[u8]) -> u32 {

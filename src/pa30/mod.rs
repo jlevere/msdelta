@@ -10,7 +10,7 @@ pub(crate) mod signature;
 
 pub use encode::{apply_get_reverse, create, Codec, CreateOptions, FileType, get_info, get_info_ex};
 pub use header::{parse, parse_header, FormatVersion, Header, MAGIC, Pa31Extra, ParsedDelta};
-pub use signature::{get_signature, DeltaHash, HASH_ALG_MD5, HASH_ALG_NONE, HASH_ALG_SHA256};
+pub use signature::{get_signature, normalize_for_signature, DeltaHash, HASH_ALG_MD5, HASH_ALG_NONE, HASH_ALG_SHA256};
 
 use header::PA19_MAGIC;
 use preprocess::{apply_pe_timestamp_fixup, parse_pe_preprocess};
