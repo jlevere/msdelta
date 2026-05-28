@@ -77,3 +77,17 @@ path = "fuzz_targets/fuzz_lzms_roundtrip.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fuzz_lzms_wim"
+path = "fuzz_targets/fuzz_lzms_wim.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_lzms_wim_roundtrip"
+path = "fuzz_targets/fuzz_lzms_wim_roundtrip.rs"
+test = false
+doc = false
+bench = false
