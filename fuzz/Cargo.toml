@@ -91,3 +91,10 @@ path = "fuzz_targets/fuzz_lzms_wim_roundtrip.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fuzz_lzms_mutate"
+path = "fuzz_targets/fuzz_lzms_mutate.rs"
+test = false
+doc = false
+bench = false
