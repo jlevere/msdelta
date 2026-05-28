@@ -41,6 +41,14 @@ pub struct PatchHeader {
     pub interleave_count: u32,
 }
 
+/// Parse a PA19 patch header without applying the patch.
+pub fn parse_header(patch: &[u8]) -> Result<PatchHeader> {
+    if patch.len() < 4 || &patch[..4] != MAGIC {
+        return Err(Error::Malformed("PA19: bad magic"));
+    }
+    header::decode(patch)
+}
+
 /// Apply a PA19 patch to produce the new file from old file + patch data.
 pub fn apply(old_file: &[u8], patch: &[u8]) -> Result<Vec<u8>> {
     if patch.len() < 4 || &patch[..4] != MAGIC {
