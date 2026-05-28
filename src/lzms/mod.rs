@@ -211,13 +211,18 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
     let mut literal_code = AdaptiveCode::new(256, 1024);
     let mut lz_offset_code = AdaptiveCode::new(num_offset_syms, 1024);
     let mut length_code = AdaptiveCode::new(54, 512);
+    let mut delta_offset_code = AdaptiveCode::new(num_offset_syms, 1024);
+    let mut delta_power_code = AdaptiveCode::new(8, 512);
 
     let mut main_st = 0u32;
     let mut match_st = 0u32;
     let mut lz_st = 0u32;
     let mut lz_rep_st = [0u32; 2];
+    let mut delta_st = 0u32;
+    let mut delta_rep_st = [0u32; 2];
     let mut probs = ProbTables::new();
     let mut lz_queue: [u32; 4] = [1, 2, 3, 4];
+    let mut delta_queue: [(u32, u32); 4] = [(1, 0), (2, 0), (3, 0), (4, 0)];
     let mut prev_type: u32 = 0;
 
     let d = &filtered;
@@ -270,7 +275,88 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
         } else {
             (0, 0)
         };
-        if match_len >= 3 {
+
+        // Try delta match: find (offset, power) where the difference pattern matches
+        let mut delta_len = 0u32;
+        let mut delta_offset = 0u32;
+        let mut delta_power = 0u32;
+        if pos >= 2 {
+            for power in 0..3u32 {
+                let span = 1usize << power;
+                if span > pos { break; }
+                for try_off in 1..pos.min(32) {
+                    let off = try_off << power;
+                    if off + span > pos { continue; }
+                    let mut ml = 0u32;
+                    while pos + (ml as usize) < d.len() && ml < 1046 {
+                        let p = pos + ml as usize;
+                        let s = p - off;
+                        if p < span || s < span { break; }
+                        let expected = d[s]
+                            .wrapping_add(d[p - span])
+                            .wrapping_sub(d[s - span]);
+                        if d[p] != expected { break; }
+                        ml += 1;
+                    }
+                    if ml > delta_len && ml >= 3 {
+                        delta_len = ml;
+                        delta_offset = try_off as u32;
+                        delta_power = power;
+                    }
+                }
+            }
+        }
+
+        let use_delta = delta_len > match_len + 1;
+
+        if use_delta {
+            // Encode delta match
+            rc.encode_bit(1, &mut main_st, NUM_MAIN_PROBS, &mut probs.main);
+            rc.encode_bit(1, &mut match_st, NUM_MATCH_PROBS, &mut probs.match_);
+
+            let rep_idx = {
+                let adj_base = ((prev_type >> 1) & 1) as usize;
+                let mut found = None;
+                for rep in 0..3usize {
+                    let adj = (rep + adj_base).min(3);
+                    if delta_queue[adj] == (delta_offset, delta_power) {
+                        found = Some((rep, adj));
+                        break;
+                    }
+                }
+                found
+            };
+
+            if let Some((rep, adj)) = rep_idx {
+                rc.encode_bit(1, &mut delta_st, NUM_DELTA_PROBS, &mut probs.delta);
+                match rep {
+                    0 => rc.encode_bit(0, &mut delta_rep_st[0], NUM_LZ_REP_PROBS, &mut probs.delta_rep[0]),
+                    1 => {
+                        rc.encode_bit(1, &mut delta_rep_st[0], NUM_LZ_REP_PROBS, &mut probs.delta_rep[0]);
+                        rc.encode_bit(0, &mut delta_rep_st[1], NUM_DELTA_REP_PROBS, &mut probs.delta_rep[1]);
+                    }
+                    _ => {
+                        rc.encode_bit(1, &mut delta_rep_st[0], NUM_LZ_REP_PROBS, &mut probs.delta_rep[0]);
+                        rc.encode_bit(1, &mut delta_rep_st[1], NUM_DELTA_REP_PROBS, &mut probs.delta_rep[1]);
+                    }
+                }
+                queue_mtf_pair(&mut delta_queue, adj);
+            } else {
+                rc.encode_bit(0, &mut delta_st, NUM_DELTA_PROBS, &mut probs.delta);
+                delta_power_code.encode_symbol(delta_power as usize, &mut bs);
+                let off_slot = tables::find_offset_slot(delta_offset);
+                delta_offset_code.encode_symbol(off_slot, &mut bs);
+                tables::encode_offset_extra(delta_offset, off_slot, &mut bs);
+                queue_push_pair(&mut delta_queue, (delta_offset, delta_power));
+            }
+
+            let len_slot = tables::find_length_slot(delta_len);
+            length_code.encode_symbol(len_slot, &mut bs);
+            tables::encode_length_extra(delta_len, len_slot, &mut bs);
+
+            pos += delta_len as usize;
+            prev_type = 2;
+        } else if match_len >= 3 {
             // Encode LZ match
             rc.encode_bit(1, &mut main_st, NUM_MAIN_PROBS, &mut probs.main);
             rc.encode_bit(0, &mut match_st, NUM_MATCH_PROBS, &mut probs.match_);
