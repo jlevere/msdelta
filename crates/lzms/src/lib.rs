@@ -487,7 +487,11 @@ fn match_length(data: &[u8], src: usize, dst: usize, limit: usize) -> u32 {
     len
 }
 
-fn decode_rep(rc: &mut RangeDecoder, st: &mut [u32; 2], probs: &mut [Vec<ProbEntry>; 2]) -> usize {
+fn decode_rep<const N: usize>(
+    rc: &mut RangeDecoder,
+    st: &mut [u32; 2],
+    probs: &mut [[ProbEntry; N]; 2],
+) -> usize {
     let b0 = rc.decode_bit(&mut st[0], NUM_LZ_REP_PROBS, &mut probs[0]);
     if b0 == 0 {
         return 0;

@@ -189,30 +189,31 @@ impl ProbEntry {
     }
 }
 
+/// Per-class adaptive probability tables. All sizes are compile-time
+/// constants, so these are fixed-size arrays held inline (no per-chunk heap
+/// allocation); a fresh `ProbTables` is created for each independent LZMS
+/// stream.
 pub(super) struct ProbTables {
-    pub(super) main: Vec<ProbEntry>,
-    pub(super) match_: Vec<ProbEntry>,
-    pub(super) lz: Vec<ProbEntry>,
-    pub(super) lz_rep: [Vec<ProbEntry>; 2],
-    pub(super) delta: Vec<ProbEntry>,
-    pub(super) delta_rep: [Vec<ProbEntry>; 2],
+    pub(super) main: [ProbEntry; NUM_MAIN_PROBS],
+    pub(super) match_: [ProbEntry; NUM_MATCH_PROBS],
+    pub(super) lz: [ProbEntry; NUM_LZ_PROBS],
+    pub(super) lz_rep: [[ProbEntry; NUM_LZ_REP_PROBS]; 2],
+    pub(super) delta: [ProbEntry; NUM_DELTA_PROBS],
+    pub(super) delta_rep: [[ProbEntry; NUM_DELTA_REP_PROBS]; 2],
 }
 
 impl ProbTables {
     pub(super) fn new() -> Self {
+        fn table<const N: usize>() -> [ProbEntry; N] {
+            std::array::from_fn(|_| ProbEntry::new())
+        }
         ProbTables {
-            main: vec![ProbEntry::new(); NUM_MAIN_PROBS],
-            match_: vec![ProbEntry::new(); NUM_MATCH_PROBS],
-            lz: vec![ProbEntry::new(); NUM_LZ_PROBS],
-            lz_rep: [
-                vec![ProbEntry::new(); NUM_LZ_REP_PROBS],
-                vec![ProbEntry::new(); NUM_LZ_REP_PROBS],
-            ],
-            delta: vec![ProbEntry::new(); NUM_DELTA_PROBS],
-            delta_rep: [
-                vec![ProbEntry::new(); NUM_DELTA_REP_PROBS],
-                vec![ProbEntry::new(); NUM_DELTA_REP_PROBS],
-            ],
+            main: table(),
+            match_: table(),
+            lz: table(),
+            lz_rep: [table(), table()],
+            delta: table(),
+            delta_rep: [table(), table()],
         }
     }
 }

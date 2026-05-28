@@ -116,6 +116,9 @@ pub(super) struct AdaptiveCode {
     overflow: Vec<[u16; 2]>,
     codes: Vec<u32>,
     lens: Vec<u8>,
+    // Reused across every rebuild so Huffman-length computation allocates once,
+    // not on each `rebuild()` (called every `rebuild_freq` symbols).
+    code_scratch: CodeLenScratch,
 }
 
 impl AdaptiveCode {
@@ -128,6 +131,7 @@ impl AdaptiveCode {
             overflow: Vec::new(),
             codes: vec![0; num_syms],
             lens: vec![0; num_syms],
+            code_scratch: CodeLenScratch::default(),
         };
         if num_syms > 0 {
             code.rebuild();
@@ -136,9 +140,14 @@ impl AdaptiveCode {
     }
 
     fn rebuild(&mut self) {
-        let lens = compute_code_lengths(&self.freqs);
-        self.build_tables(&lens);
-        self.build_codes(&lens);
+        // Move the scratch out so `build_*` can take `&mut self` while we hold a
+        // shared borrow of the computed lengths; restore it afterward. The empty
+        // placeholder allocates nothing, and the scratch keeps its capacity.
+        let mut scratch = std::mem::take(&mut self.code_scratch);
+        scratch.compute(&self.freqs);
+        self.build_tables(&scratch.lens);
+        self.build_codes(&scratch.lens);
+        self.code_scratch = scratch;
     }
 
     fn build_codes(&mut self, lens: &[u8]) {
@@ -300,92 +309,134 @@ impl AdaptiveCode {
 // Standard two-queue merge with depth limiting to MAX_CODEWORD_LEN.
 // If any code exceeds the limit, halve all frequencies and retry.
 
-pub(super) fn compute_code_lengths(freqs: &[u32]) -> Vec<u8> {
-    let n = freqs.len();
-    let mut lens = vec![0u8; n];
-
-    let mut active: Vec<(u32, u16)> = freqs
-        .iter()
-        .enumerate()
-        .filter(|(_, &f)| f > 0)
-        .map(|(i, &f)| (f, i as u16))
-        .collect();
-
-    match active.len() {
-        0 => return lens,
-        1 => {
-            lens[active[0].1 as usize] = 1;
-            return lens;
-        }
-        _ => {}
+/// Pick the smaller-frequency front of the two merge queues (leaves `q1`,
+/// internal nodes `q2`), advancing the chosen cursor. Ties and the queue-empty
+/// cases match the original two-queue merge exactly.
+fn pick_min(
+    freq: &[u32],
+    q2: &[usize],
+    q1: &mut usize,
+    q2f: &mut usize,
+    num_leaves: usize,
+) -> usize {
+    let q1_avail = *q1 < num_leaves;
+    let q2_avail = *q2f < q2.len();
+    if !q2_avail || (q1_avail && freq[*q1] <= freq[q2[*q2f]]) {
+        let i = *q1;
+        *q1 += 1;
+        i
+    } else {
+        let i = q2[*q2f];
+        *q2f += 1;
+        i
     }
+}
 
-    loop {
-        active.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+/// Reusable working buffers for [`CodeLenScratch::compute`]. Held by each
+/// `AdaptiveCode` and reused across every rebuild so the Huffman-length
+/// computation does not heap-allocate per call. `lens` holds the result.
+#[derive(Default)]
+pub(super) struct CodeLenScratch {
+    lens: Vec<u8>,
+    active: Vec<(u32, u16)>,
+    freq: Vec<u32>,
+    children: Vec<[usize; 2]>,
+    is_leaf: Vec<bool>,
+    q2: Vec<usize>,
+    depth: Vec<u32>,
+    stack: Vec<(usize, u32)>,
+}
 
-        let num = active.len();
-        let total = 2 * num - 1;
-        let mut freq = vec![0u32; total];
-        let mut children: Vec<[usize; 2]> = vec![[0; 2]; total];
-        let mut is_leaf = vec![true; total];
+impl CodeLenScratch {
+    /// Compute canonical Huffman codeword lengths for `freqs` into `self.lens`
+    /// (length-limited to `MAX_CODEWORD_LEN` via the standard two-queue merge,
+    /// halving frequencies and retrying if the limit is exceeded). All working
+    /// state is reused from `self`; the result is byte-identical to a fresh
+    /// allocation.
+    fn compute(&mut self, freqs: &[u32]) {
+        let n = freqs.len();
+        self.lens.clear();
+        self.lens.resize(n, 0);
 
-        for (i, &(f, _)) in active.iter().enumerate() {
-            freq[i] = f;
-        }
-
-        let mut q1 = 0usize;
-        let mut q2: Vec<usize> = Vec::with_capacity(num);
-        let mut q2_front = 0usize;
-        let mut next = num;
-
-        for _ in 0..num - 1 {
-            let pick =
-                |q1: &mut usize, q2: &[usize], q2f: &mut usize, freq: &[u32], nl: usize| -> usize {
-                    let q1_avail = *q1 < nl;
-                    let q2_avail = *q2f < q2.len();
-                    if !q2_avail || (q1_avail && freq[*q1] <= freq[q2[*q2f]]) {
-                        let i = *q1;
-                        *q1 += 1;
-                        i
-                    } else {
-                        let i = q2[*q2f];
-                        *q2f += 1;
-                        i
-                    }
-                };
-            let left = pick(&mut q1, &q2, &mut q2_front, &freq, num);
-            let right = pick(&mut q1, &q2, &mut q2_front, &freq, num);
-            freq[next] = freq[left].saturating_add(freq[right]);
-            children[next] = [left, right];
-            is_leaf[next] = false;
-            q2.push(next);
-            next += 1;
-        }
-
-        let root = next - 1;
-        let mut depth = vec![0u32; total];
-        let mut stack = vec![(root, 0u32)];
-        let mut max_depth = 0u32;
-        while let Some((node, d)) = stack.pop() {
-            depth[node] = d;
-            if is_leaf[node] {
-                max_depth = max_depth.max(d);
-            } else {
-                stack.push((children[node][0], d + 1));
-                stack.push((children[node][1], d + 1));
+        self.active.clear();
+        for (i, &f) in freqs.iter().enumerate() {
+            if f > 0 {
+                self.active.push((f, i as u16));
             }
         }
 
-        if max_depth <= MAX_CODEWORD_LEN {
-            lens.fill(0);
-            for i in 0..num {
-                lens[active[i].1 as usize] = depth[i] as u8;
+        match self.active.len() {
+            0 => return,
+            1 => {
+                self.lens[self.active[0].1 as usize] = 1;
+                return;
             }
-            return lens;
+            _ => {}
         }
 
-        for item in &mut active {
-            item.0 = (item.0 + 1) >> 1;
+        loop {
+            self.active
+                .sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+
+            let num = self.active.len();
+            let total = 2 * num - 1;
+            self.freq.clear();
+            self.freq.resize(total, 0);
+            self.children.clear();
+            self.children.resize(total, [0; 2]);
+            self.is_leaf.clear();
+            self.is_leaf.resize(total, true);
+
+            for (i, &(f, _)) in self.active.iter().enumerate() {
+                self.freq[i] = f;
+            }
+
+            let mut q1 = 0usize;
+            self.q2.clear();
+            let mut q2_front = 0usize;
+            let mut next = num;
+
+            for _ in 0..num - 1 {
+                // Pick the smaller of the two queue fronts, twice. Inlined as
+                // blocks (not a closure) so each shared read of self.freq /
+                // self.q2 ends before the self.freq/self.q2 mutations below;
+                // q1/q2_front stay locals.
+                let left = pick_min(&self.freq, &self.q2, &mut q1, &mut q2_front, num);
+                let right = pick_min(&self.freq, &self.q2, &mut q1, &mut q2_front, num);
+                self.freq[next] = self.freq[left].saturating_add(self.freq[right]);
+                self.children[next] = [left, right];
+                self.is_leaf[next] = false;
+                self.q2.push(next);
+                next += 1;
+            }
+
+            let root = next - 1;
+            self.depth.clear();
+            self.depth.resize(total, 0);
+            self.stack.clear();
+            self.stack.push((root, 0u32));
+            let mut max_depth = 0u32;
+            while let Some((node, d)) = self.stack.pop() {
+                self.depth[node] = d;
+                if self.is_leaf[node] {
+                    max_depth = max_depth.max(d);
+                } else {
+                    self.stack.push((self.children[node][0], d + 1));
+                    self.stack.push((self.children[node][1], d + 1));
+                }
+            }
+
+            if max_depth <= MAX_CODEWORD_LEN {
+                self.lens.fill(0);
+                for i in 0..num {
+                    self.lens[self.active[i].1 as usize] = self.depth[i] as u8;
+                }
+                return;
+            }
+
+            for item in &mut self.active {
+                item.0 = (item.0 + 1) >> 1;
+            }
         }
     }
 }
