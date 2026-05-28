@@ -41,6 +41,7 @@ impl std::error::Error for Error {}
 pub type Result<T> = std::result::Result<T, Error>;
 
 mod adaptive;
+mod container;
 mod range_coder;
 mod tables;
 mod x86_filter;
@@ -52,63 +53,19 @@ use range_coder::{
 };
 use x86_filter::{x86_filter, x86_filter_impl};
 
-const COMPRESSION_API_MAGIC: u32 = 0xC0E5_510A;
-const COMPRESSION_API_HEADER_SIZE: usize = 24;
-
-/// Decompress a Windows Compression API (cabinet.dll) LZMS-wrapped buffer.
-///
-/// This is the format produced by `Compress()` with `COMPRESS_ALGORITHM_LZMS`
-/// and consumed by msdelta.dll's `LzmsCodec::Decompress`. It consists of a
-/// 24-byte header followed by chunk-size + compressed-data pairs.
-pub fn decompress_compression_api(data: &[u8]) -> Result<Vec<u8>> {
-    if data.len() < COMPRESSION_API_HEADER_SIZE + 4 {
-        return Err(Error::Malformed("LZMS: compression API buffer too short"));
-    }
-    let magic = u32::from_le_bytes(data[0..4].try_into().unwrap());
-    if magic != COMPRESSION_API_MAGIC {
-        return Err(Error::Malformed("LZMS: bad compression API magic"));
-    }
-    let uncompressed_size = u64::from_le_bytes(data[8..16].try_into().unwrap()) as usize;
-    let chunk_compressed = u32::from_le_bytes(data[24..28].try_into().unwrap()) as usize;
-    let payload_start = COMPRESSION_API_HEADER_SIZE + 4;
-    let payload_end = payload_start + chunk_compressed;
-    if payload_end > data.len() {
-        return Err(Error::Truncated);
-    }
-    if chunk_compressed == uncompressed_size {
-        return Ok(data[payload_start..payload_end].to_vec());
-    }
-    decompress(&data[payload_start..payload_end], uncompressed_size)
-}
-
-/// Compress data into the Windows Compression API (cabinet.dll) LZMS format.
-///
-/// Produces the same format that `decompress_compression_api` reads:
-/// 24-byte header + chunk-size + LZMS-compressed payload.
-pub fn compress_compression_api(data: &[u8]) -> Result<Vec<u8>> {
-    let compressed = compress(data)?;
-    let payload = if compressed.len() < data.len() {
-        &compressed
-    } else {
-        data
-    };
-    let mut out = Vec::with_capacity(COMPRESSION_API_HEADER_SIZE + 4 + payload.len());
-    out.extend_from_slice(&COMPRESSION_API_MAGIC.to_le_bytes());
-    out.extend_from_slice(&0u32.to_le_bytes());
-    out.extend_from_slice(&(data.len() as u64).to_le_bytes());
-    out.extend_from_slice(&0u64.to_le_bytes());
-    out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
-    out.extend_from_slice(payload);
-    Ok(out)
-}
+pub use container::{compress_compression_api, decompress_compression_api};
 
 /// Decompress a raw LZMS bitstream.
 pub fn decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>> {
     if data.is_empty() || output_size == 0 {
         return Ok(Vec::new());
     }
-    if output_size > 64 * 1024 * 1024 {
-        return Err(Error::Malformed("LZMS: output size exceeds 256 MB limit"));
+    // A single LZMS stream decodes one container chunk, which cabinet.dll caps
+    // at 64 MiB; reject anything larger as malformed (and a decode-bomb guard).
+    if output_size > 0x0400_0000 {
+        return Err(Error::Malformed(
+            "LZMS: output size exceeds 64 MiB chunk limit",
+        ));
     }
     if data.len() < 4 || data.len() % 2 != 0 {
         return Err(Error::Malformed("LZMS: need >= 4 even bytes"));
@@ -227,6 +184,18 @@ pub fn decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// Upper bound on the raw delta offset the encoder will search. The format
+/// permits offsets up to `LZMS_MAX_MATCH_OFFSET`; this bounded window keeps the
+/// greedy delta search from going quadratic. Widening it (or replacing the
+/// greedy parse with a cost-based one) is a future ratio improvement.
+const DELTA_OFFSET_WINDOW: usize = 32;
+
+/// Longest match the encoder will emit. The format permits up to
+/// `LZMS_MAX_MATCH_LENGTH` (1073809578); chunks are at most 64 MiB, so this
+/// bound is never the limiting factor in practice but keeps a single match
+/// length within what the length-slot table can encode.
+const MAX_MATCH_LEN: u32 = 1 << 26;
+
 /// Compress data using LZMS with greedy LZ matching.
 pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
     if data.is_empty() {
@@ -314,18 +283,20 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
         let mut delta_offset = 0u32;
         let mut delta_power = 0u32;
         if pos >= 2 {
-            for power in 0..3u32 {
+            // Power and offset cover the full legal delta alphabet (8 power
+            // symbols); the offset window is a bounded match-finder heuristic.
+            for power in 0..8u32 {
                 let span = 1usize << power;
                 if span > pos {
                     break;
                 }
-                for try_off in 1..pos.min(32) {
+                for try_off in 1..pos.min(DELTA_OFFSET_WINDOW) {
                     let off = try_off << power;
                     if off + span > pos {
                         continue;
                     }
                     let mut ml = 0u32;
-                    while pos + (ml as usize) < d.len() && ml < 1046 {
+                    while pos + (ml as usize) < d.len() && ml < MAX_MATCH_LEN {
                         let p = pos + ml as usize;
                         let s = p - off;
                         if p < span || s < span {
@@ -506,7 +477,7 @@ fn hash4(data: &[u8], pos: usize) -> usize {
 }
 
 fn match_length(data: &[u8], src: usize, dst: usize, limit: usize) -> u32 {
-    let max = (limit - dst).min(1046) as u32;
+    let max = (limit - dst).min(MAX_MATCH_LEN as usize) as u32;
     let mut len = 0u32;
     while len < max && data[src + len as usize] == data[dst + len as usize] {
         len += 1;
@@ -676,14 +647,50 @@ mod tests {
         assert_eq!(decompressed, original);
     }
 
+    /// Long runs must encode as single long matches (cap raised well past the
+    /// old 1046) and round-trip exactly.
+    #[test]
+    fn compress_decompress_long_run() {
+        let original = vec![0xABu8; 200_000];
+        let compressed = compress(&original).unwrap();
+        // A 200 KB constant run should collapse to a handful of bytes.
+        assert!(
+            compressed.len() < 64,
+            "expected tiny output, got {}",
+            compressed.len()
+        );
+        assert_eq!(decompress(&compressed, original.len()).unwrap(), original);
+    }
+
+    /// Data with a strided arithmetic structure exercises delta matches across
+    /// multiple powers (search widened to the full 0..8 alphabet).
+    #[test]
+    fn compress_decompress_delta_favorable() {
+        let original: Vec<u8> = (0..20_000u32)
+            .map(|i| (i.wrapping_mul(3) >> 1) as u8)
+            .collect();
+        let compressed = compress(&original).unwrap();
+        assert_eq!(decompress(&compressed, original.len()).unwrap(), original);
+    }
+
+    /// A larger mixed buffer (literals + repeats + structure) to shake out the
+    /// widened match finder end to end.
+    #[test]
+    fn compress_decompress_mixed_large() {
+        let mut original = Vec::new();
+        for block in 0..64u32 {
+            original.extend(std::iter::repeat_n((block & 0xFF) as u8, 1000));
+            original.extend((0..1000u32).map(|i| (i.wrapping_mul(block + 1)) as u8));
+        }
+        let compressed = compress(&original).unwrap();
+        assert_eq!(decompress(&compressed, original.len()).unwrap(), original);
+    }
+
     #[test]
     fn compression_api_roundtrip() {
         let original =
             b"Compression API wrapper roundtrip test data with some repetition repetition";
         let wrapped = compress_compression_api(original).unwrap();
-        assert!(wrapped.len() >= COMPRESSION_API_HEADER_SIZE + 4);
-        let magic = u32::from_le_bytes(wrapped[0..4].try_into().unwrap());
-        assert_eq!(magic, COMPRESSION_API_MAGIC);
         let recovered = decompress_compression_api(&wrapped).unwrap();
         assert_eq!(recovered, original);
     }

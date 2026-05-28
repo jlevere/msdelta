@@ -108,7 +108,10 @@ impl OffsetTable {
                 val = val.saturating_add(range);
             }
         }
-        bases.push(0x7FFF_FFFF);
+        // Sentinel = LZMS_MAX_MATCH_OFFSET + 1, matching wimlib/cabinet.dll.
+        // It bounds the binary search and yields 30 extra bits for the last
+        // real slot (range = 0x40000000); it is never a real offset.
+        bases.push(0x465B_E4A5);
         OffsetTable { bases }
     }
 
@@ -200,7 +203,11 @@ mod tests {
         assert_eq!(t.bases[8], 9);
         assert_eq!(t.bases[9], 13);
         assert_eq!(t.bases[24], 101);
-        assert_eq!(*t.bases.last().unwrap(), 0x7FFF_FFFF);
+        // Last real slot base and the sentinel (LZMS_MAX_MATCH_OFFSET + 1).
+        assert_eq!(t.bases[798], 0x065B_E4A5);
+        assert_eq!(*t.bases.last().unwrap(), 0x465B_E4A5);
+        // The top real slot still derives 30 extra bits from the sentinel.
+        assert_eq!(t.extra_bits(798), 30);
     }
 
     #[test]
