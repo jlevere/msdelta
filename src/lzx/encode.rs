@@ -195,26 +195,101 @@ pub(super) fn compress_inner(reference: &[u8], target: &[u8]) -> Result<Vec<u8>>
         }
     }
 
-    // Build custom Huffman tables from frequencies
+    // Determine segment boundaries. Split every ~256KB of output for better
+    // Huffman table adaptation on large files.
+    const SEGMENT_SIZE: usize = 256 * 1024;
+    let mut seg_boundaries = vec![ref_len as u64];
+    if target.len() > SEGMENT_SIZE * 2 {
+        let mut cumulative_output = 0usize;
+        let mut seg_output = 0usize;
+        let mut sym_splits = vec![0usize];
+        for (si, sym) in symbols.iter().enumerate() {
+            cumulative_output += sym.length as usize;
+            seg_output += sym.length as usize;
+            if seg_output >= SEGMENT_SIZE && sym_splits.len() < 8 {
+                seg_boundaries.push((ref_len + cumulative_output) as u64);
+                sym_splits.push(si + 1);
+                seg_output = 0;
+            }
+        }
+        sym_splits.push(symbols.len());
+
+        // Build per-segment Huffman tables
+        let mut seg_tables = Vec::new();
+        for w in sym_splits.windows(2) {
+            let (start, end) = (w[0], w[1]);
+            let mut mf = vec![0u32; MAIN_SYMBOLS];
+            let mut lf = vec![0u32; LENGTH_SYMBOLS];
+            let mut af = vec![0u32; ALIGNED_SYMBOLS];
+            for sym in &symbols[start..end] {
+                if sym.length == 1 && sym.raw_offset < 256 {
+                    mf[sym.raw_offset as usize] += 1;
+                } else {
+                    let (os, _, na) = compute_symbol_info(sym.raw_offset, sym.length);
+                    let ls = compute_length_slot(sym.length);
+                    let ms = ((0x100 + (os << 3)) | ls) as usize;
+                    if ms < MAIN_SYMBOLS { mf[ms] += 1; }
+                    if ls == 0 {
+                        let le = compute_length_extra(sym.length);
+                        if (le as usize) < LENGTH_SYMBOLS { lf[le as usize] += 1; }
+                    }
+                    if na {
+                        let al = (sym.raw_offset.wrapping_sub(RAW_OFFSET_BASE)) & 0xF;
+                        af[al as usize] += 1;
+                    }
+                }
+            }
+            for freq in [&mut mf, &mut lf, &mut af] {
+                let nz = freq.iter().filter(|&&f| f > 0).count();
+                if nz < 2 {
+                    for (i, f) in freq.iter_mut().enumerate() {
+                        if *f == 0 && i < 2 { *f = 1; }
+                    }
+                }
+            }
+            seg_tables.push(SegmentTables {
+                main: HuffmanTable::from_frequencies(&mf, 15)?,
+                lengths: HuffmanTable::from_frequencies(&lf, 15)?,
+                aligned: HuffmanTable::from_frequencies(&af, 15)?,
+            });
+        }
+
+        // Encode
+        let mut writer = BitWriter::new();
+        writer.write_bits(0, 1); // empty rift
+        writer.write_bits(0, 1); // complex mode
+
+        write_composite_format_multi(&mut writer, &seg_tables, &seg_boundaries)?;
+
+        let mut seg_idx = 0;
+        for (si, sym) in symbols.iter().enumerate() {
+            while seg_idx + 1 < sym_splits.len() - 1 && si >= sym_splits[seg_idx + 1] {
+                seg_idx += 1;
+            }
+            let tables = &seg_tables[seg_idx];
+            if sym.length == 1 && sym.raw_offset < 256 {
+                tables.main.write_symbol(&mut writer, sym.raw_offset as u16);
+            } else {
+                encode_match(tables, &mut writer, sym.raw_offset, sym.length)?;
+            }
+        }
+
+        return Ok(writer.finish());
+    }
+
+    // Single segment path (small files)
     let tables = SegmentTables {
         main: HuffmanTable::from_frequencies(&main_freq, 15)?,
         lengths: HuffmanTable::from_frequencies(&len_freq, 15)?,
         aligned: HuffmanTable::from_frequencies(&aligned_freq, 15)?,
     };
 
-    // Pass 2: encode
     let mut writer = BitWriter::new();
+    writer.write_bits(0, 1); // empty rift
+    writer.write_bits(0, 1); // complex mode
 
-    // Rift table: empty
-    writer.write_bits(0, 1);
-
-    // CompositeFormat: complex mode (0 = complex, 1 = simple)
-    writer.write_bits(0, 1);
-
-    // Write complex format: 1 segment, boundary at ref_len
     write_composite_format(&mut writer, &tables, ref_len as u64)?;
 
-    // Encode symbols
     for sym in &symbols {
         if sym.length == 1 && sym.raw_offset < 256 {
             tables.main.write_symbol(&mut writer, sym.raw_offset as u16);
@@ -335,6 +410,54 @@ fn encode_run_count(count: usize) -> (u16, Option<(u32, u32)>) {
         32..=63 => (6, Some(((count - 32) as u32, 5))),
         _ => (7, Some(((count - 64).min(63) as u32, 6))),
     }
+}
+
+fn write_composite_format_multi(
+    writer: &mut BitWriter,
+    segments: &[SegmentTables],
+    boundaries: &[u64],
+) -> Result<()> {
+    writer.write_i64(segments.len() as i64);
+
+    let mut prev_boundary = 0i64;
+    for &b in boundaries {
+        writer.write_i64(b as i64 - prev_boundary);
+        prev_boundary = b as i64;
+    }
+
+    let mut pretree_freq = [0u32; PRETREE_SYMBOLS];
+    let mut all_segments_lengths = Vec::new();
+    let mut prev_lengths = vec![0u8; TOTAL_LENGTHS];
+
+    for seg in segments {
+        let mut all_lengths = Vec::with_capacity(TOTAL_LENGTHS);
+        all_lengths.extend_from_slice(&seg.main.lengths);
+        all_lengths.extend_from_slice(&seg.lengths.lengths);
+        all_lengths.extend_from_slice(&seg.aligned.lengths);
+
+        let syms = encode_compression_lengths(&all_lengths, &prev_lengths);
+        for &(sym, _) in &syms {
+            pretree_freq[sym as usize] += 1;
+        }
+        prev_lengths = all_lengths.clone();
+        all_segments_lengths.push((all_lengths, syms));
+    }
+
+    let pretree = HuffmanTable::from_frequencies(&pretree_freq, 15)?;
+    for i in 0..PRETREE_SYMBOLS {
+        writer.write_bits(pretree.lengths[i] as u64, 4);
+    }
+
+    for (_, syms) in &all_segments_lengths {
+        for &(sym, extra) in syms {
+            pretree.write_symbol(writer, sym);
+            if let Some((val, bits)) = extra {
+                writer.write_bits(val as u64, bits);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 pub(super) fn compute_symbol_info(raw_offset: u32, _length: u32) -> (u32, u32, bool) {
