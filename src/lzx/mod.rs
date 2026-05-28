@@ -8,11 +8,11 @@
 //! PDB-confirmed class names: `Decompressor`, `CompositeFormat`, `CompressionFormat`,
 //! `CompressionLengths`, `RiftTable`, `OffsetRiftTable`.
 
-pub mod ops;
-pub mod rift;
-mod format;
 mod decode;
 mod encode;
+mod format;
+pub mod ops;
+pub mod rift;
 
 use self::rift::RiftTable;
 use crate::Result;
@@ -61,10 +61,10 @@ pub fn compress_with_rift(reference: &[u8], target: &[u8], rift: &RiftTable) -> 
 
 #[cfg(test)]
 mod tests {
+    use self::format::{flat_code_lengths, SegmentTables, LRU_BASE, SOURCE_COPY};
+    use self::ops::RAW_OFFSET_BASE;
     use super::*;
     use crate::bitstream::{BitReader, BitWriter};
-    use self::format::{flat_code_lengths, SegmentTables, SOURCE_COPY, LRU_BASE};
-    use self::ops::RAW_OFFSET_BASE;
 
     #[test]
     fn encode_decode_match_source_copy() {

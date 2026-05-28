@@ -33,13 +33,8 @@ pub(super) fn x86_filter_impl(data: &mut [u8], undo: bool) {
                     continue;
                 }
             }
-            0xFF if data[(i + 1) as usize] == 0x15 => {
-                (2, X86_MAX_TRANSLATION_OFFSET)
-            }
-            0xF0
-                if data[(i + 1) as usize] == 0x83
-                    && (data[(i + 2) as usize] & 0x07) == 0x05 =>
-            {
+            0xFF if data[(i + 1) as usize] == 0x15 => (2, X86_MAX_TRANSLATION_OFFSET),
+            0xF0 if data[(i + 1) as usize] == 0x83 && (data[(i + 2) as usize] & 0x07) == 0x05 => {
                 (3, X86_MAX_TRANSLATION_OFFSET)
             }
             0xE9 => {
@@ -58,9 +53,8 @@ pub(super) fn x86_filter_impl(data: &mut [u8], undo: bool) {
             let n = u32::from_le_bytes(data[p..p + 4].try_into().unwrap());
             data[p..p + 4].copy_from_slice(&n.wrapping_sub(i as u32).to_le_bytes());
         }
-        let target16 = (i as u16).wrapping_add(u16::from_le_bytes(
-            data[p..p + 2].try_into().unwrap(),
-        ));
+        let target16 =
+            (i as u16).wrapping_add(u16::from_le_bytes(data[p..p + 2].try_into().unwrap()));
         if !undo && active {
             let n = u32::from_le_bytes(data[p..p + 4].try_into().unwrap());
             data[p..p + 4].copy_from_slice(&n.wrapping_add(i as u32).to_le_bytes());

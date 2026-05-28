@@ -26,8 +26,7 @@ pub struct SectionInfo {
 impl PeInfo {
     /// Parse PE headers from a byte buffer.
     pub fn parse(data: &[u8]) -> Result<Self> {
-        let pe = goblin::pe::PE::parse(data)
-            .map_err(|_| Error::Malformed("invalid PE"))?;
+        let pe = goblin::pe::PE::parse(data).map_err(|_| Error::Malformed("invalid PE"))?;
 
         let header = &pe.header;
         let opt = header
@@ -90,10 +89,7 @@ mod tests {
     fn parse_minimal_pe() {
         // A minimal PE that goblin can parse isn't easy to construct.
         // Test with an actual PE if available.
-        let pe_path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../reference/msdelta.dll"
-        );
+        let pe_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../reference/msdelta.dll");
         if let Ok(data) = std::fs::read(pe_path) {
             let info = PeInfo::parse(&data).unwrap();
             assert!(info.image_base > 0);

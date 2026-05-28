@@ -290,7 +290,11 @@ impl HuffmanTable {
         let ctz = with_sentinel.trailing_zeros();
 
         let slot = &self.slots[ctz as usize];
-        let shifted = if ctz >= 31 { 0 } else { with_sentinel >> (ctz + 1) };
+        let shifted = if ctz >= 31 {
+            0
+        } else {
+            with_sentinel >> (ctz + 1)
+        };
         let idx = ((shifted & slot.mask) + slot.offset) as usize;
 
         if idx >= self.entries.len() {
@@ -332,8 +336,8 @@ mod tests {
         let full_count = 1usize << bits_needed;
         let short_count = full_count - count;
         let mut lengths = Vec::with_capacity(count);
-        lengths.extend(std::iter::repeat(bits_needed - 1).take(short_count));
-        lengths.extend(std::iter::repeat(bits_needed).take(count - short_count));
+        lengths.extend(std::iter::repeat_n(bits_needed - 1, short_count));
+        lengths.extend(std::iter::repeat_n(bits_needed, count - short_count));
         lengths
     }
 

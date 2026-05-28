@@ -18,7 +18,9 @@ use crate::{Error, Result};
 /// The seek_distance advances the source pointer for the next block.
 pub fn bspatch(source: &[u8], target_size: usize, patch_data: &[u8]) -> Result<Vec<u8>> {
     if target_size > 64 * 1024 * 1024 {
-        return Err(Error::Malformed("bspatch: target size exceeds 256 MB limit"));
+        return Err(Error::Malformed(
+            "bspatch: target size exceeds 256 MB limit",
+        ));
     }
     let mut target = vec![0u8; target_size];
     let mut patch_pos: usize = 0;
@@ -145,7 +147,8 @@ pub fn bscreate(source: &[u8], target: &[u8]) -> Result<Vec<u8>> {
             let mut old_score = 0usize;
             for i in 0..best_len.min(target.len() - scan) {
                 let sp = scan as i64 + last_offset + i as i64;
-                if sp >= 0 && (sp as usize) < source.len()
+                if sp >= 0
+                    && (sp as usize) < source.len()
                     && source[sp as usize] == target[scan + i]
                 {
                     old_score += 1;
@@ -170,9 +173,7 @@ pub fn bscreate(source: &[u8], target: &[u8]) -> Result<Vec<u8>> {
             for i in 0..(scan - last_scan) {
                 let j = last_scan + i;
                 let sp = last_pos + i as i64;
-                if sp >= 0 && (sp as usize) < source.len()
-                    && source[sp as usize] == target[j]
-                {
+                if sp >= 0 && (sp as usize) < source.len() && source[sp as usize] == target[j] {
                     s += 1;
                 }
                 if s * 2 > (i + 1) as i64 && s > best_s {
@@ -191,9 +192,7 @@ pub fn bscreate(source: &[u8], target: &[u8]) -> Result<Vec<u8>> {
             for i in 1..=limit {
                 let j = scan - i;
                 let sp = best_pos as i64 - i as i64;
-                if sp >= 0 && (sp as usize) < source.len()
-                    && source[sp as usize] == target[j]
-                {
+                if sp >= 0 && (sp as usize) < source.len() && source[sp as usize] == target[j] {
                     s += 1;
                 }
                 if s * 2 > i as i64 && s > best_s {
@@ -274,8 +273,16 @@ fn suffix_array(data: &[u8]) -> Vec<i64> {
             if ra != rb {
                 return ra.cmp(&rb);
             }
-            let ra2 = if (a as usize) + kk < n { r[(a as usize) + kk] } else { -1 };
-            let rb2 = if (b as usize) + kk < n { r[(b as usize) + kk] } else { -1 };
+            let ra2 = if (a as usize) + kk < n {
+                r[(a as usize) + kk]
+            } else {
+                -1
+            };
+            let rb2 = if (b as usize) + kk < n {
+                r[(b as usize) + kk]
+            } else {
+                -1
+            };
             ra2.cmp(&rb2)
         });
 
@@ -285,8 +292,7 @@ fn suffix_array(data: &[u8]) -> Vec<i64> {
             let curr = sa[i] as usize;
             let same = r[prev] == r[curr]
                 && ((prev + kk >= n && curr + kk >= n)
-                    || (prev + kk < n && curr + kk < n
-                        && r[prev + kk] == r[curr + kk]));
+                    || (prev + kk < n && curr + kk < n && r[prev + kk] == r[curr + kk]));
             tmp[curr] = tmp[prev] + if same { 0 } else { 1 };
         }
         rank.copy_from_slice(&tmp);
@@ -466,7 +472,8 @@ mod tests {
 
     #[test]
     fn bscreate_pa30_like() {
-        let reference = b"Hello, this is a reference buffer with some repeated content. Hello again!";
+        let reference =
+            b"Hello, this is a reference buffer with some repeated content. Hello again!";
         let target = b"Hello, this is a modified buffer with some repeated content. Goodbye!";
         let patch = bscreate(reference, target).unwrap();
         let result = bspatch(reference, target.len(), &patch).unwrap();

@@ -5,11 +5,10 @@ use crate::huffman::HuffmanTable;
 use crate::{Error, Result};
 
 use super::format::{
-    SegmentTables,
-    MAIN_SYMBOLS, LENGTH_SYMBOLS, ALIGNED_SYMBOLS, PRETREE_SYMBOLS, TOTAL_LENGTHS,
+    SegmentTables, ALIGNED_SYMBOLS, LENGTH_SYMBOLS, MAIN_SYMBOLS, PRETREE_SYMBOLS, TOTAL_LENGTHS,
 };
-use super::ops::{RAW_OFFSET_BASE, OFFSET_BIAS};
-use super::format::{SOURCE_COPY, LRU_BASE};
+use super::format::{LRU_BASE, SOURCE_COPY};
+use super::ops::{OFFSET_BIAS, RAW_OFFSET_BASE};
 
 fn write_rift(writer: &mut BitWriter, rift: Option<&super::rift::RiftTable>) {
     if let Some(r) = rift {
@@ -21,7 +20,11 @@ fn write_rift(writer: &mut BitWriter, rift: Option<&super::rift::RiftTable>) {
 
 /// Core compression implementation. Produces a bitstream that `decompress`
 /// (and msdelta.dll) can decode.
-pub(super) fn compress_inner(reference: &[u8], target: &[u8], rift: Option<&super::rift::RiftTable>) -> Result<Vec<u8>> {
+pub(super) fn compress_inner(
+    reference: &[u8],
+    target: &[u8],
+    rift: Option<&super::rift::RiftTable>,
+) -> Result<Vec<u8>> {
     let ref_len = reference.len();
 
     // Two-pass: first find all symbols and collect frequencies, then
@@ -43,12 +46,17 @@ pub(super) fn compress_inner(reference: &[u8], target: &[u8], rift: Option<&supe
         if pos + 2 >= data.len() {
             return 0;
         }
-        let h = (data[pos] as usize) | ((data[pos + 1] as usize) << 8) | ((data[pos + 2] as usize) << 16);
+        let h = (data[pos] as usize)
+            | ((data[pos + 1] as usize) << 8)
+            | ((data[pos + 2] as usize) << 16);
         (h.wrapping_mul(0x9E3779B1)) >> 16
     }
 
     // Index the reference into the hash chain
-    for (i, chain_entry) in hash_chain[..ref_len.saturating_sub(2)].iter_mut().enumerate() {
+    for (i, chain_entry) in hash_chain[..ref_len.saturating_sub(2)]
+        .iter_mut()
+        .enumerate()
+    {
         let h = hash3(&combined, i) & hash_mask;
         *chain_entry = hash_table[h];
         hash_table[h] = i as u32;
@@ -81,7 +89,8 @@ pub(super) fn compress_inner(reference: &[u8], target: &[u8], rift: Option<&supe
                 let mut match_len = 0u32;
                 while i + (match_len as usize) < target.len()
                     && cp + (match_len as usize) < combined.len()
-                    && combined[cp + (match_len as usize)] == combined[combined_pos + (match_len as usize)]
+                    && combined[cp + (match_len as usize)]
+                        == combined[combined_pos + (match_len as usize)]
                 {
                     match_len += 1;
                     if match_len >= 1024 {
@@ -168,8 +177,7 @@ pub(super) fn compress_inner(reference: &[u8], target: &[u8], rift: Option<&supe
         if sym.length == 1 && sym.raw_offset < 256 {
             main_freq[sym.raw_offset as usize] += 1;
         } else {
-            let (offset_slot, _, needs_aligned) =
-                compute_symbol_info(sym.raw_offset, sym.length);
+            let (offset_slot, _, needs_aligned) = compute_symbol_info(sym.raw_offset, sym.length);
             let length_slot = compute_length_slot(sym.length);
             let main_sym = ((0x100 + (offset_slot << 3)) | length_slot) as usize;
             if main_sym < MAIN_SYMBOLS {
@@ -236,10 +244,14 @@ pub(super) fn compress_inner(reference: &[u8], target: &[u8], rift: Option<&supe
                     let (os, _, na) = compute_symbol_info(sym.raw_offset, sym.length);
                     let ls = compute_length_slot(sym.length);
                     let ms = ((0x100 + (os << 3)) | ls) as usize;
-                    if ms < MAIN_SYMBOLS { mf[ms] += 1; }
+                    if ms < MAIN_SYMBOLS {
+                        mf[ms] += 1;
+                    }
                     if ls == 0 {
                         let le = compute_length_extra(sym.length);
-                        if (le as usize) < LENGTH_SYMBOLS { lf[le as usize] += 1; }
+                        if (le as usize) < LENGTH_SYMBOLS {
+                            lf[le as usize] += 1;
+                        }
                     }
                     if na {
                         let al = (sym.raw_offset.wrapping_sub(RAW_OFFSET_BASE)) & 0xF;
@@ -251,7 +263,9 @@ pub(super) fn compress_inner(reference: &[u8], target: &[u8], rift: Option<&supe
                 let nz = freq.iter().filter(|&&f| f > 0).count();
                 if nz < 2 {
                     for (i, f) in freq.iter_mut().enumerate() {
-                        if *f == 0 && i < 2 { *f = 1; }
+                        if *f == 0 && i < 2 {
+                            *f = 1;
+                        }
                     }
                 }
             }
@@ -350,10 +364,7 @@ pub(super) fn write_composite_format(
     Ok(())
 }
 
-fn encode_compression_lengths(
-    lengths: &[u8],
-    prev: &[u8],
-) -> Vec<(u16, Option<(u32, u32)>)> {
+fn encode_compression_lengths(lengths: &[u8], prev: &[u8]) -> Vec<(u16, Option<(u32, u32)>)> {
     let mut syms = Vec::new();
     let mut i = 0;
 
@@ -390,12 +401,36 @@ fn encode_compression_lengths(
         // Try delta from previous
         let diff = lengths[i] as i16 - prev[i] as i16;
         match diff {
-            1 => { syms.push((17, None)); i += 1; continue; }
-            2 => { syms.push((18, None)); i += 1; continue; }
-            3 => { syms.push((19, None)); i += 1; continue; }
-            -1 => { syms.push((20, None)); i += 1; continue; }
-            -2 => { syms.push((21, None)); i += 1; continue; }
-            -3 => { syms.push((22, None)); i += 1; continue; }
+            1 => {
+                syms.push((17, None));
+                i += 1;
+                continue;
+            }
+            2 => {
+                syms.push((18, None));
+                i += 1;
+                continue;
+            }
+            3 => {
+                syms.push((19, None));
+                i += 1;
+                continue;
+            }
+            -1 => {
+                syms.push((20, None));
+                i += 1;
+                continue;
+            }
+            -2 => {
+                syms.push((21, None));
+                i += 1;
+                continue;
+            }
+            -3 => {
+                syms.push((22, None));
+                i += 1;
+                continue;
+            }
             _ => {}
         }
 
@@ -491,8 +526,16 @@ pub(super) fn compute_symbol_info(raw_offset: u32, _length: u32) -> (u32, u32, b
                 }
             } else {
                 let high_bits = half - 4;
-                let base_val = if high_bits > 0 { base << high_bits } else { base };
-                let max_high = if high_bits > 0 { (1u32 << high_bits) - 1 } else { 0 };
+                let base_val = if high_bits > 0 {
+                    base << high_bits
+                } else {
+                    base
+                };
+                let max_high = if high_bits > 0 {
+                    (1u32 << high_bits) - 1
+                } else {
+                    0
+                };
                 let min = base_val << 4;
                 let max = ((base_val | max_high) << 4) | 15;
                 if dist >= min && dist <= max {
@@ -515,18 +558,25 @@ pub(super) fn compute_length_slot(length: u32) -> u32 {
 
 pub(super) fn compute_length_extra(length: u32) -> u16 {
     let len_sym = (length - 1).saturating_sub(7);
-    if len_sym > 0 && len_sym <= 255 { len_sym as u16 } else { 0 }
+    if len_sym > 0 && len_sym <= 255 {
+        len_sym as u16
+    } else {
+        0
+    }
 }
 
 pub(super) fn match_fits_table(raw_offset: u32) -> bool {
-    if raw_offset < 0x100 || raw_offset == SOURCE_COPY
+    if raw_offset < 0x100
+        || raw_offset == SOURCE_COPY
         || (LRU_BASE..LRU_BASE + 3).contains(&raw_offset)
     {
         return true;
     }
     if raw_offset >= RAW_OFFSET_BASE {
         let dist = raw_offset - RAW_OFFSET_BASE;
-        if dist == 0 { return false; }
+        if dist == 0 {
+            return false;
+        }
         let slot = if dist <= 3 {
             dist + 7
         } else {
@@ -581,24 +631,35 @@ pub(super) fn encode_match(
                         adj = try_adj;
                         let extra = dist - shifted;
                         if half > 0 {
-                            offset_extra[n_extra] = (extra as u64, half); n_extra += 1;
+                            offset_extra[n_extra] = (extra as u64, half);
+                            n_extra += 1;
                         }
                         found = true;
                         break;
                     }
                 } else {
                     let high_bits = half - 4;
-                    let base_val = if high_bits > 0 { base << high_bits } else { base };
-                    let max_high = if high_bits > 0 { (1u32 << high_bits) - 1 } else { 0 };
+                    let base_val = if high_bits > 0 {
+                        base << high_bits
+                    } else {
+                        base
+                    };
+                    let max_high = if high_bits > 0 {
+                        (1u32 << high_bits) - 1
+                    } else {
+                        0
+                    };
                     let min = base_val << 4;
                     let max = ((base_val | max_high) << 4) | 15;
                     if dist >= min && dist <= max {
                         adj = try_adj;
                         if high_bits > 0 {
                             let high = (dist >> 4) & max_high;
-                            offset_extra[n_extra] = (high as u64, high_bits); n_extra += 1;
+                            offset_extra[n_extra] = (high as u64, high_bits);
+                            n_extra += 1;
                         }
-                        offset_extra[n_extra] = (u64::MAX, 0); n_extra += 1; // sentinel: use aligned table
+                        offset_extra[n_extra] = (u64::MAX, 0);
+                        n_extra += 1; // sentinel: use aligned table
                         found = true;
                         break;
                     }
@@ -618,7 +679,8 @@ pub(super) fn encode_match(
         if (-0x2000..0x2000).contains(&signed_dist) {
             offset_slot = 0;
             let raw14 = (signed_dist + 0x2000) as u32;
-            offset_extra[n_extra] = (raw14 as u64, 14); n_extra += 1;
+            offset_extra[n_extra] = (raw14 as u64, 14);
+            n_extra += 1;
         }
         // Slot 1: 16-bit range [-0xA000, -0x2001] u [0x2000, 0x5FFF]
         else if (-0xA000..0x6000).contains(&signed_dist) {
@@ -628,7 +690,8 @@ pub(super) fn encode_match(
             } else {
                 (signed_dist + 0x6000) as u32
             };
-            offset_extra[n_extra] = (raw16 as u64, 16); n_extra += 1;
+            offset_extra[n_extra] = (raw16 as u64, 16);
+            n_extra += 1;
         }
         // Slot 2: 18-bit range
         else {
@@ -638,7 +701,8 @@ pub(super) fn encode_match(
             } else {
                 (signed_dist + 0x2A000) as u32
             };
-            offset_extra[n_extra] = ((raw18 & 0x3FFFF) as u64, 18); n_extra += 1;
+            offset_extra[n_extra] = ((raw18 & 0x3FFFF) as u64, 18);
+            n_extra += 1;
         }
     };
 

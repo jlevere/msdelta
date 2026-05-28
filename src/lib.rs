@@ -62,9 +62,9 @@ pub mod dcm;
 #[allow(dead_code)]
 pub(crate) mod huffman;
 #[allow(dead_code)]
-pub(crate) mod lzx;
-#[allow(dead_code)]
 pub(crate) mod lzms;
+#[allow(dead_code)]
+pub(crate) mod lzx;
 pub mod pa19;
 pub mod pa30;
 #[allow(dead_code)]

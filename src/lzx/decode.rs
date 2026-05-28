@@ -4,12 +4,9 @@ use crate::bitstream::BitReader;
 use crate::huffman::HuffmanTable;
 use crate::{Error, Result};
 
-use super::format::{
-    CompositeFormat, SegmentTables,
-    PRETREE_SYMBOLS, TOTAL_LENGTHS,
-};
+use super::format::{CompositeFormat, SegmentTables, PRETREE_SYMBOLS, TOTAL_LENGTHS};
+use super::format::{LRU_BASE, SOURCE_COPY};
 use super::ops::{OFFSET_BIAS, RAW_OFFSET_BASE};
-use super::format::{SOURCE_COPY, LRU_BASE};
 use super::rift;
 
 pub(super) fn read_composite_format(reader: &mut BitReader) -> Result<CompositeFormat> {
@@ -161,7 +158,10 @@ pub(super) fn decompress_into(
 
     // Add boundary entry at source_size (as ApplyForward does in msdelta.dll)
     let ref_len = reference.len();
-    rift_table.entries.push(rift::RiftEntry { source: ref_len as i64, target: 0 });
+    rift_table.entries.push(rift::RiftEntry {
+        source: ref_len as i64,
+        target: 0,
+    });
     rift_table.entries.sort_by_key(|e| e.source);
     let ort = rift::OffsetRiftTable::from_rift_table(&rift_table);
 
@@ -228,7 +228,10 @@ pub(super) fn decompress_into(
         }
 
         let src_start = (pos as i64 - distance) as u64;
-        if src_start.checked_add(copy_len).is_some_and(|end| end <= ref_len as u64) {
+        if src_start
+            .checked_add(copy_len)
+            .is_some_and(|end| end <= ref_len as u64)
+        {
             // Entire copy from reference -- bulk copy
             let start = src_start as usize;
             let end = start + copy_len as usize;
@@ -241,7 +244,7 @@ pub(super) fn decompress_into(
             // Entire copy from output -- may overlap (like LZ back-reference)
             let out_start = (src_start - ref_len as u64) as usize;
             if out_start >= output.len() {
-                    return Err(Error::Malformed("back-reference out of output bounds"));
+                return Err(Error::Malformed("back-reference out of output bounds"));
             }
             if out_start + (copy_len as usize) <= output.len() {
                 // Non-overlapping: bulk copy via extend_from_within
@@ -295,9 +298,7 @@ pub(super) fn read_symbol(tables: &SegmentTables, reader: &mut BitReader) -> Res
     let length_slot = idx & 7;
     let offset_slot = idx >> 3;
 
-
     let offset = decode_offset(offset_slot, tables, reader)?;
-
 
     let length = if length_slot == 0 {
         let len_sym = tables.lengths.read_symbol(reader)?;

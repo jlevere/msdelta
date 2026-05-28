@@ -140,7 +140,9 @@ impl OffsetRiftTable {
     /// be in the rift table (added by the caller before this call).
     pub fn from_rift_table(rift: &RiftTable) -> Self {
         if rift.entries.is_empty() {
-            return OffsetRiftTable { entries: vec![(0, 0)] };
+            return OffsetRiftTable {
+                entries: vec![(0, 0)],
+            };
         }
 
         // Offset = entry.target - entry.source
@@ -252,7 +254,11 @@ impl IntFormat {
         }
 
         let table = HuffmanTable::from_lengths(&lengths)?;
-        Ok(IntFormat { table, num_pos, num_neg })
+        Ok(IntFormat {
+            table,
+            num_pos,
+            num_neg,
+        })
     }
 
     fn read_number(&self, reader: &mut BitReader) -> Result<i64> {
@@ -314,19 +320,22 @@ impl IntFormat {
         }
 
         let max_len: u8 = 15;
-        let table = HuffmanTable::from_frequencies(&freqs, max_len)
-            .unwrap_or_else(|_| {
-                let uniform = vec![8u8; INT_FORMAT_SYMBOLS];
-                HuffmanTable::from_lengths(&uniform).unwrap()
-            });
+        let table = HuffmanTable::from_frequencies(&freqs, max_len).unwrap_or_else(|_| {
+            let uniform = vec![8u8; INT_FORMAT_SYMBOLS];
+            HuffmanTable::from_lengths(&uniform).unwrap()
+        });
 
-        IntFormat { table, num_pos: INT_FORMAT_HALF, num_neg: INT_FORMAT_HALF }
+        IntFormat {
+            table,
+            num_pos: INT_FORMAT_HALF,
+            num_neg: INT_FORMAT_HALF,
+        }
     }
 
     fn to_writer(&self, writer: &mut BitWriter) {
-        writer.write_bits(INT_FORMAT_HALF as u64, 8);   // num_pos = 126 (all explicit)
-        writer.write_bits(INT_FORMAT_HALF as u64, 8);   // num_neg = 126 (all explicit)
-        writer.write_bits(0u64, 8);                      // num_default = 0
+        writer.write_bits(INT_FORMAT_HALF as u64, 8); // num_pos = 126 (all explicit)
+        writer.write_bits(INT_FORMAT_HALF as u64, 8); // num_neg = 126 (all explicit)
+        writer.write_bits(0u64, 8); // num_default = 0
 
         for i in 0..INT_FORMAT_HALF {
             let len = self.table.lengths[i].max(1);
@@ -363,7 +372,9 @@ mod tests {
 
     #[test]
     fn rift_table_roundtrip_empty() {
-        let table = RiftTable { entries: Vec::new() };
+        let table = RiftTable {
+            entries: Vec::new(),
+        };
         let mut w = BitWriter::new();
         table.to_writer(&mut w);
         let data = w.finish();
@@ -375,7 +386,10 @@ mod tests {
     #[test]
     fn rift_table_roundtrip_single() {
         let table = RiftTable {
-            entries: vec![RiftEntry { source: 100, target: 200 }],
+            entries: vec![RiftEntry {
+                source: 100,
+                target: 200,
+            }],
         };
         let mut w = BitWriter::new();
         table.to_writer(&mut w);
@@ -391,10 +405,22 @@ mod tests {
     fn rift_table_roundtrip_multiple() {
         let table = RiftTable {
             entries: vec![
-                RiftEntry { source: 0, target: 0 },
-                RiftEntry { source: 0x1000, target: 0x2000 },
-                RiftEntry { source: 0x5000, target: 0x5800 },
-                RiftEntry { source: 0x10000, target: 0x10000 },
+                RiftEntry {
+                    source: 0,
+                    target: 0,
+                },
+                RiftEntry {
+                    source: 0x1000,
+                    target: 0x2000,
+                },
+                RiftEntry {
+                    source: 0x5000,
+                    target: 0x5800,
+                },
+                RiftEntry {
+                    source: 0x10000,
+                    target: 0x10000,
+                },
             ],
         };
         let mut w = BitWriter::new();
@@ -413,9 +439,18 @@ mod tests {
     fn rift_table_roundtrip_negative_deltas() {
         let table = RiftTable {
             entries: vec![
-                RiftEntry { source: 100, target: 50 },
-                RiftEntry { source: 200, target: 180 },
-                RiftEntry { source: 300, target: 350 },
+                RiftEntry {
+                    source: 100,
+                    target: 50,
+                },
+                RiftEntry {
+                    source: 200,
+                    target: 180,
+                },
+                RiftEntry {
+                    source: 300,
+                    target: 350,
+                },
             ],
         };
         let mut w = BitWriter::new();
@@ -432,14 +467,20 @@ mod tests {
 
     #[test]
     fn int_format_value_symbol_roundtrip() {
-        for &val in &[0i64, 1, 2, 3, 4, 5, 7, 8, 15, 16, 100, 1000, 65535, -1, -2, -3, -4, -100, -65536] {
+        for &val in &[
+            0i64, 1, 2, 3, 4, 5, 7, 8, 15, 16, 100, 1000, 65535, -1, -2, -3, -4, -100, -65536,
+        ] {
             let (sym, extra, ebits) = IntFormat::value_to_symbol(val);
             assert!(
                 (sym as usize) < INT_FORMAT_SYMBOLS,
                 "symbol {sym} out of range for value {val}"
             );
             let is_neg = sym >= INT_FORMAT_HALF as u32;
-            let mag_idx = if is_neg { sym - INT_FORMAT_HALF as u32 } else { sym };
+            let mag_idx = if is_neg {
+                sym - INT_FORMAT_HALF as u32
+            } else {
+                sym
+            };
             let reconstructed = if mag_idx <= 3 {
                 mag_idx as i64
             } else {
@@ -447,8 +488,15 @@ mod tests {
                 let base = (mag_idx & 1) as i64 + 2;
                 (base << half) | extra as i64
             };
-            let result = if is_neg { !reconstructed } else { reconstructed };
-            assert_eq!(result, val, "roundtrip failed for {val}: sym={sym} extra={extra} ebits={ebits}");
+            let result = if is_neg {
+                !reconstructed
+            } else {
+                reconstructed
+            };
+            assert_eq!(
+                result, val,
+                "roundtrip failed for {val}: sym={sym} extra={extra} ebits={ebits}"
+            );
         }
     }
 

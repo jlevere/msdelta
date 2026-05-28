@@ -1,5 +1,5 @@
-use crate::Result;
 use crate::Error;
+use crate::Result;
 
 pub(super) const MAX_CODEWORD_LEN: u32 = 15;
 pub(super) const TABLE_BITS: u32 = 10;
@@ -17,7 +17,12 @@ pub(crate) struct BackBits<'a> {
 
 impl<'a> BackBits<'a> {
     pub(super) fn new(data: &'a [u8]) -> Self {
-        BackBits { data, pos: data.len(), buf: 0, bits: 0 }
+        BackBits {
+            data,
+            pos: data.len(),
+            buf: 0,
+            bits: 0,
+        }
     }
 
     #[inline]
@@ -43,7 +48,9 @@ impl<'a> BackBits<'a> {
 
     #[inline]
     pub(crate) fn read_bits(&mut self, n: u32) -> u32 {
-        if n == 0 { return 0; }
+        if n == 0 {
+            return 0;
+        }
         self.ensure(n);
         let val = self.peek(n);
         self.consume(n);
@@ -61,7 +68,11 @@ pub(super) struct BackBitsWriter {
 
 impl BackBitsWriter {
     pub(super) fn new() -> Self {
-        BackBitsWriter { buf: 0, bits: 0, output: Vec::new() }
+        BackBitsWriter {
+            buf: 0,
+            bits: 0,
+            output: Vec::new(),
+        }
     }
 
     pub(super) fn write_bits(&mut self, val: u32, n: u32) {
@@ -130,7 +141,9 @@ impl AdaptiveCode {
     fn build_codes(&mut self, lens: &[u8]) {
         let mut count = [0u32; MAX_CODEWORD_LEN as usize + 1];
         for &l in lens {
-            if l > 0 { count[l as usize] += 1; }
+            if l > 0 {
+                count[l as usize] += 1;
+            }
         }
         let mut next_code = [0u32; MAX_CODEWORD_LEN as usize + 1];
         let mut code = 0u32;
@@ -141,7 +154,9 @@ impl AdaptiveCode {
         self.lens.fill(0);
         self.codes.fill(0);
         for (sym, &len) in lens.iter().enumerate() {
-            if len == 0 { continue; }
+            if len == 0 {
+                continue;
+            }
             self.lens[sym] = len;
             self.codes[sym] = next_code[len as usize];
             next_code[len as usize] += 1;
@@ -154,7 +169,9 @@ impl AdaptiveCode {
 
         let mut count = [0u32; MAX_CODEWORD_LEN as usize + 1];
         for &l in lens {
-            if l > 0 { count[l as usize] += 1; }
+            if l > 0 {
+                count[l as usize] += 1;
+            }
         }
 
         let mut next_code = [0u32; MAX_CODEWORD_LEN as usize + 1];
@@ -165,7 +182,9 @@ impl AdaptiveCode {
         }
 
         for (sym, &len) in lens.iter().enumerate() {
-            if len == 0 { continue; }
+            if len == 0 {
+                continue;
+            }
             let c = next_code[len as usize];
             next_code[len as usize] += 1;
 
@@ -317,15 +336,20 @@ pub(super) fn compute_code_lengths(freqs: &[u32]) -> Vec<u8> {
         let mut next = num;
 
         for _ in 0..num - 1 {
-            let pick = |q1: &mut usize, q2: &[usize], q2f: &mut usize, freq: &[u32], nl: usize| -> usize {
-                let q1_avail = *q1 < nl;
-                let q2_avail = *q2f < q2.len();
-                if !q2_avail || (q1_avail && freq[*q1] <= freq[q2[*q2f]]) {
-                    let i = *q1; *q1 += 1; i
-                } else {
-                    let i = q2[*q2f]; *q2f += 1; i
-                }
-            };
+            let pick =
+                |q1: &mut usize, q2: &[usize], q2f: &mut usize, freq: &[u32], nl: usize| -> usize {
+                    let q1_avail = *q1 < nl;
+                    let q2_avail = *q2f < q2.len();
+                    if !q2_avail || (q1_avail && freq[*q1] <= freq[q2[*q2f]]) {
+                        let i = *q1;
+                        *q1 += 1;
+                        i
+                    } else {
+                        let i = q2[*q2f];
+                        *q2f += 1;
+                        i
+                    }
+                };
             let left = pick(&mut q1, &q2, &mut q2_front, &freq, num);
             let right = pick(&mut q1, &q2, &mut q2_front, &freq, num);
             freq[next] = freq[left].saturating_add(freq[right]);

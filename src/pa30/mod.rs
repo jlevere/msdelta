@@ -8,9 +8,13 @@ pub(crate) mod header;
 pub(crate) mod preprocess;
 pub(crate) mod signature;
 
-pub use encode::{apply_get_reverse, create, Codec, CreateOptions, FileType, get_info, get_info_ex};
-pub use header::{parse, parse_header, FormatVersion, Header, MAGIC, Pa31Extra, ParsedDelta};
-pub use signature::{get_signature, normalize_for_signature, DeltaHash, HASH_ALG_MD5, HASH_ALG_NONE, HASH_ALG_SHA256};
+pub use encode::{
+    apply_get_reverse, create, get_info, get_info_ex, Codec, CreateOptions, FileType,
+};
+pub use header::{parse, parse_header, FormatVersion, Header, Pa31Extra, ParsedDelta, MAGIC};
+pub use signature::{
+    get_signature, normalize_for_signature, DeltaHash, HASH_ALG_MD5, HASH_ALG_NONE, HASH_ALG_SHA256,
+};
 
 use header::PA19_MAGIC;
 use preprocess::{apply_pe_timestamp_fixup, parse_pe_preprocess};
@@ -53,7 +57,10 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
         crate::bsdiff::bspatch(reference, target_size, &decompressed)?
     } else {
         crate::lzx::decompress_with_rift(
-            reference, &parsed.patch_data, target_size, caller_rift.as_ref(),
+            reference,
+            &parsed.patch_data,
+            target_size,
+            caller_rift.as_ref(),
         )?
     };
 
@@ -244,7 +251,10 @@ mod tests {
                 assert_eq!(output.len(), 415);
                 let text = std::str::from_utf8(output).expect("output should be valid UTF-8");
                 assert!(text.contains("<?xml"), "output should be XML");
-                assert!(text.contains("assembly"), "output should contain assembly tag");
+                assert!(
+                    text.contains("assembly"),
+                    "output should contain assembly tag"
+                );
             }
             Err(e) => {
                 panic!("decompression failed: {e}");
@@ -347,7 +357,8 @@ mod tests {
 
     #[test]
     fn roundtrip_simple() {
-        let reference = b"Hello, this is a reference buffer with some repeated content. Hello again!";
+        let reference =
+            b"Hello, this is a reference buffer with some repeated content. Hello again!";
         let target = b"Hello, this is a modified buffer with some repeated content. Goodbye!";
 
         let delta = create(reference, target).unwrap();
@@ -359,7 +370,8 @@ mod tests {
 
     #[test]
     fn roundtrip_pa31() {
-        let reference = b"Hello, this is a reference buffer with some repeated content. Hello again!";
+        let reference =
+            b"Hello, this is a reference buffer with some repeated content. Hello again!";
         let target = b"Hello, this is a modified buffer with some repeated content. Goodbye!";
 
         let delta = CreateOptions::new()
@@ -378,7 +390,8 @@ mod tests {
 
     #[test]
     fn roundtrip_bsdiff_simple() {
-        let reference = b"Hello, this is a reference buffer with some repeated content. Hello again!";
+        let reference =
+            b"Hello, this is a reference buffer with some repeated content. Hello again!";
         let target = b"Hello, this is a modified buffer with some repeated content. Goodbye!";
 
         let delta = CreateOptions::new()
@@ -449,8 +462,14 @@ mod tests {
         use crate::lzx::rift::{RiftEntry, RiftTable};
         let rift = RiftTable {
             entries: vec![
-                RiftEntry { source: 0, target: 0 },
-                RiftEntry { source: 0x1000, target: 0x1200 },
+                RiftEntry {
+                    source: 0,
+                    target: 0,
+                },
+                RiftEntry {
+                    source: 0x1000,
+                    target: 0x1200,
+                },
             ],
         };
         let empty_rift = RiftTable { entries: vec![] };
@@ -468,7 +487,9 @@ mod tests {
 
     #[test]
     fn roundtrip_pe_cmd_to_cmd_patched() {
-        if !PathBuf::from(DELTA_DIR).exists() { return; }
+        if !PathBuf::from(DELTA_DIR).exists() {
+            return;
+        }
         let src = delta_source("cmd.exe");
         let tgt = delta_source("cmd_patched.exe");
         let delta = CreateOptions::new()
@@ -484,7 +505,9 @@ mod tests {
 
     #[test]
     fn roundtrip_pe_advapi32() {
-        if !PathBuf::from(DELTA_DIR).exists() { return; }
+        if !PathBuf::from(DELTA_DIR).exists() {
+            return;
+        }
         let src = delta_source("advapi32_old.dll");
         let tgt = delta_source("advapi32_new.dll");
         let delta = CreateOptions::new()
@@ -568,7 +591,7 @@ mod tests {
 
     #[test]
     fn decoder_matches_msdelta_dll() {
-        use md5::{Md5, Digest};
+        use md5::{Digest, Md5};
         let golden_hashes: &[(&str, &str)] = &[
             ("65|", "05CE391BCD42CC29C917F242AF7EEFC8"),
             ("249|", "625E5A94109DEC39C60506B26F377CAF"),
@@ -635,7 +658,7 @@ mod tests {
         assert_eq!(info.file_type, 1);
     }
 
-        #[test]
+    #[test]
     fn signature_md5() {
         let data = b"Hello, World!";
         let sig = get_signature(data, HASH_ALG_MD5).unwrap();
@@ -665,7 +688,10 @@ mod tests {
     #[test]
     fn reject_truncated() {
         assert!(matches!(parse_header(b"PA3"), Err(Error::Truncated)));
-        assert!(matches!(parse_header(b"PA30\x00\x00"), Err(Error::Truncated)));
+        assert!(matches!(
+            parse_header(b"PA30\x00\x00"),
+            Err(Error::Truncated)
+        ));
     }
 
     #[test]
@@ -680,18 +706,33 @@ mod tests {
         let reference = b"minimal reference buffer for fuzzing";
         for entry in std::fs::read_dir(dir).unwrap() {
             let path = entry.unwrap().path();
-            if path.file_name().unwrap().to_str().unwrap().starts_with("fuzz_crash") {
+            if path
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("fuzz_crash")
+            {
                 let data = std::fs::read(&path).unwrap();
                 let result = apply(reference, &data);
-                assert!(result.is_err(), "malformed input {} should return Err", path.display());
+                assert!(
+                    result.is_err(),
+                    "malformed input {} should return Err",
+                    path.display()
+                );
             }
         }
     }
 
     #[test]
     fn apply_pe_amd64_delta() {
-        let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/deltas"));
-        if !dir.exists() { return; }
+        let dir = PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/deltas"
+        ));
+        if !dir.exists() {
+            return;
+        }
         let src = std::fs::read(dir.join("sources/cmd.exe")).unwrap();
         let tgt = std::fs::read(dir.join("sources/cmd_patched.exe")).unwrap();
         let delta = std::fs::read(dir.join("cmd__to__cmd_patched__pe_amd64.pa30")).unwrap();
@@ -711,61 +752,110 @@ mod tests {
 
     #[test]
     fn apply_raw_cmd_to_where() {
-        if !PathBuf::from(DELTA_DIR).exists() { return; }
-        let result = apply(&delta_source("cmd.exe"), &delta_file("cmd__to__where__raw.pa30")).unwrap();
+        if !PathBuf::from(DELTA_DIR).exists() {
+            return;
+        }
+        let result = apply(
+            &delta_source("cmd.exe"),
+            &delta_file("cmd__to__where__raw.pa30"),
+        )
+        .unwrap();
         let expected = delta_source("where.exe");
         assert_eq!(result.len(), expected.len(), "size mismatch");
         let mut diffs = 0;
         let mut first = None;
         for i in 0..result.len() {
             if result[i] != expected[i] {
-                if first.is_none() { first = Some(i); }
+                if first.is_none() {
+                    first = Some(i);
+                }
                 diffs += 1;
             }
         }
-        assert_eq!(diffs, 0, "first diff at {:?}, total {diffs} diffs out of {}", first, result.len());
+        assert_eq!(
+            diffs,
+            0,
+            "first diff at {:?}, total {diffs} diffs out of {}",
+            first,
+            result.len()
+        );
     }
 
     #[test]
     fn apply_raw_cmd_to_notepad() {
-        if !PathBuf::from(DELTA_DIR).exists() { return; }
-        let result = apply(&delta_source("cmd.exe"), &delta_file("cmd__to__notepad__raw.pa30")).unwrap();
+        if !PathBuf::from(DELTA_DIR).exists() {
+            return;
+        }
+        let result = apply(
+            &delta_source("cmd.exe"),
+            &delta_file("cmd__to__notepad__raw.pa30"),
+        )
+        .unwrap();
         assert_eq!(result, delta_source("notepad.exe"));
     }
 
     #[test]
     fn apply_raw_cmd_to_notepad_flag0x20000() {
-        if !PathBuf::from(DELTA_DIR).exists() { return; }
-        let result = apply(&delta_source("cmd.exe"), &delta_file("cmd__to__notepad__raw_flag0x20000.pa30")).unwrap();
+        if !PathBuf::from(DELTA_DIR).exists() {
+            return;
+        }
+        let result = apply(
+            &delta_source("cmd.exe"),
+            &delta_file("cmd__to__notepad__raw_flag0x20000.pa30"),
+        )
+        .unwrap();
         assert_eq!(result, delta_source("notepad.exe"));
     }
 
     #[test]
     fn apply_prsm_cmd_to_notepad() {
-        if !PathBuf::from(DELTA_DIR).exists() { return; }
-        let result = apply(&delta_source("cmd.exe"), &delta_file("cmd__to__notepad__raw_bsdiff_flag0x100.pa30")).unwrap();
+        if !PathBuf::from(DELTA_DIR).exists() {
+            return;
+        }
+        let result = apply(
+            &delta_source("cmd.exe"),
+            &delta_file("cmd__to__notepad__raw_bsdiff_flag0x100.pa30"),
+        )
+        .unwrap();
         assert_eq!(result, delta_source("notepad.exe"));
     }
 
     #[test]
     fn apply_raw_advapi32() {
-        if !PathBuf::from(DELTA_DIR).exists() { return; }
-        let result = apply(&delta_source("advapi32_old.dll"), &delta_file("advapi32_raw.pa30")).unwrap();
+        if !PathBuf::from(DELTA_DIR).exists() {
+            return;
+        }
+        let result = apply(
+            &delta_source("advapi32_old.dll"),
+            &delta_file("advapi32_raw.pa30"),
+        )
+        .unwrap();
         assert_eq!(result, delta_source("advapi32_new.dll"));
     }
 
     #[test]
     fn apply_pe_advapi32() {
-        if !PathBuf::from(DELTA_DIR).exists() { return; }
-        let result = apply(&delta_source("advapi32_old.dll"), &delta_file("advapi32_pe.pa30")).unwrap();
+        if !PathBuf::from(DELTA_DIR).exists() {
+            return;
+        }
+        let result = apply(
+            &delta_source("advapi32_old.dll"),
+            &delta_file("advapi32_pe.pa30"),
+        )
+        .unwrap();
         let expected = delta_source("advapi32_new.dll");
         let mut diffs = Vec::new();
         for i in 0..result.len().min(expected.len()) {
-            if result[i] != expected[i] { diffs.push(i); }
+            if result[i] != expected[i] {
+                diffs.push(i);
+            }
         }
         if !diffs.is_empty() {
             for &i in diffs.iter().take(20) {
-                eprintln!("  diff[{i}]: got={:#04x} want={:#04x}", result[i], expected[i]);
+                eprintln!(
+                    "  diff[{i}]: got={:#04x} want={:#04x}",
+                    result[i], expected[i]
+                );
             }
             panic!("{} diffs, first at {}", diffs.len(), diffs[0]);
         }

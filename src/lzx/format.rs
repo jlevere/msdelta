@@ -53,13 +53,14 @@ impl SegmentTables {
             return Err(Error::Malformed("wrong total compression lengths"));
         }
         let main = HuffmanTable::from_lengths(&all_lengths[..MAIN_SYMBOLS])?;
-        let lengths = HuffmanTable::from_lengths(
-            &all_lengths[MAIN_SYMBOLS..MAIN_SYMBOLS + LENGTH_SYMBOLS],
-        )?;
-        let aligned = HuffmanTable::from_lengths(
-            &all_lengths[MAIN_SYMBOLS + LENGTH_SYMBOLS..],
-        )?;
-        Ok(SegmentTables { main, lengths, aligned })
+        let lengths =
+            HuffmanTable::from_lengths(&all_lengths[MAIN_SYMBOLS..MAIN_SYMBOLS + LENGTH_SYMBOLS])?;
+        let aligned = HuffmanTable::from_lengths(&all_lengths[MAIN_SYMBOLS + LENGTH_SYMBOLS..])?;
+        Ok(SegmentTables {
+            main,
+            lengths,
+            aligned,
+        })
     }
 }
 

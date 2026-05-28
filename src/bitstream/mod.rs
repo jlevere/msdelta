@@ -70,8 +70,7 @@ impl<'a> BitReader<'a> {
         if self.pos + 8 <= self.data.len() {
             let bytes = &self.data[self.pos..self.pos + 8];
             let word = u64::from_le_bytes([
-                bytes[0], bytes[1], bytes[2], bytes[3],
-                bytes[4], bytes[5], bytes[6], bytes[7],
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
             ]);
             let shift = self.bits;
             self.accum |= word << shift;
@@ -92,7 +91,9 @@ impl<'a> BitReader<'a> {
     #[inline]
     pub fn peek(&self, n: u32) -> u64 {
         debug_assert!(n <= self.bits);
-        if n == 0 { return 0; }
+        if n == 0 {
+            return 0;
+        }
         self.accum & ((1u64 << n) - 1)
     }
 
@@ -307,10 +308,18 @@ impl BitWriter {
         if n == 0 {
             return;
         }
-        let masked = if n == 64 { val } else { val & ((1u64 << n) - 1) };
+        let masked = if n == 64 {
+            val
+        } else {
+            val & ((1u64 << n) - 1)
+        };
         if self.bits + n > 64 {
             let low_n = 64 - self.bits;
-            let low_mask = if low_n == 64 { u64::MAX } else { (1u64 << low_n) - 1 };
+            let low_mask = if low_n == 64 {
+                u64::MAX
+            } else {
+                (1u64 << low_n) - 1
+            };
             self.accum |= (masked & low_mask) << self.bits;
             self.bits = 64;
             self.flush();
@@ -456,7 +465,18 @@ mod tests {
 
     #[test]
     fn writer_roundtrip_i64() {
-        for &val in &[0i64, 1, 42, 255, 256, 1000, 65535, 0x20000, 0x7FFF_FFFF, 0x1_0000_0000] {
+        for &val in &[
+            0i64,
+            1,
+            42,
+            255,
+            256,
+            1000,
+            65535,
+            0x20000,
+            0x7FFF_FFFF,
+            0x1_0000_0000,
+        ] {
             let mut w = BitWriter::new();
             w.write_i64(val);
             let data = w.finish();
@@ -503,7 +523,11 @@ mod tests {
             w.write_u32_number(val);
             let data = w.finish();
             let mut r = BitReader::new(&data).unwrap();
-            assert_eq!(r.read_u32_number().unwrap(), val, "u32_number round-trip failed for {val}");
+            assert_eq!(
+                r.read_u32_number().unwrap(),
+                val,
+                "u32_number round-trip failed for {val}"
+            );
         }
     }
 
@@ -548,7 +572,9 @@ mod tests {
             ("5 vals", &[0x101i64, 1, 0, 52, 0x800C][..]),
         ] {
             let mut w = BitWriter::new();
-            for &v in vals { w.write_i64(v); }
+            for &v in vals {
+                w.write_i64(v);
+            }
             w.write_buffer(&hash);
             w.write_i64(0);
             let data = w.finish();

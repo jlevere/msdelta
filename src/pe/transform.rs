@@ -100,7 +100,7 @@ pub fn transform_inferred_relocations_amd64(
             if out_val & check64 == 0 {
                 let rva = val - image_base;
                 let mapped = rift_map(rva);
-                let new_val = (mapped as i64 + new_image_base as i64) as u64;
+                let new_val = (mapped + new_image_base as i64) as u64;
                 let marker64 = RELOC_MARKER as u64 | ((RELOC_MARKER as u64) << 32);
                 let rebased = new_val | marker64;
                 output_buf[pos..pos + 8].copy_from_slice(&rebased.to_le_bytes());
@@ -116,9 +116,13 @@ pub fn transform_inferred_relocations_amd64(
 }
 
 pub(crate) fn pe_timestamp(data: &[u8]) -> u32 {
-    if data.len() < 0x40 { return 0; }
+    if data.len() < 0x40 {
+        return 0;
+    }
     let pe_off = u32::from_le_bytes(data[0x3C..0x40].try_into().unwrap()) as usize;
-    if pe_off + 12 > data.len() { return 0; }
+    if pe_off + 12 > data.len() {
+        return 0;
+    }
     u32::from_le_bytes(data[pe_off + 8..pe_off + 12].try_into().unwrap())
 }
 
@@ -173,24 +177,34 @@ pub(crate) fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
         if dd.virtual_address != 0 && dd.size >= 28 {
             if let Some(base_off) = rva_to_offset(dd.virtual_address) {
                 let num_entries = dd.size as usize / 28;
-                let header_ts = if offsets.is_empty() { 0 } else {
-                    u32::from_le_bytes(data[offsets[0]..offsets[0]+4].try_into().unwrap_or([0;4]))
+                let header_ts = if offsets.is_empty() {
+                    0
+                } else {
+                    u32::from_le_bytes(
+                        data[offsets[0]..offsets[0] + 4]
+                            .try_into()
+                            .unwrap_or([0; 4]),
+                    )
                 };
                 let ts_bytes = header_ts.to_le_bytes();
                 for i in 0..num_entries {
                     let entry_off = base_off + i * 28;
-                    if entry_off + 28 > data.len() { break; }
+                    if entry_off + 28 > data.len() {
+                        break;
+                    }
                     let raw_ptr = u32::from_le_bytes(
-                        data[entry_off + 24..entry_off + 28].try_into().unwrap()) as usize;
+                        data[entry_off + 24..entry_off + 28].try_into().unwrap(),
+                    ) as usize;
                     let raw_size = u32::from_le_bytes(
-                        data[entry_off + 16..entry_off + 20].try_into().unwrap()) as usize;
+                        data[entry_off + 16..entry_off + 20].try_into().unwrap(),
+                    ) as usize;
                     if raw_ptr == 0 || raw_size == 0 || raw_ptr + raw_size > data.len() {
                         continue;
                     }
                     let end = raw_ptr + raw_size;
                     let mut j = raw_ptr;
                     while j + 4 <= end {
-                        if data[j..j+4] == ts_bytes {
+                        if data[j..j + 4] == ts_bytes {
                             offsets.push(j);
                             j += 4;
                         } else {

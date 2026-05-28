@@ -59,7 +59,11 @@ mod tests {
     #[test]
     fn all_fixtures_are_dcm() {
         let paths = fixture_paths();
-        assert!(paths.len() >= 7, "expected at least 7 fixtures, got {}", paths.len());
+        assert!(
+            paths.len() >= 7,
+            "expected at least 7 fixtures, got {}",
+            paths.len()
+        );
         for path in &paths {
             let data = std::fs::read(path).expect("read fixture");
             assert!(is_dcm(&data), "not DCM: {}", path.display());
