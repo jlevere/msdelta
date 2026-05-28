@@ -167,6 +167,18 @@ pub fn find_offset_slot(offset: u32) -> usize {
     }
 }
 
+/// Number of verbatim extra bits an offset in `slot` carries after its slot
+/// symbol. Used by the cost-based parser to price an explicit offset.
+pub fn offset_slot_extra_bits(slot: usize) -> u32 {
+    OFFSET_TABLE.extra_bits(slot)
+}
+
+/// Number of verbatim extra bits a length in `slot` carries after its slot
+/// symbol.
+pub fn length_slot_extra_bits(slot: usize) -> u32 {
+    LENGTH_EXTRA[slot] as u32
+}
+
 pub fn encode_offset_extra(offset: u32, slot: usize, bs: &mut BackBitsWriter) {
     let t = &OFFSET_TABLE;
     let base = t.bases[slot];

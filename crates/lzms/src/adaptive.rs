@@ -241,6 +241,13 @@ impl AdaptiveCode {
         }
     }
 
+    /// Current Huffman codeword length (in bits) for `sym`. The cost-based
+    /// parser scales this by `COST_SHIFT` to price a symbol. Every symbol keeps
+    /// a nonzero frequency, so it always has a code.
+    pub(super) fn code_len(&self, sym: usize) -> u32 {
+        self.lens[sym] as u32
+    }
+
     pub(super) fn encode_symbol(&mut self, sym: usize, bs: &mut BackBitsWriter) {
         let len = self.lens[sym] as u32;
         let code = self.codes[sym];

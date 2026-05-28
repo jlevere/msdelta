@@ -49,8 +49,8 @@ mod x86_filter;
 
 use adaptive::{AdaptiveCode, BackBits, BackBitsWriter};
 use range_coder::{
-    ProbEntry, ProbTables, RangeDecoder, RangeEncoder, NUM_DELTA_PROBS, NUM_DELTA_REP_PROBS,
-    NUM_LZ_PROBS, NUM_LZ_REP_PROBS, NUM_MAIN_PROBS, NUM_MATCH_PROBS,
+    ProbEntry, ProbTables, RangeDecoder, RangeEncoder, COST_SHIFT, NUM_DELTA_PROBS,
+    NUM_DELTA_REP_PROBS, NUM_LZ_PROBS, NUM_LZ_REP_PROBS, NUM_MAIN_PROBS, NUM_MATCH_PROBS,
 };
 use x86_filter::{x86_filter, x86_filter_impl};
 
@@ -319,7 +319,42 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
             }
         }
 
-        let use_delta = delta_len > match_len + 1;
+        // Cost-based delta-vs-LZ selection (units: 1/2^COST_SHIFT bit). Price
+        // both candidates as explicit matches under the current adaptive state
+        // and prefer the lower cost per covered byte. This replaces the old
+        // length-only `delta_len > match_len + 1` heuristic, which could not
+        // see that a far delta offset (slot + extra bits + power symbol) often
+        // costs more than a nearer LZ offset of similar length. When only one
+        // candidate is viable we keep the simple length fallback.
+        let use_delta = {
+            let length_cost = |len: u32| -> u32 {
+                let slot = tables::find_length_slot(len);
+                (length_code.code_len(slot) + tables::length_slot_extra_bits(slot)) << COST_SHIFT
+            };
+            if delta_len >= 3 && match_len >= 3 {
+                let lz_slot = tables::find_offset_slot(match_offset);
+                let lz_cost = probs.main[main_st as usize].cost1()
+                    + probs.match_[match_st as usize].cost0()
+                    + probs.lz[lz_st as usize].cost0()
+                    + ((lz_offset_code.code_len(lz_slot)
+                        + tables::offset_slot_extra_bits(lz_slot))
+                        << COST_SHIFT)
+                    + length_cost(match_len);
+                let d_slot = tables::find_offset_slot(delta_offset);
+                let delta_cost = probs.main[main_st as usize].cost1()
+                    + probs.match_[match_st as usize].cost1()
+                    + probs.delta[delta_st as usize].cost0()
+                    + (delta_power_code.code_len(delta_power as usize) << COST_SHIFT)
+                    + ((delta_offset_code.code_len(d_slot)
+                        + tables::offset_slot_extra_bits(d_slot))
+                        << COST_SHIFT)
+                    + length_cost(delta_len);
+                // delta_cost/delta_len < lz_cost/match_len, cross-multiplied.
+                (delta_cost as u64) * (match_len as u64) < (lz_cost as u64) * (delta_len as u64)
+            } else {
+                delta_len > match_len + 1
+            }
+        };
 
         if use_delta {
             // Encode delta match
