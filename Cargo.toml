@@ -21,7 +21,11 @@ default = ["cli"]
 # The `msdelta` binary. Kept in `default` so `cargo build`/`run`/`install`
 # work out of the box; library consumers that want a lean tree can build with
 # `--no-default-features`.
-cli = ["dep:clap", "dep:clap_complete", "dep:anyhow"]
+cli = ["winsxs", "dep:clap", "dep:clap_complete", "dep:anyhow", "dep:dirs"]
+# WinSxS base-manifest extraction from a `wcp.dll` (pure byte-parsing, no
+# Windows APIs). Pulls in `memchr` for the multi-MB DLL scans; otherwise just
+# the always-present `goblin` PE parser. Off for the leanest library builds.
+winsxs = ["dep:memchr"]
 
 [dependencies]
 thiserror = "2"
@@ -34,6 +38,8 @@ digest = "0.11"
 clap = { version = "4", features = ["derive"], optional = true }
 clap_complete = { version = "4", optional = true }
 anyhow = { version = "1", optional = true }
+dirs = { version = "6", optional = true }
+memchr = { version = "2", optional = true }
 
 [[bin]]
 name = "msdelta"

@@ -50,6 +50,8 @@ pub enum Error {
     HashMismatch { expected: String, got: String },
     #[error("PA19: {0}")]
     Pa19(String),
+    #[error("base manifest extraction: {0}")]
+    BaseManifest(&'static str),
     #[error(transparent)]
     Lzms(#[from] lzms::Error),
 }
@@ -69,3 +71,5 @@ pub mod pa19;
 pub mod pa30;
 #[allow(dead_code)]
 pub(crate) mod pe;
+#[cfg(feature = "winsxs")]
+pub mod winsxs;

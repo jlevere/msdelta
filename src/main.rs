@@ -36,6 +36,17 @@ enum Command {
     /// the wrapper and format are detected automatically.
     Apply(ApplyArgs),
 
+    /// Decompress DCM-wrapped WinSxS manifests, resolving the base manifest
+    /// automatically.
+    ///
+    /// The base every manifest is delta-encoded against lives inside
+    /// `wcp.dll`. With no `--base`/`--wcp-dll`, the base is taken from the
+    /// cache, or extracted from the local system `wcp.dll` and cached for
+    /// next time. The base is build-specific: when decoding manifests from a
+    /// different Windows build than this host, point `--wcp-dll` at that
+    /// build's `wcp.dll` (e.g. from its servicing-stack component).
+    Decompress(DecompressArgs),
+
     /// Create a PA30 delta that transforms the reference into the target.
     Create(CreateArgs),
 
@@ -63,6 +74,30 @@ struct ApplyArgs {
     /// Write the reconstructed target here (default: stdout).
     #[arg(short, long)]
     output: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct DecompressArgs {
+    /// One or more DCM-wrapped `.manifest` files.
+    #[arg(required = true)]
+    manifests: Vec<PathBuf>,
+
+    /// Use this pre-extracted base manifest directly (skips all resolution).
+    #[arg(long, conflicts_with = "wcp_dll")]
+    base: Option<PathBuf>,
+
+    /// Extract the base from this `wcp.dll` (and cache it for reuse).
+    #[arg(long)]
+    wcp_dll: Option<PathBuf>,
+
+    /// Write decompressed XML here. Only valid with a single manifest;
+    /// otherwise each manifest is written next to itself as `<name>.xml`.
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+
+    /// Re-extract from a `wcp.dll` even if a cached base exists.
+    #[arg(long)]
+    no_cache: bool,
 }
 
 #[derive(Debug, Args)]
@@ -210,6 +245,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Command::Apply(args) => cmd_apply(args),
+        Command::Decompress(args) => cmd_decompress(args),
         Command::Create(args) => cmd_create(args),
         Command::Reverse(args) => cmd_reverse(args),
         Command::Signature(args) => cmd_signature(args),
@@ -232,6 +268,159 @@ fn cmd_apply(args: ApplyArgs) -> Result<()> {
     // A reconstructed target is frequently text (e.g. a WinSxS manifest), so
     // piping to a terminal is reasonable here; don't guard it.
     write_out(args.output.as_deref(), &target)
+}
+
+fn cmd_decompress(args: DecompressArgs) -> Result<()> {
+    if args.output.is_some() && args.manifests.len() > 1 {
+        bail!("--output is only valid with a single manifest; omit it to write <name>.xml beside each input");
+    }
+
+    let base = resolve_base(&args)?;
+
+    for manifest in &args.manifests {
+        let raw = read(manifest)?;
+        let xml = msdelta::winsxs::decompress(&base, &raw)
+            .with_context(|| format!("decompressing {}", manifest.display()))?;
+
+        if !msdelta::winsxs::looks_like_manifest(&xml) {
+            eprintln!(
+                "warning: {} did not decode to well-formed manifest XML; \
+                 the base may not match this manifest's Windows build",
+                manifest.display()
+            );
+        }
+
+        match (&args.output, args.manifests.len()) {
+            (Some(out), _) => {
+                std::fs::write(out, &xml).with_context(|| format!("writing {}", out.display()))?;
+                eprintln!("wrote {}", out.display());
+            }
+            (None, 1) => write_out(None, &xml)?,
+            (None, _) => {
+                let out = manifest.with_extension("xml");
+                std::fs::write(&out, &xml).with_context(|| format!("writing {}", out.display()))?;
+                eprintln!("wrote {}", out.display());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Resolve the base manifest for `decompress`, in priority order:
+/// explicit `--base`, extraction from `--wcp-dll`, the on-disk cache, then the
+/// local system `wcp.dll`. Every filesystem action is logged to stderr.
+fn resolve_base(args: &DecompressArgs) -> Result<Vec<u8>> {
+    if let Some(path) = &args.base {
+        eprintln!("base: using {}", path.display());
+        return read(path);
+    }
+
+    if let Some(dll) = &args.wcp_dll {
+        return extract_and_cache(dll);
+    }
+
+    if !args.no_cache {
+        let cached = cached_bases()?;
+        match cached.len() {
+            1 => {
+                eprintln!("base: using cached {}", cached[0].display());
+                return read(&cached[0]);
+            }
+            0 => {}
+            _ => bail!(
+                "multiple cached bases in {}; pass --base <path> or --wcp-dll <path> to pick one:\n{}",
+                cache_dir()?.display(),
+                cached
+                    .iter()
+                    .map(|p| format!("  {}", p.display()))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
+        }
+    }
+
+    let candidates = msdelta::winsxs::locate_wcp();
+    let dll = candidates.first().ok_or_else(|| {
+        anyhow::anyhow!(
+            "no base manifest available: no cached base and no system wcp.dll found.\n\
+             Supply one with --base <base.bin> or --wcp-dll <wcp.dll> \
+             (on a non-Windows host, copy wcp.dll from the target image's \
+             servicing-stack component)."
+        )
+    })?;
+    eprintln!("base: located system {}", dll.display());
+    extract_and_cache(dll)
+}
+
+/// Extract the base from a `wcp.dll`, cache it keyed by content hash, return it.
+fn extract_and_cache(dll: &Path) -> Result<Vec<u8>> {
+    let bytes = read(dll)?;
+    let base = msdelta::winsxs::extract_base(&bytes)
+        .with_context(|| format!("extracting base manifest from {}", dll.display()))?;
+    eprintln!(
+        "base: extracted {} bytes from {}",
+        base.len(),
+        dll.display()
+    );
+
+    match cache_path(&base) {
+        Ok(path) => {
+            if path.exists() {
+                eprintln!("base: already cached at {}", path.display());
+            } else if let Err(e) = write_cache(&path, &base) {
+                // Caching is a convenience; failure must not abort the decode.
+                eprintln!("warning: could not cache base ({e:#})");
+            } else {
+                eprintln!("base: cached to {}", path.display());
+            }
+        }
+        Err(e) => eprintln!("warning: no cache location ({e:#})"),
+    }
+    Ok(base)
+}
+
+fn write_cache(path: &Path, base: &[u8]) -> Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(path, base)?;
+    Ok(())
+}
+
+/// Cache file path for a base, keyed by a short hash of its content so distinct
+/// builds' bases coexist and identical ones dedupe.
+fn cache_path(base: &[u8]) -> Result<PathBuf> {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(base);
+    let short = hex(&digest[..8]);
+    Ok(cache_dir()?.join(format!("base-{short}.bin")))
+}
+
+/// Existing cached base files (`base-*.bin`).
+fn cached_bases() -> Result<Vec<PathBuf>> {
+    let dir = cache_dir()?;
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Ok(Vec::new());
+    };
+    let mut bases: Vec<PathBuf> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with("base-") && n.ends_with(".bin"))
+        })
+        .collect();
+    bases.sort();
+    Ok(bases)
+}
+
+/// Per-user cache directory for extracted bases, under the platform cache root
+/// (`%LOCALAPPDATA%` on Windows, `~/Library/Caches` on macOS, `$XDG_CACHE_HOME`
+/// or `~/.cache` on Linux).
+fn cache_dir() -> Result<PathBuf> {
+    let root = dirs::cache_dir().context("no platform cache directory available")?;
+    Ok(root.join("msdelta"))
 }
 
 fn cmd_create(args: CreateArgs) -> Result<()> {
