@@ -8,7 +8,7 @@ pub(crate) mod header;
 pub(crate) mod preprocess;
 pub(crate) mod signature;
 
-pub use encode::{apply_get_reverse, create, Codec, CreateOptions, FileType, get_info};
+pub use encode::{apply_get_reverse, create, Codec, CreateOptions, FileType, get_info, get_info_ex};
 pub use header::{parse, parse_header, FormatVersion, Header, MAGIC, Pa31Extra, ParsedDelta};
 pub use signature::{get_signature, DeltaHash, HASH_ALG_MD5, HASH_ALG_NONE, HASH_ALG_SHA256};
 
@@ -72,6 +72,19 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
     }
 
     Ok(output)
+}
+
+/// Apply a delta into a caller-provided buffer.
+///
+/// Equivalent to `ApplyDeltaProvidedB(...)` on Windows. The output buffer
+/// must be at least `target_size` bytes (from `get_info().target_size`).
+pub fn apply_into(reference: &[u8], delta: &[u8], output: &mut [u8]) -> Result<usize> {
+    let result = apply(reference, delta)?;
+    if output.len() < result.len() {
+        return Err(Error::Malformed("output buffer too small"));
+    }
+    output[..result.len()].copy_from_slice(&result);
+    Ok(result.len())
 }
 
 #[cfg(test)]

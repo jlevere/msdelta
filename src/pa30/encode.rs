@@ -100,15 +100,17 @@ impl CreateOptions {
                 let mut normalized = target.to_vec();
                 let original_ts = transform::normalize_timestamps(&mut normalized, reference);
 
-                let section_rift = rift_gen::rift_from_sections(&src_pe, &tgt_pe);
-                let import_rift = rift_gen::rift_from_imports(reference, target);
-                let export_rift = rift_gen::rift_from_exports(reference, target);
-                let mut merged = section_rift;
-                for e in import_rift.entries {
-                    merged.entries.push(e);
-                }
-                for e in export_rift.entries {
-                    merged.entries.push(e);
+                let rifts = [
+                    rift_gen::rift_from_sections(&src_pe, &tgt_pe),
+                    rift_gen::rift_from_imports(reference, target),
+                    rift_gen::rift_from_exports(reference, target),
+                    rift_gen::rift_from_import_thunks(reference, target),
+                    rift_gen::rift_from_resources(&src_pe, &tgt_pe),
+                    rift_gen::rift_from_pdata(&src_pe, &tgt_pe),
+                ];
+                let mut merged = RiftTable { entries: Vec::new() };
+                for r in rifts {
+                    merged.entries.extend(r.entries);
                 }
                 merged.entries.sort_by_key(|e| e.source);
                 merged.entries.dedup_by_key(|e| e.source);
@@ -198,5 +200,13 @@ pub fn apply_get_reverse(reference: &[u8], delta: &[u8]) -> Result<(Vec<u8>, Vec
 ///
 /// Equivalent to `GetDeltaInfoB(...)` on Windows.
 pub fn get_info(delta: &[u8]) -> Result<super::header::Header> {
+    super::header::parse_header(delta)
+}
+
+/// Get extended delta info including PA31 fields.
+///
+/// Equivalent to `GetDeltaInfoExB(...)` on UpdateCompression.dll.
+/// Returns the same Header struct — PA31 extra fields are in `pa31_extra`.
+pub fn get_info_ex(delta: &[u8]) -> Result<super::header::Header> {
     super::header::parse_header(delta)
 }

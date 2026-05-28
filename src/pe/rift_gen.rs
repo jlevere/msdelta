@@ -124,6 +124,87 @@ pub fn rift_from_exports(source_data: &[u8], target_data: &[u8]) -> RiftTable {
     RiftTable { entries }
 }
 
+/// Generate rift entries from resource directory structure.
+///
+/// Compares resource directory RVAs between source and target PEs.
+pub fn rift_from_resources(source: &PeInfo, target: &PeInfo) -> RiftTable {
+    let mut entries = Vec::new();
+    const RESOURCE_DIR_IDX: usize = 2;
+    if RESOURCE_DIR_IDX < source.data_directories.len()
+        && RESOURCE_DIR_IDX < target.data_directories.len()
+    {
+        let (src_rva, src_size) = source.data_directories[RESOURCE_DIR_IDX];
+        let (tgt_rva, tgt_size) = target.data_directories[RESOURCE_DIR_IDX];
+        if src_rva > 0 && src_size > 0 && tgt_rva > 0 && tgt_size > 0 && src_rva != tgt_rva {
+            entries.push(RiftEntry {
+                source: src_rva as i64 - 1,
+                target: tgt_rva as i64 - 1,
+            });
+        }
+    }
+    entries.sort_by_key(|e| e.source);
+    RiftTable { entries }
+}
+
+/// Generate rift entries from exception/pdata directory.
+///
+/// Compares pdata (exception handler) directory RVAs between PEs.
+pub fn rift_from_pdata(source: &PeInfo, target: &PeInfo) -> RiftTable {
+    let mut entries = Vec::new();
+    const EXCEPTION_DIR_IDX: usize = 3;
+    if EXCEPTION_DIR_IDX < source.data_directories.len()
+        && EXCEPTION_DIR_IDX < target.data_directories.len()
+    {
+        let (src_rva, src_size) = source.data_directories[EXCEPTION_DIR_IDX];
+        let (tgt_rva, tgt_size) = target.data_directories[EXCEPTION_DIR_IDX];
+        if src_rva > 0 && src_size > 0 && tgt_rva > 0 && tgt_size > 0 && src_rva != tgt_rva {
+            entries.push(RiftEntry {
+                source: src_rva as i64 - 1,
+                target: tgt_rva as i64 - 1,
+            });
+        }
+    }
+    entries.sort_by_key(|e| e.source);
+    RiftTable { entries }
+}
+
+/// Generate rift entries from per-thunk import matching.
+///
+/// Matches individual imported functions by name within each DLL,
+/// creating rift entries for each IAT slot that moves.
+pub fn rift_from_import_thunks(source_data: &[u8], target_data: &[u8]) -> RiftTable {
+    let mut entries = Vec::new();
+
+    let src_pe = match goblin::pe::PE::parse(source_data) {
+        Ok(pe) => pe,
+        Err(_) => return RiftTable { entries },
+    };
+    let tgt_pe = match goblin::pe::PE::parse(target_data) {
+        Ok(pe) => pe,
+        Err(_) => return RiftTable { entries },
+    };
+
+    for src_imp in &src_pe.imports {
+        for tgt_imp in &tgt_pe.imports {
+            if src_imp.dll == tgt_imp.dll && src_imp.name == tgt_imp.name {
+                if src_imp.offset != 0 && tgt_imp.offset != 0
+                    && src_imp.offset != tgt_imp.offset
+                {
+                    entries.push(RiftEntry {
+                        source: src_imp.offset as i64,
+                        target: tgt_imp.offset as i64,
+                    });
+                }
+                break;
+            }
+        }
+    }
+
+    entries.sort_by_key(|e| e.source);
+    entries.dedup_by_key(|e| e.source);
+    RiftTable { entries }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
