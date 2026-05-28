@@ -18,6 +18,9 @@
           config.allowUnfree = true;
         };
         toolchain = fenix.packages.${system}.stable.toolchain;
+        # Nightly is only needed for cargo-fuzz (libFuzzer sanitizers); the
+        # library and CLI stay on stable. Used by the `fuzz` devShell below.
+        nightlyToolchain = fenix.packages.${system}.complete.toolchain;
         python = pkgs.python313.withPackages (ps: [
           ps.pefile     # PE structure parsing for msdelta.dll / wcp.dll
           ps.capstone   # disassembly snippets when scripting analysis
@@ -45,6 +48,27 @@
             echo ""
             echo "RE:     ghidra  |  analyzeHeadless <proj-dir> <proj-name> -import <bin>"
             echo "Build:  cargo build  |  cargo nextest run"
+            echo "Fuzz:   nix develop .#fuzz"
+          '';
+        };
+
+        # Nightly toolchain + cargo-fuzz, isolated from the default stable
+        # shell. Enter with `nix develop .#fuzz`.
+        devShells.fuzz = pkgs.mkShell {
+          name = "msdelta-fuzz";
+
+          packages = [
+            nightlyToolchain
+            pkgs.cargo-fuzz
+            pkgs.hexyl
+          ];
+
+          shellHook = ''
+            echo "msdelta — fuzzing shell (nightly + cargo-fuzz)"
+            echo ""
+            echo "List:   cargo fuzz list"
+            echo "Run:    cargo fuzz run fuzz_apply"
+            echo "Repro:  cargo fuzz run fuzz_apply fuzz/artifacts/fuzz_apply/<crash>"
           '';
         };
       });
