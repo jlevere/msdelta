@@ -41,74 +41,33 @@ impl std::error::Error for Error {}
 pub type Result<T> = std::result::Result<T, Error>;
 
 mod adaptive;
+mod container;
 mod range_coder;
 mod tables;
+mod wim;
 mod x86_filter;
 
 use adaptive::{AdaptiveCode, BackBits, BackBitsWriter};
 use range_coder::{
-    ProbEntry, ProbTables, RangeDecoder, RangeEncoder, NUM_DELTA_PROBS, NUM_DELTA_REP_PROBS,
-    NUM_LZ_PROBS, NUM_LZ_REP_PROBS, NUM_MAIN_PROBS, NUM_MATCH_PROBS,
+    ProbEntry, ProbTables, RangeDecoder, RangeEncoder, COST_SHIFT, NUM_DELTA_PROBS,
+    NUM_DELTA_REP_PROBS, NUM_LZ_PROBS, NUM_LZ_REP_PROBS, NUM_MAIN_PROBS, NUM_MATCH_PROBS,
 };
 use x86_filter::{x86_filter, x86_filter_impl};
 
-const COMPRESSION_API_MAGIC: u32 = 0xC0E5_510A;
-const COMPRESSION_API_HEADER_SIZE: usize = 24;
-
-/// Decompress a Windows Compression API (cabinet.dll) LZMS-wrapped buffer.
-///
-/// This is the format produced by `Compress()` with `COMPRESS_ALGORITHM_LZMS`
-/// and consumed by msdelta.dll's `LzmsCodec::Decompress`. It consists of a
-/// 24-byte header followed by chunk-size + compressed-data pairs.
-pub fn decompress_compression_api(data: &[u8]) -> Result<Vec<u8>> {
-    if data.len() < COMPRESSION_API_HEADER_SIZE + 4 {
-        return Err(Error::Malformed("LZMS: compression API buffer too short"));
-    }
-    let magic = u32::from_le_bytes(data[0..4].try_into().unwrap());
-    if magic != COMPRESSION_API_MAGIC {
-        return Err(Error::Malformed("LZMS: bad compression API magic"));
-    }
-    let uncompressed_size = u64::from_le_bytes(data[8..16].try_into().unwrap()) as usize;
-    let chunk_compressed = u32::from_le_bytes(data[24..28].try_into().unwrap()) as usize;
-    let payload_start = COMPRESSION_API_HEADER_SIZE + 4;
-    let payload_end = payload_start + chunk_compressed;
-    if payload_end > data.len() {
-        return Err(Error::Truncated);
-    }
-    if chunk_compressed == uncompressed_size {
-        return Ok(data[payload_start..payload_end].to_vec());
-    }
-    decompress(&data[payload_start..payload_end], uncompressed_size)
-}
-
-/// Compress data into the Windows Compression API (cabinet.dll) LZMS format.
-///
-/// Produces the same format that `decompress_compression_api` reads:
-/// 24-byte header + chunk-size + LZMS-compressed payload.
-pub fn compress_compression_api(data: &[u8]) -> Result<Vec<u8>> {
-    let compressed = compress(data)?;
-    let payload = if compressed.len() < data.len() {
-        &compressed
-    } else {
-        data
-    };
-    let mut out = Vec::with_capacity(COMPRESSION_API_HEADER_SIZE + 4 + payload.len());
-    out.extend_from_slice(&COMPRESSION_API_MAGIC.to_le_bytes());
-    out.extend_from_slice(&0u32.to_le_bytes());
-    out.extend_from_slice(&(data.len() as u64).to_le_bytes());
-    out.extend_from_slice(&0u64.to_le_bytes());
-    out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
-    out.extend_from_slice(payload);
-    Ok(out)
-}
+pub use container::{compress_compression_api, decompress_compression_api};
+pub use wim::{compress_wim, compress_wim_solid, decompress_wim, decompress_wim_solid};
 
 /// Decompress a raw LZMS bitstream.
 pub fn decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>> {
     if data.is_empty() || output_size == 0 {
         return Ok(Vec::new());
     }
-    if output_size > 64 * 1024 * 1024 {
-        return Err(Error::Malformed("LZMS: output size exceeds 256 MB limit"));
+    // A single LZMS stream decodes one container chunk, which cabinet.dll caps
+    // at 64 MiB; reject anything larger as malformed (and a decode-bomb guard).
+    if output_size > 0x0400_0000 {
+        return Err(Error::Malformed(
+            "LZMS: output size exceeds 64 MiB chunk limit",
+        ));
     }
     if data.len() < 4 || data.len() % 2 != 0 {
         return Err(Error::Malformed("LZMS: need >= 4 even bytes"));
@@ -174,8 +133,21 @@ pub fn decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>> {
                 }
                 let n = length.min(output_size - pos);
                 let src = pos - offset as usize;
-                for i in 0..n {
-                    out[pos + i] = out[src + i];
+                let off = offset as usize;
+                if off >= n {
+                    // Non-overlapping: one memmove instead of a checked byte loop.
+                    out.copy_within(src..src + n, pos);
+                } else {
+                    // Overlapping run: replicate the `off`-byte pattern, doubling
+                    // the copied span each step so every copy is a memmove
+                    // (O(log n) copies even for offset 1).
+                    out.copy_within(src..src + off, pos);
+                    let mut done = off;
+                    while done < n {
+                        let chunk = (n - done).min(done);
+                        out.copy_within(pos..pos + chunk, pos + done);
+                        done += chunk;
+                    }
                 }
                 pos += n;
                 prev_type = 1;
@@ -227,6 +199,12 @@ pub fn decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// Longest match the encoder will emit. The format permits up to
+/// `LZMS_MAX_MATCH_LENGTH` (1073809578); chunks are at most 64 MiB, so this
+/// bound is never the limiting factor in practice but keeps a single match
+/// length within what the length-slot table can encode.
+const MAX_MATCH_LEN: u32 = 1 << 26;
+
 /// Compress data using LZMS with greedy LZ matching.
 pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
     if data.is_empty() {
@@ -265,6 +243,20 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
     const HASH_BITS: usize = 16;
     let mut head = vec![0u32; 1 << HASH_BITS];
     let mut chain = vec![0u32; d.len()];
+
+    // Delta-match finder: one hash table per power over the 3-byte difference
+    // signature `d[i] - d[i-span]`, keyed by `i mod span` so a hit is
+    // span-aligned (the byte offset must be a multiple of `span = 1 << power`).
+    // Each signature bucket is `DELTA_WAYS`-way set-associative (a ring indexed
+    // by `pos & (DELTA_WAYS-1)`) to keep several recent candidate offsets
+    // without a per-position chain. This replaces the former brute-force
+    // `power x window x extend` scan; the offset is no longer windowed because
+    // the cost model now rejects deltas that are not worth their offset cost.
+    // Slots store `pos + 1` (0 = empty).
+    const DELTA_HASH_BITS: u32 = 13;
+    const DELTA_WAYS: usize = 8;
+    let dh_size = 1usize << DELTA_HASH_BITS;
+    let mut delta_head = vec![0u32; dh_size * 8 * DELTA_WAYS];
 
     while pos < d.len() {
         let (match_offset, match_len) = if pos + 3 < d.len() {
@@ -309,23 +301,38 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
             (0, 0)
         };
 
-        // Try delta match: find (offset, power) where the difference pattern matches
+        // Delta match: probe the per-power signature hash for candidate sources
+        // at the full (span-aligned) offset range. Correctness comes from
+        // verifying and extending at the exact offset we will encode
+        // (`raw_off << power`); the cost model decides whether to use the
+        // result over an LZ match.
         let mut delta_len = 0u32;
         let mut delta_offset = 0u32;
         let mut delta_power = 0u32;
-        if pos >= 2 {
-            for power in 0..3u32 {
+        // Delta search is expensive (8 powers x associative probe per position)
+        // and rarely beats a usable LZ match, so only run it where LZ found
+        // nothing usable (match_len < 3) -- which is exactly the delta-favorable
+        // data (e.g. strided/incrementing) where deltas matter.
+        if match_len < 3 && pos + 2 < d.len() {
+            for power in 0..8u32 {
                 let span = 1usize << power;
                 if span > pos {
                     break;
                 }
-                for try_off in 1..pos.min(32) {
-                    let off = try_off << power;
-                    if off + span > pos {
+                let base = ((power as usize) * dh_size + delta_sig(d, pos, span, DELTA_HASH_BITS))
+                    * DELTA_WAYS;
+                for way in 0..DELTA_WAYS {
+                    let cand = delta_head[base + way];
+                    if cand == 0 {
                         continue;
                     }
+                    let off = pos - (cand - 1) as usize;
+                    if off == 0 || off % span != 0 {
+                        continue;
+                    }
+                    let raw_off = (off >> power) as u32;
                     let mut ml = 0u32;
-                    while pos + (ml as usize) < d.len() && ml < 1046 {
+                    while pos + (ml as usize) < d.len() && ml < MAX_MATCH_LEN {
                         let p = pos + ml as usize;
                         let s = p - off;
                         if p < span || s < span {
@@ -339,16 +346,75 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
                     }
                     if ml > delta_len && ml >= 3 {
                         delta_len = ml;
-                        delta_offset = try_off as u32;
+                        delta_offset = raw_off;
                         delta_power = power;
                     }
                 }
+                delta_head[base + (pos & (DELTA_WAYS - 1))] = (pos + 1) as u32;
             }
         }
 
-        let use_delta = delta_len > match_len + 1;
+        // Cost-based selection (units: 1/2^COST_SHIFT bit). Price each candidate
+        // match as it would be encoded (explicit form) under the current
+        // adaptive state, pick the cheaper per covered byte, then gate it
+        // against coding the same span as literals. This makes every decision
+        // cost-driven: the match finder may surface far/expensive deltas, but a
+        // match is taken only when it actually beats the literal alternative,
+        // which is what lets the delta search run unwindowed without bloating
+        // literal-heavy data.
+        let (use_delta, take_match) = {
+            let length_cost = |len: u32| -> u32 {
+                let slot = tables::find_length_slot(len);
+                (length_code.code_len(slot) + tables::length_slot_extra_bits(slot)) << COST_SHIFT
+            };
+            let lit_cost = |byte: u8| -> u32 {
+                probs.main[main_st as usize].cost0()
+                    + (literal_code.code_len(byte as usize) << COST_SHIFT)
+            };
+            let lz_cost = (match_len >= 3).then(|| {
+                let slot = tables::find_offset_slot(match_offset);
+                probs.main[main_st as usize].cost1()
+                    + probs.match_[match_st as usize].cost0()
+                    + probs.lz[lz_st as usize].cost0()
+                    + ((lz_offset_code.code_len(slot) + tables::offset_slot_extra_bits(slot))
+                        << COST_SHIFT)
+                    + length_cost(match_len)
+            });
+            let delta_cost = (delta_len >= 3).then(|| {
+                let slot = tables::find_offset_slot(delta_offset);
+                probs.main[main_st as usize].cost1()
+                    + probs.match_[match_st as usize].cost1()
+                    + probs.delta[delta_st as usize].cost0()
+                    + (delta_power_code.code_len(delta_power as usize) << COST_SHIFT)
+                    + ((delta_offset_code.code_len(slot) + tables::offset_slot_extra_bits(slot))
+                        << COST_SHIFT)
+                    + length_cost(delta_len)
+            });
+            // Pick the better match by cost per byte (cross-multiplied).
+            let chosen = match (lz_cost, delta_cost) {
+                (Some(l), Some(dc)) => {
+                    if (dc as u64) * (match_len as u64) < (l as u64) * (delta_len as u64) {
+                        Some((true, dc, delta_len))
+                    } else {
+                        Some((false, l, match_len))
+                    }
+                }
+                (Some(l), None) => Some((false, l, match_len)),
+                (None, Some(dc)) => Some((true, dc, delta_len)),
+                (None, None) => None,
+            };
+            match chosen {
+                Some((is_delta, cost, len)) => {
+                    let lits: u32 = (0..len as usize)
+                        .map(|k| lit_cost(d[pos + k]))
+                        .fold(0u32, u32::saturating_add);
+                    (is_delta, cost < lits)
+                }
+                None => (false, false),
+            }
+        };
 
-        if use_delta {
+        if take_match && use_delta {
             // Encode delta match
             rc.encode_bit(1, &mut main_st, NUM_MAIN_PROBS, &mut probs.main);
             rc.encode_bit(1, &mut match_st, NUM_MATCH_PROBS, &mut probs.match_);
@@ -420,8 +486,8 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>> {
 
             pos += delta_len as usize;
             prev_type = 2;
-        } else if match_len >= 3 {
-            // Encode LZ match
+        } else if take_match {
+            // Encode LZ match (cost-gated; match_len >= 3 guaranteed here)
             rc.encode_bit(1, &mut main_st, NUM_MAIN_PROBS, &mut probs.main);
             rc.encode_bit(0, &mut match_st, NUM_MATCH_PROBS, &mut probs.match_);
 
@@ -505,8 +571,21 @@ fn hash4(data: &[u8], pos: usize) -> usize {
     (v.wrapping_mul(0x1E35A7BD) >> 16) as usize
 }
 
+/// Hash the 3-byte difference signature `d[i] - d[i-span]` at position `i` for
+/// a delta match of the given `span`, mixing in `i mod span` so positions only
+/// collide when their byte offset is a multiple of `span`. Requires `i >= span`
+/// and `i + 2 < d.len()`.
+fn delta_sig(d: &[u8], i: usize, span: usize, bits: u32) -> usize {
+    let a = d[i].wrapping_sub(d[i - span]) as u32;
+    let b = d[i + 1].wrapping_sub(d[i + 1 - span]) as u32;
+    let c = d[i + 2].wrapping_sub(d[i + 2 - span]) as u32;
+    let residue = (i & (span - 1)) as u32;
+    let v = (a | (b << 8) | (c << 16)) ^ residue.wrapping_mul(0x9E37_79B1);
+    (v.wrapping_mul(0x85EB_CA77) >> (32 - bits)) as usize
+}
+
 fn match_length(data: &[u8], src: usize, dst: usize, limit: usize) -> u32 {
-    let max = (limit - dst).min(1046) as u32;
+    let max = (limit - dst).min(MAX_MATCH_LEN as usize) as u32;
     let mut len = 0u32;
     while len < max && data[src + len as usize] == data[dst + len as usize] {
         len += 1;
@@ -514,7 +593,11 @@ fn match_length(data: &[u8], src: usize, dst: usize, limit: usize) -> u32 {
     len
 }
 
-fn decode_rep(rc: &mut RangeDecoder, st: &mut [u32; 2], probs: &mut [Vec<ProbEntry>; 2]) -> usize {
+fn decode_rep<const N: usize>(
+    rc: &mut RangeDecoder,
+    st: &mut [u32; 2],
+    probs: &mut [[ProbEntry; N]; 2],
+) -> usize {
     let b0 = rc.decode_bit(&mut st[0], NUM_LZ_REP_PROBS, &mut probs[0]);
     if b0 == 0 {
         return 0;
@@ -676,14 +759,63 @@ mod tests {
         assert_eq!(decompressed, original);
     }
 
+    /// Long runs must encode as single long matches (cap raised well past the
+    /// old 1046) and round-trip exactly.
+    #[test]
+    fn compress_decompress_long_run() {
+        let original = vec![0xABu8; 200_000];
+        let compressed = compress(&original).unwrap();
+        // A 200 KB constant run should collapse to a handful of bytes.
+        assert!(
+            compressed.len() < 64,
+            "expected tiny output, got {}",
+            compressed.len()
+        );
+        assert_eq!(decompress(&compressed, original.len()).unwrap(), original);
+    }
+
+    /// Data with a strided arithmetic structure exercises delta matches across
+    /// multiple powers (search widened to the full 0..8 alphabet).
+    /// Fuzz regression: a malformed raw stream that exhausts the backward
+    /// bitstream must not panic (was `attempt to subtract with overflow` in
+    /// `BackBits::consume`). Missing bits are zero-extended.
+    #[test]
+    fn fuzz_regression_bitstream_underflow_no_panic() {
+        let crash = [0xde, 0x06, 0xde, 0xde, 0xde, 0x06, 0x06, 0x0a];
+        let size =
+            u32::from_le_bytes([crash[0], crash[1], crash[2], crash[3]]) as usize % (1 << 20);
+        // Must terminate without panicking; output correctness is not asserted
+        // for malformed input.
+        let _ = decompress(&crash[4..], size);
+    }
+
+    #[test]
+    fn compress_decompress_delta_favorable() {
+        let original: Vec<u8> = (0..20_000u32)
+            .map(|i| (i.wrapping_mul(3) >> 1) as u8)
+            .collect();
+        let compressed = compress(&original).unwrap();
+        assert_eq!(decompress(&compressed, original.len()).unwrap(), original);
+    }
+
+    /// A larger mixed buffer (literals + repeats + structure) to shake out the
+    /// widened match finder end to end.
+    #[test]
+    fn compress_decompress_mixed_large() {
+        let mut original = Vec::new();
+        for block in 0..64u32 {
+            original.extend(std::iter::repeat_n((block & 0xFF) as u8, 1000));
+            original.extend((0..1000u32).map(|i| (i.wrapping_mul(block + 1)) as u8));
+        }
+        let compressed = compress(&original).unwrap();
+        assert_eq!(decompress(&compressed, original.len()).unwrap(), original);
+    }
+
     #[test]
     fn compression_api_roundtrip() {
         let original =
             b"Compression API wrapper roundtrip test data with some repetition repetition";
         let wrapped = compress_compression_api(original).unwrap();
-        assert!(wrapped.len() >= COMPRESSION_API_HEADER_SIZE + 4);
-        let magic = u32::from_le_bytes(wrapped[0..4].try_into().unwrap());
-        assert_eq!(magic, COMPRESSION_API_MAGIC);
         let recovered = decompress_compression_api(&wrapped).unwrap();
         assert_eq!(recovered, original);
     }

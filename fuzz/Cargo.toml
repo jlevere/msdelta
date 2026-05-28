@@ -7,12 +7,20 @@ edition = "2021"
 [package.metadata]
 cargo-fuzz = true
 
+# Stand alone as its own workspace: this crate lives inside the msdelta repo but
+# is not a member, and depending on the `lzms` workspace member by path would
+# otherwise pull it into the parent workspace.
+[workspace]
+
 [dependencies]
 libfuzzer-sys = "0.4"
 
 [dependencies.msdelta]
 path = ".."
 default-features = false
+
+[dependencies.lzms]
+path = "../crates/lzms"
 
 [[bin]]
 name = "fuzz_apply"
@@ -45,6 +53,48 @@ bench = false
 [[bin]]
 name = "fuzz_rift_roundtrip"
 path = "fuzz_targets/fuzz_rift_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_lzms_decompress"
+path = "fuzz_targets/fuzz_lzms_decompress.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_lzms_container"
+path = "fuzz_targets/fuzz_lzms_container.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_lzms_roundtrip"
+path = "fuzz_targets/fuzz_lzms_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_lzms_wim"
+path = "fuzz_targets/fuzz_lzms_wim.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_lzms_wim_roundtrip"
+path = "fuzz_targets/fuzz_lzms_wim_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_lzms_mutate"
+path = "fuzz_targets/fuzz_lzms_mutate.rs"
 test = false
 doc = false
 bench = false
