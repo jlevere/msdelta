@@ -13,3 +13,6 @@ keywords = ["lzms", "compression", "windows", "wim", "cabinet"]
 exclude = ["tests/fixtures"]
 
 [dependencies]
+
+[dev-dependencies]
+proptest = "1"

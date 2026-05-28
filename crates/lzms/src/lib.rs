@@ -664,6 +664,19 @@ mod tests {
 
     /// Data with a strided arithmetic structure exercises delta matches across
     /// multiple powers (search widened to the full 0..8 alphabet).
+    /// Fuzz regression: a malformed raw stream that exhausts the backward
+    /// bitstream must not panic (was `attempt to subtract with overflow` in
+    /// `BackBits::consume`). Missing bits are zero-extended.
+    #[test]
+    fn fuzz_regression_bitstream_underflow_no_panic() {
+        let crash = [0xde, 0x06, 0xde, 0xde, 0xde, 0x06, 0x06, 0x0a];
+        let size =
+            u32::from_le_bytes([crash[0], crash[1], crash[2], crash[3]]) as usize % (1 << 20);
+        // Must terminate without panicking; output correctness is not asserted
+        // for malformed input.
+        let _ = decompress(&crash[4..], size);
+    }
+
     #[test]
     fn compress_decompress_delta_favorable() {
         let original: Vec<u8> = (0..20_000u32)

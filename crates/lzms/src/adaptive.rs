@@ -43,7 +43,10 @@ impl<'a> BackBits<'a> {
     #[inline]
     pub(super) fn consume(&mut self, n: u32) {
         self.buf <<= n;
-        self.bits -= n;
+        // On a truncated/malformed stream `ensure` can leave fewer than `n`
+        // bits buffered; `peek` already zero-fills those, so saturate here
+        // rather than underflow. A well-formed stream never asks past its end.
+        self.bits = self.bits.saturating_sub(n);
     }
 
     #[inline]

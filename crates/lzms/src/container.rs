@@ -120,7 +120,10 @@ pub fn decompress_compression_api(data: &[u8]) -> Result<Vec<u8>> {
         return Err(Error::Malformed("LZMS: unsupported chunk-record mode"));
     }
 
-    let mut out = Vec::with_capacity(uncompressed_total);
+    // Reserve generously but never trust `uncompressed_total` blindly: a
+    // malformed header can claim terabytes. The Vec still grows as real chunks
+    // decode, so a lying total just fails with `Truncated` when input runs out.
+    let mut out = Vec::with_capacity(uncompressed_total.min(MAX_CHUNK));
     let mut cursor = header_size;
     while out.len() < uncompressed_total {
         if cursor + 4 > data.len() {
@@ -298,5 +301,20 @@ mod tests {
             compress_compression_api(b"another buffer with repetition repetition").unwrap();
         let truncated = &wrapped[..wrapped.len() - 1];
         assert!(decompress_compression_api(truncated).is_err());
+    }
+
+    /// Fuzz regression: a header with a valid CRC but an absurd
+    /// `uncompressed_total` must not trigger a giant allocation. It should fail
+    /// cleanly (the declared total is unbacked by input).
+    #[test]
+    fn fuzz_regression_huge_total_no_panic() {
+        let crash = [
+            0x0a, 0x51, 0xe5, 0xc0, 0x28, 0x00, 0x2c, 0x05, 0xb2, 0xb3, 0x00, 0x00, 0x00, 0x2c,
+            0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x23, 0x00, 0xff, 0xb0,
+            0xff, 0x09, 0x00,
+        ];
+        // Must not panic/abort; result is an error either way.
+        assert!(decompress_compression_api(&crash).is_err());
     }
 }
