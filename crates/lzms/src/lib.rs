@@ -44,6 +44,7 @@ mod adaptive;
 mod container;
 mod range_coder;
 mod tables;
+mod wim;
 mod x86_filter;
 
 use adaptive::{AdaptiveCode, BackBits, BackBitsWriter};
@@ -54,6 +55,7 @@ use range_coder::{
 use x86_filter::{x86_filter, x86_filter_impl};
 
 pub use container::{compress_compression_api, decompress_compression_api};
+pub use wim::{compress_wim, compress_wim_solid, decompress_wim, decompress_wim_solid};
 
 /// Decompress a raw LZMS bitstream.
 pub fn decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>> {
