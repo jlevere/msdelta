@@ -71,8 +71,8 @@ msdelta = { version = "0.1", default-features = false }
 
 ## What's implemented
 
-| | Decode | Encode |
-|-|--------|--------|
+| | Decode | Encode (self round-trip) |
+|-|--------|--------------------------|
 | **PA30** (primary format) | yes | yes |
 | **PA31** (extended header) | yes | yes |
 | **PA19** (legacy LZX) | yes | - |
@@ -83,6 +83,21 @@ msdelta = { version = "0.1", default-features = false }
 | **PE transforms** (rift tables, timestamps) | yes | yes |
 
 PE delta encoding auto-detects x86/x86-64 binaries and generates rift tables from section layout, data directories, imports, exports, resources, and exception tables.
+
+**Decode is the production-ready direction.** It is verified MD5-identical to
+`msdelta.dll` across every bundled fixture.
+
+**Encoder ↔ `msdelta.dll` compatibility is partial and being closed.** A
+cross-check against genuine `msdelta.dll!ApplyDeltaB` (Windows build 26100)
+currently passes for **RAW PseudoLzx (PA30)** at any size, with an MD5
+integrity hash, and for the identical-input and empty-target edge cases
+(`msdelta.dll` re-applies these deltas to the exact target). Still failing:
+the **BsDiff** codec and **PE rift transforms** (rejected or mis-decoded —
+our framing does not yet match), and **PA31** / **SHA-256 hashes** (which this
+`msdelta.dll` build may not support via `ApplyDeltaB` at all; pending
+verification against `UpdateCompression.dll`). See
+[Known limitations](#known-limitations). Only feed RAW PseudoLzx/PA30 deltas
+to Windows tooling for now.
 
 ## API surface
 
@@ -111,9 +126,29 @@ MSRV: 1.85
 
 ## Known limitations
 
-- One multi-segment DCM fixture (WOW64 proxystub, 3.2MB output) has a decode divergence at byte 249 vs `msdelta.dll`. All other fixtures decode correctly. See `notes/blockers.md`.
-- PA19 encoding not implemented (legacy format, `lxzd` crate is decode-only).
+- Encoder ↔ `msdelta.dll` compatibility is partial. A Windows cross-check
+  (genuine `ApplyDeltaB`, build 26100) currently passes for RAW PseudoLzx/PA30
+  at any size (the encoder emits the same "simple mode" framing as genuine
+  deltas for small inputs and "complex mode" for large ones), with an MD5
+  hash, and for identical/empty-target edges. Still open:
+  - **BsDiff** codec: rejected with `ERROR_INVALID_DATA`; our LZMS-wrapped
+    BsDiff container framing does not match `msdelta.dll`.
+  - **PE rift transforms**: accepted structurally but decode to incorrect
+    bytes; the rift/preprocess encoding does not match `msdelta.dll`'s
+    interpretation. This is the largest open item.
+  - **PA31** and **SHA-256** hashes: rejected by this `msdelta.dll` build's
+    `ApplyDeltaB` (and `CreateDeltaB`), which may not support them at all —
+    pending verification against `UpdateCompression.dll`.
+  - Genuine deltas stamp a creation FILETIME in the header (bytes 4-11) that
+    this crate zeroes; not required for acceptance but a divergence.
+
+  The in-crate round-trip tests pass because this crate's decoder mirrors its
+  own encoder conventions; Windows is the only ground truth for the encoder.
+- PA19 encoding not implemented (legacy format, the `lzxd` crate is decode-only). PA19 decode works.
 - LZX encoder does not use rift tables during match finding (rift is written for the decoder but compression doesn't exploit it).
+
+Decode is verified MD5-identical to `msdelta.dll` across all bundled fixtures,
+including the 3.2 MB multi-segment WOW64 proxystub manifest.
 
 ## License
 
