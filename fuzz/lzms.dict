@@ -1,0 +1,9 @@
+# libFuzzer dictionary for the LZMS Compression API container targets
+# (fuzz_lzms_container, fuzz_lzms_mutate). The raw bitstream is magicless, so
+# this only helps where a valid header matters. Pass it explicitly:
+#   cargo fuzz run fuzz_lzms_container -- -dict=fuzz/lzms.dict
+
+# Container magic 0xC0E5510A (little-endian) followed by the 24-byte header.
+container_magic="\x0a\x51\xe5\xc0"
+# Algorithm id (LZMS = 5) at header offset 7.
+algorithm_lzms="\x05"

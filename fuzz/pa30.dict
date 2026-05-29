@@ -1,0 +1,20 @@
+# libFuzzer dictionary for the PA30/PA31 byte-parsing targets (fuzz_apply,
+# fuzz_pa30_header). Gets the mutator past the magic gates it would otherwise
+# spend enormous effort rediscovering. Pass it explicitly:
+#   cargo fuzz run fuzz_apply -- -dict=fuzz/pa30.dict
+# (cargo-fuzz does not auto-load dictionaries; .options files are OSS-Fuzz-only.)
+# Format: https://llvm.org/docs/LibFuzzer.html#dictionaries
+
+# Format magics.
+magic_pa30="PA30"
+magic_pa31="PA31"
+magic_pa19="PA19"
+
+# DCM wrapper: "DCM\x01" then a PA30 delta.
+dcm="DCM\x01"
+
+# Flag dwords observed in real deltas (little-endian): 0x100 (BsDiff),
+# 0x20000 (manifest path), 0xe63e (PE transform pipeline).
+flag_bsdiff="\x00\x01\x00\x00"
+flag_manifest="\x00\x00\x02\x00"
+flag_pe="\x3e\xe6\x00\x00"
