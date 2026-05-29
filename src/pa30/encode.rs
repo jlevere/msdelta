@@ -97,39 +97,43 @@ impl CreateOptions {
 
         let (patch_data, file_type_set, file_type_val, flags, preprocess) =
             if let Some((src_pe, tgt_pe)) = pe_info {
-                let mut normalized = target.to_vec();
-                let original_ts = transform::normalize_timestamps(&mut normalized, reference);
+                let _ = &src_pe;
+                // Do NOT normalize timestamps: diff the raw target so its real
+                // timestamps are carried in the patch (as literals where they
+                // differ from the reference). msdelta's apply then emits the
+                // target timestamps directly. (Our decoder's timestamp fixup is
+                // retained for decoding genuine *normalized* deltas, where it's
+                // needed; on our own un-normalized deltas it is a no-op because
+                // those offsets already hold the target timestamp.)
 
-                let rifts = [
-                    rift_gen::rift_from_sections(&src_pe, &tgt_pe),
-                    rift_gen::rift_from_imports(reference, target),
-                    rift_gen::rift_from_exports(reference, target),
-                    rift_gen::rift_from_import_thunks(reference, target),
-                    rift_gen::rift_from_resources(&src_pe, &tgt_pe),
-                    rift_gen::rift_from_pdata(&src_pe, &tgt_pe),
-                ];
-                let mut merged = RiftTable {
-                    entries: Vec::new(),
-                };
-                for r in rifts {
-                    merged.entries.extend(r.entries);
-                }
-                merged.entries.sort_by_key(|e| e.source);
-                merged.entries.dedup_by_key(|e| e.source);
+                // Genuine msdelta uses the *reference* image's section
+                // RVA->file-offset map as the rift (verified byte-exact), carried
+                // in the preprocess (not the patch). The LZX encoder consumes it to
+                // pick rift-relative offsets; long copies that start at a low
+                // position span whole sections.
+                let merged = rift_gen::pe_section_rift(reference);
 
-                let patch_data = if merged.entries.is_empty() {
-                    crate::lzx::compress(reference, &normalized)?
-                } else {
-                    crate::lzx::compress_with_rift(reference, &normalized, &merged)?
-                };
+                // msdelta zeroes the optional-header CheckSum in the copy source;
+                // diffing against the zeroed reference makes the target's real
+                // checksum fall out as literals instead of a copy that resolves to
+                // zero on genuine msdelta.
+                let mut ref_norm = reference.to_vec();
+                transform::zero_pe_checksum(&mut ref_norm);
+
+                let patch_data = crate::lzx::compress_with_rift(&ref_norm, target, &merged)?;
+                let _ = tgt_pe.checksum;
                 let preprocess = build_pe_preprocess(
                     tgt_pe.image_base,
-                    original_ts,
+                    0, // field1 (restores to opt-header+0x70); 0 matches genuine for cmd
+                    tgt_pe.timestamp,
                     &merged,
                     &RiftTable { entries: vec![] },
                 );
                 let ft: i64 = if tgt_pe.is_64bit { 8 } else { 2 };
-                (patch_data, 0xFi64, ft, 0i64, preprocess)
+                // flags=0xe63e: the PE transform-config bitmask genuine msdelta
+                // emits for AMD64 PE deltas; its apply requires it to drive
+                // rift-based decode of the patch.
+                (patch_data, 0xFi64, ft, 0xe63ei64, preprocess)
             } else {
                 match self.codec {
                     Codec::PseudoLzx => {
@@ -137,9 +141,16 @@ impl CreateOptions {
                         (data, 1i64, 1i64, 0x20000i64, vec![])
                     }
                     Codec::BsDiff => {
-                        let bsdiff_patch = crate::bsdiff::bscreate(reference, target)?;
-                        let data = lzms::compress_compression_api(&bsdiff_patch)?;
-                        (data, 0x101i64, 1i64, 0i64, vec![])
+                        // msdelta's "bsdiff" path (CreateDeltaB with SetFlags=0x100)
+                        // does NOT emit a distinct bsdiff container. Verified against
+                        // genuine msdelta.dll (Win Server 2025, build 26100): the patch
+                        // bytes are identical for SetFlags 0 vs 0x100 across small, tiny,
+                        // and pathological scattered-byte diffs -- only the header `flags`
+                        // bit changes. The codec is always LZX. So the MS-compatible form
+                        // is the normal LZX patch with file_type_set=1, file_type=1, and
+                        // the 0x100 flag bit set.
+                        let data = crate::lzx::compress(reference, target)?;
+                        (data, 1i64, 1i64, 0x100i64, vec![])
                     }
                 }
             };

@@ -8,6 +8,9 @@ pub struct PeInfo {
     pub image_base: u64,
     pub size_of_image: u32,
     pub timestamp: u32,
+    /// Optional-header CheckSum field. msdelta's PE transform zeroes this in the
+    /// patch domain and restores it from the preprocess on apply.
+    pub checksum: u32,
     pub is_64bit: bool,
     pub sections: Vec<SectionInfo>,
     pub data_directories: Vec<(u32, u32)>,
@@ -37,6 +40,7 @@ impl PeInfo {
         let image_base = opt.windows_fields.image_base;
         let size_of_image = opt.windows_fields.size_of_image;
         let timestamp = header.coff_header.time_date_stamp;
+        let checksum = opt.windows_fields.check_sum;
 
         let mut data_directories = vec![(0u32, 0u32); 16];
         for (dtype, dd) in opt.data_directories.dirs() {
@@ -69,6 +73,7 @@ impl PeInfo {
             image_base,
             size_of_image,
             timestamp,
+            checksum,
             is_64bit,
             sections,
             data_directories,

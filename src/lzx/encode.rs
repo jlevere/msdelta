@@ -9,6 +9,7 @@ use super::format::{
 };
 use super::format::{LRU_BASE, SOURCE_COPY};
 use super::ops::{OFFSET_BIAS, RAW_OFFSET_BASE};
+use super::rift::{OffsetRiftTable, RiftEntry, RiftTable};
 
 fn write_rift(writer: &mut BitWriter, rift: Option<&super::rift::RiftTable>) {
     if let Some(r) = rift {
@@ -26,6 +27,21 @@ pub(super) fn compress_inner(
     rift: Option<&super::rift::RiftTable>,
 ) -> Result<Vec<u8>> {
     let ref_len = reference.len();
+
+    // Offset-rift table, built exactly as the decoder does (caller rift -- the
+    // PE section map carried in the preprocess -- plus the boundary entry
+    // {ref_len, 0}). This lets the encoder pick offsets that invert the decoder's
+    // rift-relative computation. For a None rift this reduces to just the
+    // boundary, so SOURCE_COPY <=> distance == ref_len, matching the old behavior.
+    let ort = {
+        let mut rt = rift.cloned().unwrap_or(RiftTable { entries: Vec::new() });
+        rt.entries.push(RiftEntry {
+            source: ref_len as i64,
+            target: 0,
+        });
+        rt.entries.sort_by_key(|e| e.source);
+        OffsetRiftTable::from_rift_table(&rt)
+    };
 
     // Two-pass: first find all symbols and collect frequencies, then
     // build optimal Huffman tables and encode.
@@ -75,15 +91,26 @@ pub(super) fn compress_inner(
     while i < target.len() {
         let combined_pos = ref_len + i;
 
+        // Rift offset at this output position -- inverse of the decoder's
+        // ort.offset_at(pos). A SOURCE_COPY decodes to distance == -rift_offset,
+        // so we may only emit SOURCE_COPY when the match distance equals that.
+        let rift_offset = ort.offset_at(combined_pos as i64);
+
         // Try to find a match
         let mut best_len = 0u32;
         let mut best_offset: u32 = 0;
+        let mut best_distance: i64 = 0;
 
         if i + 2 < target.len() {
             let h = hash3(&combined, combined_pos) & hash_mask;
             let mut chain_pos = hash_table[h];
             let mut chain_depth = 0;
 
+            // Allow matches to span whole sections. Genuine msdelta encodes
+            // identity runs as single multi-KB SOURCE_COPY copies that start at a
+            // low position (where offset_at == -ref_len) and run upward; the
+            // 263+ length is carried by encode_match's big-number escape.
+            const MAX_MATCH: u32 = 1 << 26;
             while chain_pos != u32::MAX && chain_depth < 128 {
                 let cp = chain_pos as usize;
                 let mut match_len = 0u32;
@@ -93,7 +120,7 @@ pub(super) fn compress_inner(
                         == combined[combined_pos + (match_len as usize)]
                 {
                     match_len += 1;
-                    if match_len >= 1024 {
+                    if match_len >= MAX_MATCH {
                         break;
                     }
                 }
@@ -101,9 +128,10 @@ pub(super) fn compress_inner(
                 if match_len >= 3 && match_len > best_len {
                     let distance = (combined_pos - cp) as i64;
                     best_len = match_len;
+                    best_distance = distance;
 
-                    // Encode offset
-                    if cp < ref_len && distance == ref_len as i64 {
+                    // Encode offset (inverse of the decoder's offset logic).
+                    if cp < ref_len && distance == -rift_offset {
                         best_offset = SOURCE_COPY;
                     } else if lru[0] == distance {
                         best_offset = LRU_BASE;
@@ -114,6 +142,12 @@ pub(super) fn compress_inner(
                     } else {
                         best_offset = distance as u32 + RAW_OFFSET_BASE;
                     }
+                }
+
+                // A long match is already excellent; stop scanning the chain to
+                // bound worst-case work on highly self-similar inputs.
+                if best_len >= 2048 {
+                    break;
                 }
 
                 chain_pos = hash_chain[cp];
@@ -131,14 +165,9 @@ pub(super) fn compress_inner(
                 length: best_len,
             });
 
-            // Update LRU
-            let distance = if best_offset == SOURCE_COPY {
-                ref_len as i64
-            } else if (LRU_BASE..LRU_BASE + 3).contains(&best_offset) {
-                lru[(best_offset - LRU_BASE) as usize]
-            } else {
-                (best_offset - RAW_OFFSET_BASE) as i64
-            };
+            // Update LRU with the actual match distance, mirroring the decoder
+            // (which updates LRU from its computed distance for every match type).
+            let distance = best_distance;
             if lru[0] != distance {
                 let old_1 = lru[1];
                 lru[1] = lru[0];
@@ -278,7 +307,7 @@ pub(super) fn compress_inner(
 
         // Encode
         let mut writer = BitWriter::new();
-        write_rift(&mut writer, rift);
+        write_rift(&mut writer, None); // rift travels in the preprocess, not the patch
         writer.write_bits(0, 1); // complex mode
 
         write_composite_format_multi(&mut writer, &seg_tables, &seg_boundaries)?;
@@ -299,28 +328,48 @@ pub(super) fn compress_inner(
         return Ok(writer.finish());
     }
 
-    // Single segment path (small files)
-    let tables = SegmentTables {
+    // Single segment path (small/medium files). msdelta.dll picks between
+    // "simple mode" (flat Huffman codes, no composite-format header) and
+    // "complex mode" (custom per-segment Huffman tables) by whichever encodes
+    // smaller: small inputs go simple, large inputs go complex. Match that.
+    // Genuine deltas use simple mode for small targets, and msdelta's decoder
+    // rejects our custom single-segment complex framing for those inputs
+    // (ERROR_INVALID_DATA), so emitting only complex is not an option.
+    let write_symbols = |writer: &mut BitWriter, tables: &SegmentTables| -> Result<()> {
+        for sym in &symbols {
+            if sym.length == 1 && sym.raw_offset < 256 {
+                tables.main.write_symbol(writer, sym.raw_offset as u16);
+            } else {
+                encode_match(tables, writer, sym.raw_offset, sym.length)?;
+            }
+        }
+        Ok(())
+    };
+
+    let complex_tables = SegmentTables {
         main: HuffmanTable::from_frequencies(&main_freq, 15)?,
         lengths: HuffmanTable::from_frequencies(&len_freq, 15)?,
         aligned: HuffmanTable::from_frequencies(&aligned_freq, 15)?,
     };
+    let mut complex = BitWriter::new();
+    write_rift(&mut complex, None); // rift travels in the preprocess, not the patch
+    complex.write_bits(0, 1); // complex mode
+    write_composite_format(&mut complex, &complex_tables, ref_len as u64)?;
+    write_symbols(&mut complex, &complex_tables)?;
+    let complex_out = complex.finish();
 
-    let mut writer = BitWriter::new();
-    writer.write_bits(0, 1); // empty rift
-    writer.write_bits(0, 1); // complex mode
+    let flat_tables = SegmentTables::from_flat()?;
+    let mut simple = BitWriter::new();
+    write_rift(&mut simple, None); // rift travels in the preprocess, not the patch
+    simple.write_bits(1, 1); // simple mode
+    write_symbols(&mut simple, &flat_tables)?;
+    let simple_out = simple.finish();
 
-    write_composite_format(&mut writer, &tables, ref_len as u64)?;
-
-    for sym in &symbols {
-        if sym.length == 1 && sym.raw_offset < 256 {
-            tables.main.write_symbol(&mut writer, sym.raw_offset as u16);
-        } else {
-            encode_match(&tables, &mut writer, sym.raw_offset, sym.length)?;
-        }
-    }
-
-    Ok(writer.finish())
+    Ok(if simple_out.len() <= complex_out.len() {
+        simple_out
+    } else {
+        complex_out
+    })
 }
 
 pub(super) fn write_composite_format(

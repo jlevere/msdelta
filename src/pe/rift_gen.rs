@@ -3,6 +3,36 @@
 use super::parse::PeInfo;
 use crate::lzx::rift::{RiftEntry, RiftTable};
 
+/// Build the PE rift table the way genuine msdelta.dll does: the *source*
+/// (reference) image's RVA -> file-offset map. One entry per section,
+/// `{source: VirtualAddress, target: PointerToRawData}`, preceded by a
+/// `{0, 0}` header entry.
+///
+/// Confirmed byte-exact against genuine `CreateDeltaB` output (Win Server 2025,
+/// build 26100): for cmd.exe the 9 entries are exactly headers + the 8 section
+/// `(VA -> RawPtr)` pairs (e.g. .pdata 0x61000 -> 0x45000). msdelta's apply
+/// uses this map to translate between the in-memory RVA view (where absolute
+/// pointers live) and the on-disk file layout the patch is computed over.
+pub fn pe_section_rift(reference: &[u8]) -> RiftTable {
+    let mut entries = vec![RiftEntry { source: 0, target: 0 }];
+
+    if let Ok(pe) = goblin::pe::PE::parse(reference) {
+        for s in &pe.sections {
+            if s.virtual_address == 0 || s.pointer_to_raw_data == 0 {
+                continue;
+            }
+            entries.push(RiftEntry {
+                source: s.virtual_address as i64,
+                target: s.pointer_to_raw_data as i64,
+            });
+        }
+    }
+
+    entries.sort_by_key(|e| e.source);
+    entries.dedup_by_key(|e| e.source);
+    RiftTable { entries }
+}
+
 /// Generate a rift table from section header alignment between two PEs.
 ///
 /// Matches sections by name and creates entries where the virtual address
@@ -212,6 +242,7 @@ mod tests {
             image_base: 0x140000000,
             size_of_image: 0x50000,
             timestamp: 0x12345678,
+            checksum: 0,
             is_64bit: true,
             sections: vec![super::super::parse::SectionInfo {
                 name: ".text".to_string(),
@@ -233,6 +264,7 @@ mod tests {
             image_base: 0x140000000,
             size_of_image: 0x50000,
             timestamp: 0x11111111,
+            checksum: 0,
             is_64bit: true,
             sections: vec![super::super::parse::SectionInfo {
                 name: ".text".to_string(),
@@ -248,6 +280,7 @@ mod tests {
             image_base: 0x140000000,
             size_of_image: 0x60000,
             timestamp: 0x22222222,
+            checksum: 0,
             is_64bit: true,
             sections: vec![super::super::parse::SectionInfo {
                 name: ".text".to_string(),

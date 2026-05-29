@@ -31,3 +31,14 @@ All from `C:\Windows\System32\` on the VM. MD5-verified.
   (fts=0xF). Pure fts=8 returns ERROR_INVALID_DATA (13) for cross-binary deltas
   but works for same-binary patches.
 - PE delta flags=0xe63e encodes the PE transform pipeline configuration.
+
+## Genuine PE delta oracles (`genuine/`)
+
+Real `CreateDeltaB` output captured from genuine `msdelta.dll` on Windows
+Server 2025 (build 26100), used to verify our PE encoder reproduces the genuine
+transform (rift, flags=0xe63e, preprocess). `FileTypeSet=0xF`, `HashAlgId=0`.
+
+| File | Bytes | Source -> Target |
+|------|-------|------------------|
+| `genuine/cmd_pe_genuine.pa30` | 139 | cmd.exe -> cmd_patched.exe |
+| `genuine/advapi32_pe_genuine.pa30` | 3,778 | advapi32_old.dll -> advapi32_new.dll |
