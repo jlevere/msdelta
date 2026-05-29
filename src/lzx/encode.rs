@@ -299,28 +299,48 @@ pub(super) fn compress_inner(
         return Ok(writer.finish());
     }
 
-    // Single segment path (small files)
-    let tables = SegmentTables {
+    // Single segment path (small/medium files). msdelta.dll picks between
+    // "simple mode" (flat Huffman codes, no composite-format header) and
+    // "complex mode" (custom per-segment Huffman tables) by whichever encodes
+    // smaller: small inputs go simple, large inputs go complex. Match that.
+    // Genuine deltas use simple mode for small targets, and msdelta's decoder
+    // rejects our custom single-segment complex framing for those inputs
+    // (ERROR_INVALID_DATA), so emitting only complex is not an option.
+    let write_symbols = |writer: &mut BitWriter, tables: &SegmentTables| -> Result<()> {
+        for sym in &symbols {
+            if sym.length == 1 && sym.raw_offset < 256 {
+                tables.main.write_symbol(writer, sym.raw_offset as u16);
+            } else {
+                encode_match(tables, writer, sym.raw_offset, sym.length)?;
+            }
+        }
+        Ok(())
+    };
+
+    let complex_tables = SegmentTables {
         main: HuffmanTable::from_frequencies(&main_freq, 15)?,
         lengths: HuffmanTable::from_frequencies(&len_freq, 15)?,
         aligned: HuffmanTable::from_frequencies(&aligned_freq, 15)?,
     };
+    let mut complex = BitWriter::new();
+    write_rift(&mut complex, rift);
+    complex.write_bits(0, 1); // complex mode
+    write_composite_format(&mut complex, &complex_tables, ref_len as u64)?;
+    write_symbols(&mut complex, &complex_tables)?;
+    let complex_out = complex.finish();
 
-    let mut writer = BitWriter::new();
-    writer.write_bits(0, 1); // empty rift
-    writer.write_bits(0, 1); // complex mode
+    let flat_tables = SegmentTables::from_flat()?;
+    let mut simple = BitWriter::new();
+    write_rift(&mut simple, rift);
+    simple.write_bits(1, 1); // simple mode
+    write_symbols(&mut simple, &flat_tables)?;
+    let simple_out = simple.finish();
 
-    write_composite_format(&mut writer, &tables, ref_len as u64)?;
-
-    for sym in &symbols {
-        if sym.length == 1 && sym.raw_offset < 256 {
-            tables.main.write_symbol(&mut writer, sym.raw_offset as u16);
-        } else {
-            encode_match(&tables, &mut writer, sym.raw_offset, sym.length)?;
-        }
-    }
-
-    Ok(writer.finish())
+    Ok(if simple_out.len() <= complex_out.len() {
+        simple_out
+    } else {
+        complex_out
+    })
 }
 
 pub(super) fn write_composite_format(

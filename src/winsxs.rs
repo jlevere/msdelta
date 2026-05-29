@@ -293,7 +293,7 @@ mod tests {
 
     #[test]
     fn extract_rejects_non_pe() {
-        assert!(matches!(extract_base(b"not a PE"), Err(_)));
+        assert!(extract_base(b"not a PE").is_err());
     }
 
     #[test]
