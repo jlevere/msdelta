@@ -115,6 +115,36 @@ pub fn transform_inferred_relocations_amd64(
     Ok(count)
 }
 
+/// File offset of the PE optional-header CheckSum field (4 bytes), if `data`
+/// is a PE. CheckSum sits at optional-header offset 0x40 for both PE32 and
+/// PE32+, and the optional header starts at e_lfanew + 4 (signature) + 20
+/// (COFF file header), so the absolute offset is e_lfanew + 0x58.
+pub(crate) fn pe_checksum_offset(data: &[u8]) -> Option<usize> {
+    if data.len() < 0x40 {
+        return None;
+    }
+    let e_lfanew = u32::from_le_bytes(data[0x3C..0x40].try_into().unwrap()) as usize;
+    if data.get(e_lfanew..e_lfanew + 4) != Some(b"PE\0\0") {
+        return None;
+    }
+    let off = e_lfanew + 0x58;
+    if off + 4 <= data.len() {
+        Some(off)
+    } else {
+        None
+    }
+}
+
+/// Zero the optional-header CheckSum in a reference buffer. msdelta normalizes
+/// (zeroes) this volatile field in the copy source before applying a PE delta;
+/// matching it here forces the target's real checksum to be carried as literals
+/// rather than a copy that would resolve to zero on genuine msdelta.
+pub(crate) fn zero_pe_checksum(data: &mut [u8]) {
+    if let Some(off) = pe_checksum_offset(data) {
+        data[off..off + 4].fill(0);
+    }
+}
+
 pub(crate) fn pe_timestamp(data: &[u8]) -> u32 {
     if data.len() < 0x40 {
         return 0;
@@ -217,26 +247,6 @@ pub(crate) fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
     }
 
     offsets
-}
-
-/// Normalize timestamps in a target PE to match the source PE.
-/// Returns the original target timestamp for storage in the preprocess buffer.
-pub(crate) fn normalize_timestamps(target: &mut [u8], source: &[u8]) -> u32 {
-    let source_ts = pe_timestamp(source);
-    let target_ts = pe_timestamp(target);
-    if source_ts == 0 || target_ts == 0 || source_ts == target_ts {
-        return target_ts;
-    }
-    let new_bytes = source_ts.to_le_bytes();
-    for off in pe_timestamp_offsets(target) {
-        if off + 4 <= target.len() {
-            let val = u32::from_le_bytes(target[off..off + 4].try_into().unwrap());
-            if val == target_ts {
-                target[off..off + 4].copy_from_slice(&new_bytes);
-            }
-        }
-    }
-    target_ts
 }
 
 #[cfg(test)]

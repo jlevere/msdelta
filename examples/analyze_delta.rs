@@ -28,7 +28,7 @@ fn main() {
                     h.version, h.target_file_time, h.file_type_set, h.file_type, h.flags,
                     h.target_size, h.hash_alg_id, h.target_hash.len()
                 );
-                println!("  preprocess: {} bytes", p.preprocess.len());
+                println!("  preprocess: {} bytes  full: {}", p.preprocess.len(), hex(&p.preprocess));
                 println!(
                     "  patch_data: {} bytes  head: {}",
                     p.patch_data.len(),

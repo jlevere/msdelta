@@ -52,12 +52,25 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
         (None, None)
     };
 
+    // For PE deltas, msdelta normalizes the copy source by zeroing the
+    // optional-header CheckSum before applying. Mirror that so copies resolve
+    // identically (the target's real checksum is carried as literals).
+    let pe_ref;
+    let decode_ref: &[u8] = if pp.is_some() {
+        let mut r = reference.to_vec();
+        crate::pe::transform::zero_pe_checksum(&mut r);
+        pe_ref = r;
+        &pe_ref
+    } else {
+        reference
+    };
+
     let mut output = if parsed.header.file_type_set & 0x100 != 0 {
         let decompressed = lzms::decompress_compression_api(&parsed.patch_data)?;
         crate::bsdiff::bspatch(reference, target_size, &decompressed)?
     } else {
         crate::lzx::decompress_with_rift(
-            reference,
+            decode_ref,
             &parsed.patch_data,
             target_size,
             caller_rift.as_ref(),
@@ -401,7 +414,7 @@ mod tests {
         assert!(delta.starts_with(b"PA30"));
 
         let header = parse_header(&delta).unwrap();
-        assert_eq!(header.file_type_set & 0x100, 0x100);
+        assert_eq!(header.flags & 0x100, 0x100);
 
         let recovered = apply(reference, &delta).unwrap();
         assert_eq!(recovered, target);
@@ -431,7 +444,7 @@ mod tests {
 
         let header = parse_header(&delta).unwrap();
         assert_eq!(header.hash_alg_id, HASH_ALG_SHA256 as i32);
-        assert_eq!(header.file_type_set & 0x100, 0x100);
+        assert_eq!(header.flags & 0x100, 0x100);
 
         let header2 = parse_header(&delta).unwrap();
         assert_eq!(header2.target_size, target.len() as i64);
@@ -473,7 +486,7 @@ mod tests {
             ],
         };
         let empty_rift = RiftTable { entries: vec![] };
-        let buf = preprocess::build_pe_preprocess(0x140000000, 0x12345678, &rift, &empty_rift);
+        let buf = preprocess::build_pe_preprocess(0x140000000, 0xCAFEBABE, 0x12345678, &rift, &empty_rift);
         let parsed = preprocess::parse_pe_preprocess(&buf).unwrap();
         assert_eq!(parsed.target_image_base, 0x140000000);
         assert_eq!(parsed.target_timestamp, 0x12345678);
