@@ -14,6 +14,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
 
 [dependencies.msdelta]
 path = ".."
@@ -21,6 +22,11 @@ default-features = false
 
 [dependencies.lzms]
 path = "../crates/lzms"
+
+# Structure-aware inputs shared by the round-trip targets.
+[lib]
+name = "msdelta_fuzz"
+path = "src/lib.rs"
 
 [[bin]]
 name = "fuzz_apply"
@@ -30,29 +36,15 @@ doc = false
 bench = false
 
 [[bin]]
-name = "fuzz_roundtrip_lzx"
-path = "fuzz_targets/fuzz_roundtrip_lzx.rs"
+name = "fuzz_pa30_header"
+path = "fuzz_targets/fuzz_pa30_header.rs"
 test = false
 doc = false
 bench = false
 
 [[bin]]
-name = "fuzz_roundtrip_bsdiff"
-path = "fuzz_targets/fuzz_roundtrip_bsdiff.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "fuzz_lzms"
-path = "fuzz_targets/fuzz_lzms.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "fuzz_rift_roundtrip"
-path = "fuzz_targets/fuzz_rift_roundtrip.rs"
+name = "fuzz_pa30_roundtrip"
+path = "fuzz_targets/fuzz_pa30_roundtrip.rs"
 test = false
 doc = false
 bench = false

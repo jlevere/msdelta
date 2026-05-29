@@ -60,14 +60,19 @@
           packages = [
             nightlyToolchain
             pkgs.cargo-fuzz
+            # fuzz/coverage.sh renders reports with llvm-cov / llvm-profdata,
+            # which ship in the nightly toolchain's llvm-tools component (see
+            # lib/rustlib/<triple>/bin), so no extra coverage package is needed.
             pkgs.hexyl
           ];
 
           shellHook = ''
             echo "msdelta — fuzzing shell (nightly + cargo-fuzz)"
             echo ""
+            echo "Seed:   ./fuzz/seed_corpus.sh            # real fixtures -> corpora"
             echo "List:   cargo fuzz list"
-            echo "Run:    cargo fuzz run fuzz_apply"
+            echo "Run:    cargo fuzz run fuzz_apply -- -dict=fuzz/pa30.dict   # decoders: add -dict"
+            echo "Cov:    ./fuzz/coverage.sh fuzz_apply    # what the corpus misses"
             echo "Repro:  cargo fuzz run fuzz_apply fuzz/artifacts/fuzz_apply/<crash>"
           '';
         };
