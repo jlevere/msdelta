@@ -218,6 +218,18 @@ pub fn parse(delta: &[u8]) -> Result<ParsedDelta> {
     }
 
     let header = parse_header(delta)?;
+
+    // Reverse deltas (file_type_set & 0x100 -> the ApplyReversalData path) carry a
+    // single reversal-data buffer in place of the forward preprocess+patch pair.
+    if header.file_type_set & 0x100 != 0 {
+        let reversal_data = outer_reader.read_buffer()?;
+        return Ok(ParsedDelta {
+            header,
+            preprocess: Vec::new(),
+            patch_data: reversal_data,
+        });
+    }
+
     let preprocess = outer_reader.read_buffer()?;
     let patch_data = outer_reader.read_buffer()?;
 

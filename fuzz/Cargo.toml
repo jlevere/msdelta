@@ -19,6 +19,7 @@ arbitrary = { version = "1", features = ["derive"] }
 [dependencies.msdelta]
 path = ".."
 default-features = false
+features = ["fuzzing"]
 
 [dependencies.lzms]
 path = "../crates/lzms"
@@ -45,6 +46,13 @@ bench = false
 [[bin]]
 name = "fuzz_pa30_roundtrip"
 path = "fuzz_targets/fuzz_pa30_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_xpress"
+path = "fuzz_targets/fuzz_xpress.rs"
 test = false
 doc = false
 bench = false

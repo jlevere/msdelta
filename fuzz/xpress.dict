@@ -1,0 +1,6 @@
+# libFuzzer dictionary for fuzz_xpress (XPRESS_HUFF Compression-API container).
+#   cargo fuzz run fuzz_xpress -- -dict=fuzz/xpress.dict
+# Compression API container magic 0xC0E5510A (little-endian) + 24-byte header.
+magic="\x0a\x51\xe5\xc0"
+hdr_size="\x18\x00"
+algo_xpress_huff="\x04"

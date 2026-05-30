@@ -5,6 +5,7 @@ use crate::{Error, Result};
 /// Hash algorithm IDs (matching Windows ALG_ID values).
 pub const HASH_ALG_NONE: u32 = 0;
 pub const HASH_ALG_MD5: u32 = 0x8003;
+pub const HASH_ALG_SHA1: u32 = 0x8004;
 pub const HASH_ALG_SHA256: u32 = 0x800C;
 
 /// Computed delta signature/hash.
@@ -23,6 +24,11 @@ pub fn get_signature(data: &[u8], hash_alg_id: u32) -> Result<DeltaHash> {
     let hash = match hash_alg_id {
         HASH_ALG_MD5 => {
             let mut hasher = md5::Md5::new();
+            hasher.update(data);
+            hasher.finalize().to_vec()
+        }
+        HASH_ALG_SHA1 => {
+            let mut hasher = sha1::Sha1::new();
             hasher.update(data);
             hasher.finalize().to_vec()
         }

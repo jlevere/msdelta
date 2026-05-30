@@ -6,6 +6,7 @@
 mod encode;
 pub(crate) mod header;
 pub(crate) mod preprocess;
+pub(crate) mod reverse;
 pub(crate) mod signature;
 
 pub use encode::{
@@ -37,6 +38,22 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
     const MAX_TARGET_SIZE: usize = 64 * 1024 * 1024;
     if target_size > MAX_TARGET_SIZE {
         return Err(Error::Malformed("target size exceeds 256 MB limit"));
+    }
+
+    // Reverse delta: reconstruct the source from the reference (which is the
+    // target the delta was diffed against). target_size is the source length.
+    if parsed.header.file_type_set & 0x100 != 0 {
+        let output = reverse::apply_reversal(reference, &parsed.patch_data, target_size)?;
+        if parsed.header.hash_alg_id != 0 && !parsed.header.target_hash.is_empty() {
+            let computed = get_signature(&output, parsed.header.hash_alg_id as u32)?;
+            if computed.hash != parsed.header.target_hash {
+                return Err(Error::HashMismatch {
+                    expected: hex_str(&parsed.header.target_hash),
+                    got: hex_str(&computed.hash),
+                });
+            }
+        }
+        return Ok(output);
     }
 
     let (caller_rift, pp) = if parsed.header.file_type != 1 && !parsed.preprocess.is_empty() {
