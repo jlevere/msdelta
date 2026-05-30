@@ -527,6 +527,47 @@ impl Generator<MsDeltaCase> for CreateModeSweepGen {
     }
 }
 
+/// Reverse-delta cases: representative raw inputs run through the genuine
+/// ApplyDeltaGetReverseB round-trip (and our reverse delta checked too). Raw
+/// only -- reverse of PE/hash variants is out of scope for now.
+pub struct ReverseGen;
+
+impl Generator<MsDeltaCase> for ReverseGen {
+    fn category(&self) -> &str {
+        "reverse"
+    }
+    fn generate(&self, seed: u64, _count: usize) -> Vec<MsDeltaCase> {
+        let mut rng = SplitMix64::new(derive_seed(seed, self.category()));
+        let dirs = vec![Direction::ReverseRoundTrip, Direction::OursToOurs];
+        let mut cases = Vec::new();
+
+        let rt = build_text(&mut rng, 80);
+        let tt = mutate_text(&mut rng, &rt);
+        cases.push(MsDeltaCase::raw("reverse.text", "reverse", rt, tt).with_directions(dirs.clone()));
+
+        let rr = build_runs(&mut rng, 8192);
+        let tr = structural_edits(&mut rng, &rr);
+        cases.push(MsDeltaCase::raw("reverse.runs", "reverse", rr, tr).with_directions(dirs.clone()));
+
+        if let Some(base) = read_fixture("base_manifest.bin") {
+            if let Some(dcm) = read_fixture(
+                "amd64_dual_netvg63a.inf_31bf3856ad364e35_10.0.26100.1_none_9162a10543917fc7.manifest",
+            ) {
+                if let Some(xml) = msdelta::dcm::strip(&dcm)
+                    .ok()
+                    .and_then(|p| msdelta::pa30::apply(&base, p).ok())
+                {
+                    cases.push(
+                        MsDeltaCase::raw("reverse.manifest", "reverse", base, xml)
+                            .with_directions(dirs),
+                    );
+                }
+            }
+        }
+        cases
+    }
+}
+
 /// Generate a full suite from one seed: `per_category` cases from each
 /// procedural generator, plus all fixture-backed, corpus, and mode-sweep cases.
 pub fn default_suite(seed: u64, per_category: usize) -> Vec<MsDeltaCase> {
@@ -538,5 +579,6 @@ pub fn default_suite(seed: u64, per_category: usize) -> Vec<MsDeltaCase> {
     cases.extend(PePairGen.generate(seed, per_category));
     cases.extend(CorpusReplayGen.generate(seed, per_category));
     cases.extend(CreateModeSweepGen.generate(seed, per_category));
+    cases.extend(ReverseGen.generate(seed, per_category));
     cases
 }

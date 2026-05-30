@@ -28,6 +28,10 @@ pub struct DllCaseReport {
     pub native_decode: Verdict,
     /// Genuine create->apply round-trip (control).
     pub native_to_native: Verdict,
+    /// Genuine ApplyDeltaGetReverseB round-trip (forward+reverse) of our delta.
+    pub reverse_round_trip: Verdict,
+    /// Our decoder applied the genuine reverse gold == source (decode interop).
+    pub reverse_decode: Verdict,
 }
 
 /// One case across all DLLs.
@@ -82,7 +86,9 @@ pub fn build_report(dir: &Path) -> io::Result<Report> {
     struct CaseMeta {
         category: String,
         reference: String,
+        target: String,
         target_sha256: String,
+        reference_sha256: String,
     }
     let meta: BTreeMap<String, CaseMeta> = job
         .cases
@@ -93,7 +99,9 @@ pub fn build_report(dir: &Path) -> io::Result<Report> {
                 CaseMeta {
                     category: c.category.clone(),
                     reference: c.reference.clone(),
+                    target: c.target.clone(),
                     target_sha256: c.target_sha256.clone(),
+                    reference_sha256: c.reference_sha256.clone(),
                 },
             )
         })
@@ -140,10 +148,22 @@ pub fn build_report(dir: &Path) -> io::Result<Report> {
                 _ => Verdict::Skipped,
             };
 
+            let reverse = Verdict::classify(rc.reverse_round_trip.as_ref());
+            // Local decode of the genuine reverse gold: our apply(target, reverse)
+            // must reconstruct the source (reference).
+            let reverse_decode = match rc.reverse_round_trip.as_ref() {
+                Some(v) if v.status == "PASS" && !v.gold.is_empty() => {
+                    decode_gold(dir, &m.target, &v.gold, &m.reference_sha256)
+                }
+                _ => Verdict::Skipped,
+            };
+
             tally(format!("{}/ours_to_native", dr.dll), &ours, &mut summary);
             tally(format!("{}/native_create", dr.dll), &create, &mut summary);
             tally(format!("{}/native_decode", dr.dll), &decode, &mut summary);
             tally(format!("{}/native_to_native", dr.dll), &control, &mut summary);
+            tally(format!("{}/reverse_round_trip", dr.dll), &reverse, &mut summary);
+            tally(format!("{}/reverse_decode", dr.dll), &reverse_decode, &mut summary);
 
             cases
                 .entry(rc.id.clone())
@@ -160,6 +180,8 @@ pub fn build_report(dir: &Path) -> io::Result<Report> {
                         native_create: create,
                         native_decode: decode,
                         native_to_native: control,
+                        reverse_round_trip: reverse,
+                        reverse_decode,
                     },
                 );
         }
@@ -175,6 +197,8 @@ pub fn build_report(dir: &Path) -> io::Result<Report> {
             rows.push(("native_create", dll, &c.category, &c.id, &r.native_create));
             rows.push(("native_decode", dll, &c.category, &c.id, &r.native_decode));
             rows.push(("native_to_native", dll, &c.category, &c.id, &r.native_to_native));
+            rows.push(("reverse_round_trip", dll, &c.category, &c.id, &r.reverse_round_trip));
+            rows.push(("reverse_decode", dll, &c.category, &c.id, &r.reverse_decode));
         }
     }
     let buckets = bucketize(rows.into_iter());

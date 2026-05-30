@@ -47,6 +47,10 @@ public static class OracleRef {
         DELTA_INPUT Source, DELTA_INPUT Target, DELTA_INPUT SourceOptions, DELTA_INPUT TargetOptions,
         DELTA_INPUT GlobalOptions, IntPtr TargetFileTime, uint HashAlgId, out DELTA_OUTPUT Delta);
 
+    [DllImport("$Dll", SetLastError=true)]
+    public static extern bool ApplyDeltaGetReverseB(long ApplyFlags, DELTA_INPUT Source, DELTA_INPUT Delta,
+        IntPtr TargetFileTime, out DELTA_OUTPUT Target, out DELTA_OUTPUT TargetReverse);
+
     [DllImport("$Dll")]
     public static extern bool DeltaFree(IntPtr lpMemory);
 
@@ -86,6 +90,25 @@ public static class OracleRef {
             DeltaFree(o.lpStart);
             return r;
         } finally { hR.Free(); hT.Free(); }
+    }
+
+    // Apply a forward delta and get the reverse delta in one call. Returns
+    // { target, reverse } (throws on failure). TargetFileTime null -> current.
+    public static byte[][] ApplyGetReverse(byte[] source, byte[] delta) {
+        GCHandle hS = GCHandle.Alloc(source, GCHandleType.Pinned);
+        GCHandle hD = GCHandle.Alloc(delta, GCHandleType.Pinned);
+        try {
+            DELTA_OUTPUT ot, orv;
+            if (!ApplyDeltaGetReverseB(0, In(hS.AddrOfPinnedObject(), source.Length),
+                    In(hD.AddrOfPinnedObject(), delta.Length), IntPtr.Zero, out ot, out orv))
+                throw new Exception("ApplyDeltaGetReverseB GetLastError=" + Marshal.GetLastWin32Error());
+            long nt = ot.uSize.ToInt64(); byte[] t = new byte[nt];
+            if (nt > 0 && ot.lpStart != IntPtr.Zero) Marshal.Copy(ot.lpStart, t, 0, (int)nt);
+            long nr = orv.uSize.ToInt64(); byte[] rv = new byte[nr];
+            if (nr > 0 && orv.lpStart != IntPtr.Zero) Marshal.Copy(orv.lpStart, rv, 0, (int)nr);
+            DeltaFree(ot.lpStart); DeltaFree(orv.lpStart);
+            return new byte[][] { t, rv };
+        } finally { hS.Free(); hD.Free(); }
     }
 }
 "@
@@ -150,6 +173,33 @@ foreach ($case in $job.cases) {
             $row.native_to_native = [ordered]@{ status = $status; got_sha = $gotSha; got_len = $produced.Length; message = "" }
         } catch {
             $row.native_to_native = [ordered]@{ status = "ERROR"; got_sha = ""; got_len = 0; message = $_.Exception.Message }
+        }
+    }
+
+    if ($dirs -contains "reverse_round_trip") {
+        try {
+            $delta = Read-Bytes (Join-Path $Dir $case.ours_delta)
+            # Genuine reverse-API applied to OUR forward delta.
+            $res = [OracleRef]::ApplyGetReverse($reference, $delta)
+            $tgt = $res[0]; $rev = $res[1]
+            $fwdOk = (Sha256Hex $tgt) -eq $case.target_sha256
+            # Persist the genuine reverse delta as a gold for our decoder.
+            $revName = "$($case.id).$dllTag.reverse.gold"
+            [System.IO.File]::WriteAllBytes((Join-Path $Dir $revName), $rev)
+            # Genuine reverse delta must reconstruct the source.
+            $src2 = [OracleRef]::Apply($tgt, $rev)
+            $genRevOk = (Sha256Hex $src2) -eq $case.reference_sha256
+            # Our reverse delta (if provided) must also be accepted by genuine apply.
+            $oursRevOk = $true
+            if ($case.reverse_delta) {
+                $ourRev = Read-Bytes (Join-Path $Dir $case.reverse_delta)
+                $src3 = [OracleRef]::Apply($tgt, $ourRev)
+                $oursRevOk = (Sha256Hex $src3) -eq $case.reference_sha256
+            }
+            $status = if ($fwdOk -and $genRevOk -and $oursRevOk) { "PASS" } else { "FAIL" }
+            $row.reverse_round_trip = [ordered]@{ status = $status; got_sha = (Sha256Hex $tgt); got_len = $tgt.Length; gold = $revName; message = ("fwd={0} genRev={1} oursRev={2}" -f $fwdOk, $genRevOk, $oursRevOk) }
+        } catch {
+            $row.reverse_round_trip = [ordered]@{ status = "ERROR"; got_sha = ""; got_len = 0; gold = ""; message = $_.Exception.Message }
         }
     }
 

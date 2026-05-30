@@ -39,6 +39,12 @@ pub enum Direction {
     NativeToNative,
     /// We produce and consume. A purely local self round-trip; needs no lab.
     OursToOurs,
+    /// Reverse-delta round trip via the native `ApplyDeltaGetReverseB`: apply a
+    /// forward delta to get the target AND a reverse delta, then check the
+    /// reverse reconstructs the source. Exercises the forward/reverse
+    /// differential servicing API. The native side also emits the genuine
+    /// reverse delta as a gold for our decoder to read.
+    ReverseRoundTrip,
 }
 
 impl Direction {

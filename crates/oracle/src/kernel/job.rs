@@ -56,6 +56,14 @@ pub struct JobCase<P> {
     pub target_sha256: String,
     /// Length of the expected target in bytes.
     pub target_len: u64,
+    /// Hex SHA-256 of the reference (source). Lets the executor verify a reverse
+    /// delta reconstructs the source.
+    #[serde(default)]
+    pub reference_sha256: String,
+    /// Our reverse-delta filename (target -> reference), produced when the case
+    /// runs the `reverse_round_trip` direction. None otherwise.
+    #[serde(default)]
+    pub reverse_delta: Option<String>,
     /// Domain-specific native-side parameters (opaque to the kernel).
     pub native: P,
     /// Which interop-matrix cells to run for this case.

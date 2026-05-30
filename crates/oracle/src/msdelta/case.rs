@@ -135,6 +135,20 @@ impl MsDeltaCase {
             })?;
         fs::write(dir.join(&delta_name), &delta)?;
 
+        // For reverse-delta cases, also produce our reverse delta (target ->
+        // reference) so the executor can check the genuine DLL accepts it.
+        let reverse_delta = if self.directions.contains(&Direction::ReverseRoundTrip) {
+            let (_target, rev) = msdelta::pa30::apply_get_reverse(&self.reference, &delta)
+                .map_err(|e| {
+                    io::Error::other(format!("our apply_get_reverse failed on {}: {e}", self.id))
+                })?;
+            let name = format!("{}.ours.reverse.delta", self.id);
+            fs::write(dir.join(&name), &rev)?;
+            Some(name)
+        } else {
+            None
+        };
+
         Ok(JobCase {
             id: self.id.clone(),
             category: self.category.clone(),
@@ -143,6 +157,8 @@ impl MsDeltaCase {
             ours_delta: delta_name,
             target_sha256: sha256_hex(&self.target),
             target_len: self.target.len() as u64,
+            reference_sha256: sha256_hex(&self.reference),
+            reverse_delta,
             native: self.native.clone(),
             directions: self.directions.clone(),
         })

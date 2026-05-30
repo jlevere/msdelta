@@ -37,6 +37,7 @@ pub struct RawCase {
     pub ours_to_native: Option<RawVerdict>,
     pub native_to_ours: Option<RawVerdict>,
     pub native_to_native: Option<RawVerdict>,
+    pub reverse_round_trip: Option<RawVerdict>,
 }
 
 /// A full `result.<dll>.json`.
