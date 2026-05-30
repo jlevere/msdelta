@@ -33,6 +33,16 @@ copy fuzz_pa30_header "$fixtures"/deltas/*.pa30 "$fixtures"/fuzz_crash_*.pa30
 # LZMS WIM decode: genuine Microsoft solid WIM resources.
 copy fuzz_lzms_wim "$lzms_fx"/*.resource
 
+# Reverse-delta + XPRESS_HUFF decoders. Genuine reverse diffs are kept out of the
+# repo (gitignored under notes/genuine-samples; MS-redistribution); seed from
+# there when present so fuzz_apply reaches the reverse/PRSM/XPRESS path and
+# fuzz_xpress starts from a real container. No-ops on a fresh clone.
+gen="$root/notes/genuine-samples"
+if [ -d "$gen" ]; then
+  copy fuzz_apply "$gen"/corpus/*/reverse.pa31 "$gen"/sweep/*/reverse.pa31
+  copy fuzz_xpress "$gen"/xpress/blob.bin
+fi
+
 echo "Seeded:"
 for d in "$here"/corpus/*/; do
   [ -d "$d" ] || continue
