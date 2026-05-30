@@ -441,8 +441,94 @@ impl Generator<MsDeltaCase> for CorpusReplayGen {
     }
 }
 
+/// Decode-completeness sweep: a few representative inputs run through the FULL
+/// genuine `CreateDeltaB` mode matrix, so our decoder is tested against every
+/// format variant the genuine encoder can emit. Directions emphasize
+/// native_to_ours (genuine create -> our decode) plus the control.
+///
+/// Mode space (grounded in msdelta.dll): file_type_set {raw, executables} x
+/// hash {none, md5, sha256} x set_flags {0, 0x100 "bsdiff"}. Unsupported combos
+/// (e.g. sha256 on msdelta.dll) simply ERROR on create -> decode skipped; they
+/// succeed on UpdateCompression, so the sweep covers what each DLL emits.
+pub struct CreateModeSweepGen;
+
+impl Generator<MsDeltaCase> for CreateModeSweepGen {
+    fn category(&self) -> &str {
+        "create_mode_sweep"
+    }
+    fn generate(&self, seed: u64, _count: usize) -> Vec<MsDeltaCase> {
+        let mut rng = SplitMix64::new(derive_seed(seed, self.category()));
+        // Representative inputs: structured text, a real manifest pair (if
+        // present), and a buffer with runs. Kept modest so the unused ours
+        // encode during lowering stays cheap.
+        let mut inputs: Vec<(String, Vec<u8>, Vec<u8>)> = Vec::new();
+        {
+            let r = build_text(&mut rng, 60);
+            let t = mutate_text(&mut rng, &r);
+            inputs.push(("text".into(), r, t));
+        }
+        {
+            let r = build_runs(&mut rng, 4096);
+            let t = structural_edits(&mut rng, &r);
+            inputs.push(("runs".into(), r, t));
+        }
+        if let Some(base) = read_fixture("base_manifest.bin") {
+            // The smallest real manifest, decoded, as a realistic raw target.
+            if let Some(dcm) = read_fixture(
+                "amd64_microsoft-windows-font-truetype-gadugi_31bf3856ad364e35_10.0.26100.1_none_e1326a4c8dcc8ee1.manifest",
+            ) {
+                if let Some(xml) = msdelta::dcm::strip(&dcm)
+                    .ok()
+                    .and_then(|p| msdelta::pa30::apply(&base, p).ok())
+                {
+                    inputs.push(("manifest".into(), base, xml));
+                }
+            }
+        }
+
+        // (label, ours options, genuine CreateDeltaB spec)
+        let modes: Vec<(&str, CreateOptions, CreateSpec)> = vec![
+            ("raw_lzx", CreateOptions::new(), CreateSpec::raw()),
+            (
+                "raw_bsdiff",
+                CreateOptions::new().codec(Codec::BsDiff),
+                CreateSpec::raw().with_set_flags(0x100),
+            ),
+            (
+                "raw_md5",
+                CreateOptions::new().hash_algorithm(HASH_ALG_MD5),
+                CreateSpec::raw().with_hash(HASH_ALG_MD5),
+            ),
+            (
+                "raw_sha256",
+                CreateOptions::new().hash_algorithm(HASH_ALG_SHA256),
+                CreateSpec::raw().with_hash(HASH_ALG_SHA256),
+            ),
+        ];
+
+        let decode_dirs = vec![Direction::NativeToOurs, Direction::NativeToNative];
+        let mut cases = Vec::new();
+        for (iname, reference, target) in &inputs {
+            for (mname, ours, native) in &modes {
+                cases.push(
+                    MsDeltaCase::new(
+                        format!("create_mode_sweep.{iname}.{mname}"),
+                        self.category(),
+                        reference.clone(),
+                        target.clone(),
+                        ours.clone(),
+                        native.clone(),
+                    )
+                    .with_directions(decode_dirs.clone()),
+                );
+            }
+        }
+        cases
+    }
+}
+
 /// Generate a full suite from one seed: `per_category` cases from each
-/// procedural generator, plus all fixture-backed and corpus cases.
+/// procedural generator, plus all fixture-backed, corpus, and mode-sweep cases.
 pub fn default_suite(seed: u64, per_category: usize) -> Vec<MsDeltaCase> {
     let mut cases = Vec::new();
     cases.extend(RandomGen.generate(seed, per_category));
@@ -451,5 +537,6 @@ pub fn default_suite(seed: u64, per_category: usize) -> Vec<MsDeltaCase> {
     cases.extend(ManifestPairGen.generate(seed, per_category));
     cases.extend(PePairGen.generate(seed, per_category));
     cases.extend(CorpusReplayGen.generate(seed, per_category));
+    cases.extend(CreateModeSweepGen.generate(seed, per_category));
     cases
 }
