@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/lzms"]
+members = ["crates/lzms", "crates/oracle"]
 resolver = "2"
 
 [package]

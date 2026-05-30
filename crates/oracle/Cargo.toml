@@ -1,0 +1,17 @@
+[package]
+name = "oracle"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+# Internal differential-testing harness; never published to crates.io.
+publish = false
+
+[dependencies]
+# Lean: we only need the pa30 encode/decode API, not the CLI or winsxs feature.
+msdelta = { path = "../..", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+
+[dev-dependencies]
+tempfile = "3"
