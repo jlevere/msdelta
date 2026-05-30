@@ -186,13 +186,31 @@ impl OffsetRiftTable {
 /// - 126..251: negative values (symbol - 126 gives magnitude)
 ///
 /// Values > 3 have extra bits read via the base/half scheme.
-struct IntFormat {
+pub(crate) struct IntFormat {
     table: HuffmanTable,
     num_pos: usize,
     num_neg: usize,
 }
 
 impl IntFormat {
+    /// The default (un-serialized) IntFormat from `IntFormat::Init`
+    /// (`Codes::Init(0xfc, 0x10, false)` -> `ResetLengths`): for 252 symbols the
+    /// first 4 get code length 7, the remaining 248 get length 8 (a Kraft-complete
+    /// canonical code, 4/128 + 248/256 = 1). Used for the per-entry length vector in
+    /// reverse-patch type-0 sections, where no Huffman header is serialized.
+    pub(crate) fn init_default() -> Result<Self> {
+        let mut lengths = vec![8u8; INT_FORMAT_SYMBOLS];
+        for l in &mut lengths[..4] {
+            *l = 7;
+        }
+        let table = HuffmanTable::from_lengths(&lengths)?;
+        Ok(IntFormat {
+            table,
+            num_pos: 0,
+            num_neg: 0,
+        })
+    }
+
     /// Parse from bitstream. Decompiled from IntFormat::FromBitReader (1800470f0).
     ///
     /// Format: 3 mode bytes + explicit code lengths + default length.
@@ -269,7 +287,7 @@ impl IntFormat {
         })
     }
 
-    fn read_number(&self, reader: &mut BitReader) -> Result<i64> {
+    pub(crate) fn read_number(&self, reader: &mut BitReader) -> Result<i64> {
         let sym = self.table.read_symbol(reader)? as u32;
 
         let (magnitude_idx, is_negative) = if sym < INT_FORMAT_HALF as u32 {

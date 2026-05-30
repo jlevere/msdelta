@@ -26,6 +26,8 @@ cli = ["winsxs", "dep:clap", "dep:clap_complete", "dep:anyhow", "dep:dirs"]
 # Windows APIs). Pulls in `memchr` for the multi-MB DLL scans; otherwise just
 # the always-present `goblin` PE parser. Off for the leanest library builds.
 winsxs = ["dep:memchr"]
+# Exposes internal decoders for the fuzz harnesses (see src/lib.rs::fuzzing).
+fuzzing = []
 
 [dependencies]
 thiserror = "2"
@@ -40,6 +42,7 @@ clap_complete = { version = "4", optional = true }
 anyhow = { version = "1", optional = true }
 dirs = { version = "6", optional = true }
 memchr = { version = "2", optional = true }
+sha1 = "0.11"
 
 [[bin]]
 name = "msdelta"
