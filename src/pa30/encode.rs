@@ -138,6 +138,9 @@ impl CreateOptions {
                 match self.codec {
                     Codec::PseudoLzx => {
                         let data = crate::lzx::compress(reference, target)?;
+                        // flags=0x20000 matches genuine WinSxS DCM manifests. (Tested:
+                        // flags is NOT the complex-mode reject cause -- both 0 and
+                        // 0x20000 are accepted by apply; the reject is in the patch body.)
                         (data, 1i64, 1i64, 0x20000i64, vec![])
                     }
                     Codec::BsDiff => {

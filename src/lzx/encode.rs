@@ -417,11 +417,18 @@ fn encode_compression_lengths(lengths: &[u8], prev: &[u8]) -> Vec<(u16, Option<(
     let mut syms = Vec::new();
     let mut i = 0;
 
+    // msdelta's CompressionLengths::Read (decompiled, 0x41601 check) throws if a
+    // run reaches `i + run > 0x367` (871) -- i.e. a run may NOT cover the final
+    // length entry (index 871). Our own decoder is lenient (allows i+run <=
+    // TOTAL_LENGTHS), but to be accepted by genuine msdelta the encoder must cap
+    // runs at i + run <= lengths.len() - 1, leaving the last entry to an
+    // individual code.
+    let run_end_cap = lengths.len() - 1;
     while i < lengths.len() {
         // Try run-length: repeat of previous value from prev[]
         if i + 3 < lengths.len() {
             let mut run = 0;
-            while i + run < lengths.len() && lengths[i + run] == prev[i + run] && run < 127 {
+            while i + run < run_end_cap && lengths[i + run] == prev[i + run] && run < 127 {
                 run += 1;
             }
             if run >= 4 {
@@ -436,7 +443,7 @@ fn encode_compression_lengths(lengths: &[u8], prev: &[u8]) -> Vec<(u16, Option<(
         if i > 0 {
             let fill = lengths[i - 1];
             let mut run = 0;
-            while i + run < lengths.len() && lengths[i + run] == fill && run < 127 {
+            while i + run < run_end_cap && lengths[i + run] == fill && run < 127 {
                 run += 1;
             }
             if run >= 4 {
@@ -805,4 +812,50 @@ pub(super) fn encode_match(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod compression_length_tests {
+    use super::{encode_compression_lengths, TOTAL_LENGTHS};
+
+    /// msdelta's CompressionLengths::Read throws (0x41601) if a run-length code
+    /// reaches i + run > TOTAL_LENGTHS - 1 (it may not cover the final index).
+    /// Regression: a trailing all-equal region must not be RLE'd to the end.
+    #[test]
+    fn runs_never_cover_final_length_index() {
+        // Worst case: the last 200 entries identical (e.g. a flat aligned tree
+        // plus trailing zeros) -- the natural greedy run would reach the end.
+        let mut lengths = vec![0u8; TOTAL_LENGTHS];
+        for l in lengths.iter_mut().skip(TOTAL_LENGTHS - 200) {
+            *l = 4;
+        }
+        let prev = vec![0u8; TOTAL_LENGTHS];
+        let syms = encode_compression_lengths(&lengths, &prev);
+
+        // Replay the symbol stream, mirroring the decoder's run-count decode,
+        // and assert every run satisfies the msdelta bound.
+        let mut pos = 0usize;
+        for (sym, extra) in &syms {
+            if *sym >= 23 {
+                let run_sym = (*sym as u32) - 23;
+                let slot = run_sym & 7;
+                let count = if slot < 3 {
+                    (slot + 1) as usize
+                } else {
+                    let eb = slot - 1;
+                    let ev = extra.map(|(v, _)| v).unwrap_or(0);
+                    ((1u32 << eb) | ev) as usize
+                };
+                assert!(
+                    pos + count < TOTAL_LENGTHS,
+                    "run at {pos} count {count} reaches {} (>= {TOTAL_LENGTHS})",
+                    pos + count
+                );
+                pos += count;
+            } else {
+                pos += 1;
+            }
+        }
+        assert_eq!(pos, TOTAL_LENGTHS, "stream must cover all lengths");
+    }
 }

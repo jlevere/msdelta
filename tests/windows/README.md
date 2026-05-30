@@ -1,60 +1,29 @@
-# Windows cross-check harnesses
+# Windows cross-check
 
-These PowerShell scripts validate this crate's encoder/decoder against the
-genuine `msdelta.dll` on a Windows host (any build with
-`C:\Windows\System32\msdelta.dll`). They P/Invoke `ApplyDeltaB` /
-`CreateDeltaB` / `DeltaFree` directly — no crate code runs on Windows.
+The hand-run, single-purpose PowerShell harnesses that used to live here
+(`apply_harness.ps1`, `gen_golden.ps1`, `create_probe.ps1`) have been
+superseded by the **differential oracle** in [`crates/oracle`](../../crates/oracle).
 
-The in-crate `cargo nextest` suite only proves the encoder and decoder agree
-with each other. These harnesses are the only ground truth for whether genuine
-`msdelta.dll` accepts the deltas this crate produces.
+The oracle generates diverse test cases, runs them through both this crate and
+the genuine reference DLLs (`msdelta.dll` / `UpdateCompression.dll`) in both
+directions, and scores the results. See `crates/oracle/lab/oracle_harness.ps1`
+(the universal P/Invoke executor) and `crates/oracle/lab/run.sh` (the lab
+orchestrator).
 
-## Workflow
+Typical use, from the repo root:
 
-1. On the dev host, generate a test corpus with the Rust example:
+```sh
+cargo build --release -p oracle
+./target/release/oracle gen --seed 0x5EED --count 4 --out /tmp/job
+bash crates/oracle/lab/run.sh /tmp/job          # runs against both DLLs
+./target/release/oracle report --job /tmp/job   # scored summary + failure buckets
+```
 
-   ```sh
-   cargo run --release --example gen_roundtrip_corpus -- ./rtcorpus
-   ```
+To shrink a failing case to a small repro:
 
-   This writes, per case, `<name>.ref`, `<name>.target`, `<name>.delta` (our
-   encoder) and a `manifest.tsv` of `name <tab> sha256(target) <tab>
-   target_len <tab> delta_len`.
+```sh
+./target/release/oracle minimize --job /tmp/job --id <case-id> --dll msdelta.dll
+```
 
-2. Copy the `rtcorpus` directory and these scripts to a Windows host (any
-   transport: SMB, scp, shared folder).
-
-3. Run a harness in PowerShell:
-
-   ```powershell
-   # Apply our deltas with genuine msdelta.dll and compare hashes:
-   powershell -ExecutionPolicy Bypass -File apply_harness.ps1 .\rtcorpus
-
-   # Produce genuine msdelta deltas (.gold) for the same inputs, to diff
-   # against ours (RAW=FileTypeSet 1; PE=0xF; MD5 hash=0x8003):
-   powershell -ExecutionPolicy Bypass -File gen_golden.ps1 .\rtcorpus
-
-   # Control: confirm genuine CreateDeltaB -> ApplyDeltaB round-trips (sanity
-   # check that the P/Invoke marshalling is correct):
-   powershell -ExecutionPolicy Bypass -File create_probe.ps1 .\rtcorpus
-   ```
-
-## Scripts
-
-- `apply_harness.ps1` — applies each `<name>.delta` to `<name>.ref` via
-  `ApplyDeltaB`, prints `name <tab> PASS|FAIL|ERROR <tab> got-sha <tab>
-  exp-sha <tab> got-len <tab> exp-len`.
-- `gen_golden.ps1` — calls `CreateDeltaB` for each case to emit a genuine
-  `<name>.gold` delta. Use `examples/analyze_delta.rs` back on the dev host to
-  diff genuine vs. ours.
-- `create_probe.ps1` — `CreateDeltaB` then `ApplyDeltaB` on the same pair;
-  confirms the harness itself is correct and dumps the genuine delta header.
-
-## Notes
-
-- `DELTA_INPUT`/`DELTA_OUTPUT` are passed by value; byte arrays are pinned with
-  `GCHandle`; output is freed with `DeltaFree`. `ApplyFlags` is 0.
-- `ApplyDeltaB` returns a null output pointer for a zero-length target; the
-  harness handles that.
-- This `msdelta.dll` does not implement PA31 or SHA-256 hashing via
-  `CreateDeltaB`/`ApplyDeltaB` (those live in `UpdateCompression.dll`).
+Lab coordinates are read from the environment (see the top of `run.sh`);
+authentication is key-based.

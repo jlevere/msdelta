@@ -65,7 +65,14 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
         reference
     };
 
-    let mut output = if parsed.header.file_type_set & 0x100 != 0 {
+    // Discriminate the patch codec by its actual leading bytes, not by
+    // file_type_set: genuine reverse deltas (ApplyDeltaGetReverseB) carry
+    // file_type_set 0x101 but are plain LZX, which collides with our old
+    // LZMS-wrapped bsdiff container (also 0x101). Only a real LZMS compression-
+    // API container starts with its magic; everything else is PseudoLzx.
+    const LZMS_API_MAGIC: [u8; 4] = 0xC0E5_510Au32.to_le_bytes();
+    let is_lzms_bsdiff = parsed.patch_data.len() >= 4 && parsed.patch_data[..4] == LZMS_API_MAGIC;
+    let mut output = if is_lzms_bsdiff {
         let decompressed = lzms::decompress_compression_api(&parsed.patch_data)?;
         crate::bsdiff::bspatch(reference, target_size, &decompressed)?
     } else {
