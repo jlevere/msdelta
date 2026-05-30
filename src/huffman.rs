@@ -191,8 +191,15 @@ impl HuffmanTable {
             return Self::from_lengths(&vec![0u8; n]);
         }
         if active.len() == 1 {
+            // A lone length-1 code is INCOMPLETE (Kraft sum = 2^(max-1)); msdelta
+            // rejects incomplete trees. Add a phantom length-1 leaf on another
+            // symbol so the canonical code is complete. The phantom never
+            // appears in the symbol stream (its frequency is 0).
             let mut lengths = vec![0u8; n];
             lengths[active[0]] = 1;
+            if let Some(phantom) = (0..n).find(|&i| i != active[0]) {
+                lengths[phantom] = 1;
+            }
             return Self::from_lengths(&lengths);
         }
 
@@ -215,11 +222,11 @@ impl HuffmanTable {
             heap.push(std::cmp::Reverse((f1 + f2, idx)));
         }
 
-        // Compute depths (u32 to avoid overflow for deep trees)
+        // Raw (uncapped) depth per tree node. Active symbols are the first
+        // `active.len()` nodes, so node_depth[i] is active[i]'s depth.
         let mut node_depth = vec![0u32; nodes.len()];
         let root = heap.pop().unwrap().0 .1;
         let mut stack = vec![(root, 0u32)];
-        let mut depths = vec![0u8; n];
         while let Some((node, depth)) = stack.pop() {
             node_depth[node] = depth;
             let (_, left, right) = nodes[node];
@@ -228,45 +235,75 @@ impl HuffmanTable {
                 stack.push((r, depth + 1));
             }
         }
-        for (i, &sym) in active.iter().enumerate() {
-            depths[sym] = node_depth[i].min(max_len as u32) as u8;
+
+        // Length-limit to `max_len` while keeping the code COMPLETE. A naive
+        // per-symbol `min(depth, max_len)` cap leaves an over- or
+        // under-subscribed tree, which our decoder tolerates but msdelta rejects
+        // with ERROR_INVALID_DATA. We work on the count-per-length (`bl_count`)
+        // and repair the Kraft sum to exactly 2^max_len by moving leaves between
+        // adjacent lengths (each move preserves the total leaf count, so the
+        // assignment below still consumes exactly active.len() symbols).
+        let ml = max_len as usize;
+        let mut bl_count = vec![0u32; ml + 1];
+        for i in 0..active.len() {
+            bl_count[node_depth[i].min(max_len as u32) as usize] += 1;
         }
 
-        // Cap and fix Kraft inequality
-        loop {
-            let kraft: u64 = depths
-                .iter()
-                .filter(|&&d| d > 0)
-                .map(|&d| 1u64 << (max_len - d))
-                .sum();
-            if kraft <= 1u64 << max_len {
+        let target = 1i64 << ml;
+        let scaled = |bl: &[u32]| -> i64 { (1..=ml).map(|l| (bl[l] as i64) << (ml - l)).sum() };
+
+        // Over-subscribed (Kraft > target): lengthen a code (move leaf L -> L+1,
+        // which reduces Kraft by 2^(ml-L-1)). Prefer the largest reduction that
+        // does not undershoot; otherwise make progress with the smallest step.
+        for _ in 0..1_000_000 {
+            let k = scaled(&bl_count);
+            if k <= target {
                 break;
             }
-            if let Some(longest) = depths.iter_mut().filter(|d| **d > 0).max() {
-                if *longest > 1 {
-                    *longest -= 1;
+            let excess = k - target;
+            let l = (1..ml)
+                .find(|&l| bl_count[l] > 0 && (1i64 << (ml - l - 1)) <= excess)
+                .or_else(|| (1..ml).rev().find(|&l| bl_count[l] > 0));
+            match l {
+                Some(l) => {
+                    bl_count[l] -= 1;
+                    bl_count[l + 1] += 1;
                 }
-            } else {
-                break;
+                None => break,
             }
         }
-        loop {
-            let kraft: u64 = depths
-                .iter()
-                .filter(|&&d| d > 0)
-                .map(|&d| 1u64 << (max_len - d))
-                .sum();
-            if kraft >= 1u64 << max_len {
+        // Under-subscribed (Kraft < target): shorten a code (move leaf L -> L-1,
+        // raising Kraft by 2^(ml-L)). Powers of two => this converges exactly.
+        for _ in 0..1_000_000 {
+            let k = scaled(&bl_count);
+            if k >= target {
                 break;
             }
-            if let Some(shortest) = depths.iter_mut().filter(|d| **d > 0).min() {
-                if *shortest < max_len {
-                    *shortest += 1;
-                } else {
-                    break;
+            let deficit = target - k;
+            let l = (2..=ml)
+                .rev()
+                .find(|&l| bl_count[l] > 0 && (1i64 << (ml - l)) <= deficit)
+                .or_else(|| (2..=ml).find(|&l| bl_count[l] > 0));
+            match l {
+                Some(l) => {
+                    bl_count[l] -= 1;
+                    bl_count[l - 1] += 1;
                 }
-            } else {
-                break;
+                None => break,
+            }
+        }
+
+        // Assign the resulting length distribution to symbols, shortest codes to
+        // the most frequent (canonical + optimal); stable tie-break by index.
+        let mut order = active.clone();
+        order.sort_by(|&a, &b| freqs[b].cmp(&freqs[a]).then(a.cmp(&b)));
+        let mut depths = vec![0u8; n];
+        let mut next = order.into_iter();
+        for (len, &cnt) in bl_count.iter().enumerate().skip(1) {
+            for _ in 0..cnt {
+                if let Some(sym) = next.next() {
+                    depths[sym] = len as u8;
+                }
             }
         }
 
@@ -372,6 +409,67 @@ mod tests {
         assert_eq!(lengths[sym as usize], 8);
     }
 
+    /// Kraft sum scaled to 2^max_len. A complete canonical code has
+    /// `kraft == 1 << max_len`; an all-zero (empty) table has 0.
+    fn kraft(lengths: &[u8], max_len: u8) -> u64 {
+        lengths
+            .iter()
+            .filter(|&&d| d > 0)
+            .map(|&d| 1u64 << (max_len - d))
+            .sum()
+    }
+
+    #[test]
+    fn from_frequencies_always_complete() {
+        let max_len = 15u8;
+        let target = 1u64 << max_len;
+
+        // A battery of adversarial frequency patterns. Every one must yield a
+        // COMPLETE canonical code (msdelta rejects incomplete trees), or an
+        // all-zero table when there are no active symbols.
+        let mut cases: Vec<(&str, Vec<u32>)> = vec![
+            ("single_at_0", {
+                let mut v = vec![0u32; 8];
+                v[0] = 5;
+                v
+            }),
+            ("single_at_5", {
+                let mut v = vec![0u32; 8];
+                v[5] = 5;
+                v
+            }),
+            ("two", vec![3, 7, 0, 0]),
+            ("flat8", vec![1; 8]),
+            ("flat7", vec![1; 7]),
+            ("flat600", vec![1; 600]),
+        ];
+        // Skewed distribution over 600 symbols that forces depths past the
+        // 15-bit cap (Fibonacci-like frequencies => deep Huffman tree).
+        let mut fib = vec![0u32; 600];
+        let (mut a, mut b) = (1u32, 1u32);
+        for f in fib.iter_mut() {
+            *f = a;
+            let n = a.saturating_add(b);
+            a = b;
+            b = n;
+        }
+        cases.push(("fib600_capped", fib));
+
+        for (name, freqs) in cases {
+            let t = HuffmanTable::from_frequencies(&freqs, max_len).unwrap();
+            let k = kraft(&t.lengths, max_len);
+            let active = freqs.iter().filter(|&&f| f > 0).count();
+            if active == 0 {
+                assert_eq!(k, 0, "{name}: expected empty table");
+            } else {
+                assert_eq!(
+                    k, target,
+                    "{name}: incomplete/over canonical code (kraft={k}, want {target})"
+                );
+            }
+        }
+    }
+
     #[test]
     fn from_frequencies_basic() {
         let freqs = [10u32, 5, 3, 1];
@@ -385,8 +483,11 @@ mod tests {
     fn from_frequencies_single() {
         let freqs = [0u32, 0, 5, 0];
         let table = HuffmanTable::from_frequencies(&freqs, 15).unwrap();
+        // The active symbol gets a length-1 code, plus one phantom length-1 leaf
+        // so the canonical code is COMPLETE (msdelta rejects incomplete trees).
         assert_eq!(table.lengths[2], 1);
-        assert_eq!(table.lengths[0], 0);
+        assert_eq!(table.lengths.iter().filter(|&&l| l == 1).count(), 2);
+        assert_eq!(kraft(&table.lengths, 15), 1 << 15);
     }
 
     #[test]
