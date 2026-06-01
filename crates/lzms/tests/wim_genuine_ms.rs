@@ -36,6 +36,28 @@ fn decodes_genuine_ms_multichunk_zeros() {
     assert!(decoded.iter().all(|&b| b == 0), "expected all zeros");
 }
 
+/// Regression for the adaptive-Huffman rebuild order. This genuine MS solid
+/// holds diverse content (a `.cat` catalog + component manifests from a real
+/// Windows UUP `.esd`), so it decodes enough distinct symbols to cross the
+/// 1024-symbol rebuild threshold -- unlike the highly-repetitive fixtures
+/// above, which stay under it. Before the fix the decoder halved frequencies
+/// *before* rebuilding the code (MS rebuilds first, then halves), so it
+/// desynced right after the first rebuild ("LZ offset past start"). Decoding to
+/// the full plaintext proves the rebuild now matches Microsoft's.
+#[test]
+fn decodes_genuine_ms_with_huffman_rebuild() {
+    let resource = include_bytes!("fixtures/lzms/wim_solid_lzms_ms_rebuild.resource");
+    let decoded = lzms::decompress_wim_solid(resource).expect("decode genuine MS solid resource");
+    assert_eq!(decoded.len(), 27972);
+    // The first packed blob is a `.cat` (PKCS#7 SignedData): SEQUENCE then the
+    // signedData OID 1.2.840.113549.1.7.2.
+    assert_eq!(&decoded[0..2], &[0x30, 0x82]);
+    assert_eq!(
+        &decoded[4..15],
+        &[0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x07, 0x02]
+    );
+}
+
 /// Re-encoding the genuine plaintext through our own solid encoder must
 /// round-trip (uses a small chunk size to stay multi-chunk without 64 MiB).
 #[test]

@@ -257,10 +257,14 @@ impl AdaptiveCode {
         self.freqs[sym] += 1;
         self.countdown -= 1;
         if self.countdown == 0 {
+            // Rebuild the code from the ACCUMULATED frequencies, THEN decay
+            // them. Microsoft's LZMS rebuilds before halving; decaying first
+            // (the prior order) built the code from already-halved freqs and
+            // desynced against real MS streams after the first rebuild.
+            self.rebuild();
             for f in &mut self.freqs {
                 *f = (*f >> 1) + 1;
             }
-            self.rebuild();
             self.countdown = self.rebuild_freq;
         }
     }
@@ -300,10 +304,14 @@ impl AdaptiveCode {
         self.freqs[sym] += 1;
         self.countdown -= 1;
         if self.countdown == 0 {
+            // Rebuild the code from the ACCUMULATED frequencies, THEN decay
+            // them. Microsoft's LZMS rebuilds before halving; decaying first
+            // (the prior order) built the code from already-halved freqs and
+            // desynced against real MS streams after the first rebuild.
+            self.rebuild();
             for f in &mut self.freqs {
                 *f = (*f >> 1) + 1;
             }
-            self.rebuild();
             self.countdown = self.rebuild_freq;
         }
 

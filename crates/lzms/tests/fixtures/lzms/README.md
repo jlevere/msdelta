@@ -39,7 +39,15 @@ at their blob-table offsets. Decoded by `decompress_wim_solid` in the
   (`[u64 uncompressed_size][u32 chunk_size][u32 format=3]` + an `N`-entry
   chunk-size table + chunk data) was reverse-engineered from these bytes.
 
+The `_rebuild` fixture is from a real distributed `.esd` (a Windows 11
+professional UUP build payload, downloaded from Microsoft's CDN), not a
+DISM-made solid: its single chunk packs a `.cat` catalog plus component
+manifests, so it decodes enough distinct symbols to cross the 1024-symbol
+adaptive-Huffman rebuild threshold. The repetitive fixtures above never rebuild,
+so it is the one that exercises the rebuild path.
+
 | Fixture | On-disk | Decodes to |
 |---|---|---|
 | `wim_solid_lzms_ms.resource` | 78 B | 180000 B of repeated "The quick brown fox..." text (1 solid chunk) |
 | `wim_solid_lzms_ms_3chunk.resource` | 64 B | 140 MiB of zeros across three 64 MiB solid chunks |
+| `wim_solid_lzms_ms_rebuild.resource` | 12026 B | 27972 B of `.cat` + manifests; crosses the Huffman rebuild threshold |
