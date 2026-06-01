@@ -8,7 +8,10 @@ use std::fs;
 use msdelta::pa30::{apply, parse};
 
 fn hex(b: &[u8]) -> String {
-    b.iter().map(|x| format!("{x:02x}")).collect::<Vec<_>>().join(" ")
+    b.iter()
+        .map(|x| format!("{x:02x}"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn main() {
@@ -28,7 +31,11 @@ fn main() {
                     h.version, h.target_file_time, h.file_type_set, h.file_type, h.flags,
                     h.target_size, h.hash_alg_id, h.target_hash.len()
                 );
-                println!("  preprocess: {} bytes  full: {}", p.preprocess.len(), hex(&p.preprocess));
+                println!(
+                    "  preprocess: {} bytes  full: {}",
+                    p.preprocess.len(),
+                    hex(&p.preprocess)
+                );
                 println!(
                     "  patch_data: {} bytes  head: {}",
                     p.patch_data.len(),

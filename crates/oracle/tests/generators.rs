@@ -96,6 +96,12 @@ fn fast_subset_lowers_without_encoder_failure() {
 fn default_suite_is_nonempty_and_well_formed() {
     // Cheap structural check on the full suite without lowering (no encoding).
     let suite = default_suite(99, 2);
-    assert!(suite.len() >= 12, "suite unexpectedly small: {}", suite.len());
-    assert!(suite.iter().all(|c| !c.id.is_empty() && !c.reference.is_empty()));
+    assert!(
+        suite.len() >= 12,
+        "suite unexpectedly small: {}",
+        suite.len()
+    );
+    assert!(suite
+        .iter()
+        .all(|c| !c.id.is_empty() && !c.reference.is_empty()));
 }

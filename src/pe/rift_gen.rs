@@ -14,7 +14,10 @@ use crate::lzx::rift::{RiftEntry, RiftTable};
 /// uses this map to translate between the in-memory RVA view (where absolute
 /// pointers live) and the on-disk file layout the patch is computed over.
 pub fn pe_section_rift(reference: &[u8]) -> RiftTable {
-    let mut entries = vec![RiftEntry { source: 0, target: 0 }];
+    let mut entries = vec![RiftEntry {
+        source: 0,
+        target: 0,
+    }];
 
     if let Ok(pe) = goblin::pe::PE::parse(reference) {
         for s in &pe.sections {

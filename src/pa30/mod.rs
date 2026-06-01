@@ -510,7 +510,13 @@ mod tests {
             ],
         };
         let empty_rift = RiftTable { entries: vec![] };
-        let buf = preprocess::build_pe_preprocess(0x140000000, 0xCAFEBABE, 0x12345678, &rift, &empty_rift);
+        let buf = preprocess::build_pe_preprocess(
+            0x140000000,
+            0xCAFEBABE,
+            0x12345678,
+            &rift,
+            &empty_rift,
+        );
         let parsed = preprocess::parse_pe_preprocess(&buf).unwrap();
         assert_eq!(parsed.target_image_base, 0x140000000);
         assert_eq!(parsed.target_timestamp, 0x12345678);

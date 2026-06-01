@@ -96,7 +96,9 @@ fn cmd_minimize(args: &[String]) -> ExitCode {
         return usage();
     };
     let dll = arg(args, "--dll").unwrap_or("msdelta.dll");
-    let rounds: usize = arg(args, "--rounds").and_then(|s| s.parse().ok()).unwrap_or(12);
+    let rounds: usize = arg(args, "--rounds")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(12);
     let run_sh = arg(args, "--run").unwrap_or("crates/oracle/lab/run.sh");
     let job_dir = Path::new(job_dir);
 
@@ -215,7 +217,10 @@ fn cmd_report(args: &[String]) -> ExitCode {
         }
     };
 
-    println!("oracle report  domain={}  seed={:#x}", report.domain, report.seed);
+    println!(
+        "oracle report  domain={}  seed={:#x}",
+        report.domain, report.seed
+    );
     println!("\nscore (pass/total, skipped excluded):");
     for (key, [pass, total]) in &report.summary {
         let flag = if pass == total { "" } else { "  <--" };
@@ -256,7 +261,9 @@ fn cmd_gen(args: &[String]) -> ExitCode {
         },
         None => 0,
     };
-    let count: usize = arg(args, "--count").and_then(|s| s.parse().ok()).unwrap_or(4);
+    let count: usize = arg(args, "--count")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(4);
     let Some(out) = arg(args, "--out") else {
         return usage();
     };

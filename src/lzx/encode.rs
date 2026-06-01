@@ -34,7 +34,9 @@ pub(super) fn compress_inner(
     // rift-relative computation. For a None rift this reduces to just the
     // boundary, so SOURCE_COPY <=> distance == ref_len, matching the old behavior.
     let ort = {
-        let mut rt = rift.cloned().unwrap_or(RiftTable { entries: Vec::new() });
+        let mut rt = rift.cloned().unwrap_or(RiftTable {
+            entries: Vec::new(),
+        });
         rt.entries.push(RiftEntry {
             source: ref_len as i64,
             target: 0,

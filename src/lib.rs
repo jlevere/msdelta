@@ -71,10 +71,10 @@ pub mod pa19;
 pub mod pa30;
 #[allow(dead_code)]
 pub(crate) mod pe;
-#[allow(dead_code)]
-pub(crate) mod xpress;
 #[cfg(feature = "winsxs")]
 pub mod winsxs;
+#[allow(dead_code)]
+pub(crate) mod xpress;
 
 /// Decoder entry points exposed only under the `fuzzing` feature so the fuzz
 /// harnesses can target the bit-level codecs directly (these are internal
@@ -89,7 +89,11 @@ pub mod fuzzing {
     }
 
     /// Fuzz the reverse-delta (`ReversePatchFormat`) apply against a reference.
-    pub fn apply_reversal(target: &[u8], reversal_data: &[u8], source_size: usize) -> Result<Vec<u8>> {
+    pub fn apply_reversal(
+        target: &[u8],
+        reversal_data: &[u8],
+        source_size: usize,
+    ) -> Result<Vec<u8>> {
         crate::pa30::reverse::apply_reversal(target, reversal_data, source_size)
     }
 }

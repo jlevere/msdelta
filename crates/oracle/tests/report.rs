@@ -35,25 +35,62 @@ fn normalize_error_extracts_stable_keys() {
 
 #[test]
 fn classify_maps_statuses() {
-    let pass = RawVerdict { status: "PASS".into(), ..Default::default() };
-    let ok = RawVerdict { status: "OK".into(), ..Default::default() };
-    let fail = RawVerdict { status: "FAIL".into(), got_sha: "deadbeef".into(), got_len: 9, ..Default::default() };
-    let err = RawVerdict { status: "ERROR".into(), message: "x GetLastError=13".into(), ..Default::default() };
+    let pass = RawVerdict {
+        status: "PASS".into(),
+        ..Default::default()
+    };
+    let ok = RawVerdict {
+        status: "OK".into(),
+        ..Default::default()
+    };
+    let fail = RawVerdict {
+        status: "FAIL".into(),
+        got_sha: "deadbeef".into(),
+        got_len: 9,
+        ..Default::default()
+    };
+    let err = RawVerdict {
+        status: "ERROR".into(),
+        message: "x GetLastError=13".into(),
+        ..Default::default()
+    };
     assert!(Verdict::classify(Some(&pass)).is_pass());
     assert!(Verdict::classify(Some(&ok)).is_pass());
-    assert!(matches!(Verdict::classify(Some(&fail)), Verdict::Fail { .. }));
-    assert!(matches!(Verdict::classify(Some(&err)), Verdict::Error { .. }));
+    assert!(matches!(
+        Verdict::classify(Some(&fail)),
+        Verdict::Fail { .. }
+    ));
+    assert!(matches!(
+        Verdict::classify(Some(&err)),
+        Verdict::Error { .. }
+    ));
     assert!(matches!(Verdict::classify(None), Verdict::Skipped));
 }
 
 #[test]
 fn bucketize_groups_by_signature_and_skips_passes() {
     let pass = Verdict::Pass;
-    let err13a = Verdict::Error { detail: "GetLastError=13".into() };
-    let err13b = Verdict::Error { detail: "GetLastError=13".into() };
+    let err13a = Verdict::Error {
+        detail: "GetLastError=13".into(),
+    };
+    let err13b = Verdict::Error {
+        detail: "GetLastError=13".into(),
+    };
     let rows = vec![
-        ("ours_to_native", "msdelta.dll", "manifest_pair", "m.0", &err13a),
-        ("ours_to_native", "msdelta.dll", "manifest_pair", "m.1", &err13b),
+        (
+            "ours_to_native",
+            "msdelta.dll",
+            "manifest_pair",
+            "m.0",
+            &err13a,
+        ),
+        (
+            "ours_to_native",
+            "msdelta.dll",
+            "manifest_pair",
+            "m.1",
+            &err13b,
+        ),
         ("ours_to_native", "msdelta.dll", "text", "t.0", &pass), // skipped
     ];
     let buckets = bucketize(rows.into_iter());

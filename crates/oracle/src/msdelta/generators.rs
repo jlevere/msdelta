@@ -121,9 +121,32 @@ fn structural_edits(rng: &mut SplitMix64, src: &[u8]) -> Vec<u8> {
 }
 
 const WORDS: &[&str] = &[
-    "the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog", "component", "manifest",
-    "assembly", "registry", "value", "boolean", "string", "version", "deployment", "display",
-    "name", "true", "false", "unsignedInt", "multiString", "key", "local", "machine",
+    "the",
+    "quick",
+    "brown",
+    "fox",
+    "jumps",
+    "over",
+    "lazy",
+    "dog",
+    "component",
+    "manifest",
+    "assembly",
+    "registry",
+    "value",
+    "boolean",
+    "string",
+    "version",
+    "deployment",
+    "display",
+    "name",
+    "true",
+    "false",
+    "unsignedInt",
+    "multiString",
+    "key",
+    "local",
+    "machine",
 ];
 
 fn build_text(rng: &mut SplitMix64, lines: usize) -> Vec<u8> {
@@ -304,7 +327,12 @@ impl Generator<MsDeltaCase> for PePairGen {
         // uses the PE transform; cross-binary stays raw (no shared structure).
         let specs: &[(&str, &str, &str, bool)] = &[
             ("cmd_selfpatch", "cmd.exe", "cmd_patched.exe", true),
-            ("advapi32_xver", "advapi32_old.dll", "advapi32_new.dll", true),
+            (
+                "advapi32_xver",
+                "advapi32_old.dll",
+                "advapi32_new.dll",
+                true,
+            ),
             ("cmd_to_where_raw", "cmd.exe", "where.exe", false),
             ("cmd_to_notepad_raw", "cmd.exe", "notepad.exe", false),
         ];
@@ -334,12 +362,14 @@ impl Generator<MsDeltaCase> for CorpusReplayGen {
     }
     fn generate(&self, _seed: u64, _count: usize) -> Vec<MsDeltaCase> {
         let cat = self.category();
-        let ref_text = b"Hello, this is a reference buffer with some repeated content. Hello again! \
+        let ref_text =
+            b"Hello, this is a reference buffer with some repeated content. Hello again! \
             The quick brown fox jumps over the lazy dog. Repeated content repeated content."
-            .to_vec();
-        let tgt_text = b"Hello, this is a MODIFIED buffer with some repeated content. Goodbye now! \
+                .to_vec();
+        let tgt_text =
+            b"Hello, this is a MODIFIED buffer with some repeated content. Goodbye now! \
             The quick brown fox jumps over the lazy cat. Repeated content repeated content."
-            .to_vec();
+                .to_vec();
 
         // A larger, compressible body to exercise multi-segment LZX.
         let big_ref: Vec<u8> = (0..400_000u32)
@@ -432,10 +462,16 @@ impl Generator<MsDeltaCase> for CorpusReplayGen {
                 .with_directions(apply_only),
             );
         }
-        if let (Some(old), Some(new)) =
-            (read_source("advapi32_old.dll"), read_source("advapi32_new.dll"))
-        {
-            cases.push(MsDeltaCase::executables("corpus.pe_advapi32", cat, old, new));
+        if let (Some(old), Some(new)) = (
+            read_source("advapi32_old.dll"),
+            read_source("advapi32_new.dll"),
+        ) {
+            cases.push(MsDeltaCase::executables(
+                "corpus.pe_advapi32",
+                cat,
+                old,
+                new,
+            ));
         }
         cases
     }
@@ -543,11 +579,15 @@ impl Generator<MsDeltaCase> for ReverseGen {
 
         let rt = build_text(&mut rng, 80);
         let tt = mutate_text(&mut rng, &rt);
-        cases.push(MsDeltaCase::raw("reverse.text", "reverse", rt, tt).with_directions(dirs.clone()));
+        cases.push(
+            MsDeltaCase::raw("reverse.text", "reverse", rt, tt).with_directions(dirs.clone()),
+        );
 
         let rr = build_runs(&mut rng, 8192);
         let tr = structural_edits(&mut rng, &rr);
-        cases.push(MsDeltaCase::raw("reverse.runs", "reverse", rr, tr).with_directions(dirs.clone()));
+        cases.push(
+            MsDeltaCase::raw("reverse.runs", "reverse", rr, tr).with_directions(dirs.clone()),
+        );
 
         if let Some(base) = read_fixture("base_manifest.bin") {
             if let Some(dcm) = read_fixture(

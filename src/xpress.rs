@@ -116,7 +116,12 @@ fn read_u32(input: &[u8], pos: &mut usize) -> Result<u32> {
     if *pos + 4 > input.len() {
         return Err(Error::Truncated);
     }
-    let v = u32::from_le_bytes([input[*pos], input[*pos + 1], input[*pos + 2], input[*pos + 3]]);
+    let v = u32::from_le_bytes([
+        input[*pos],
+        input[*pos + 1],
+        input[*pos + 2],
+        input[*pos + 3],
+    ]);
     *pos += 4;
     Ok(v)
 }
