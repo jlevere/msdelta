@@ -35,12 +35,20 @@ fn reverse_corpus_roundtrips() {
         checked += 1;
         match msdelta::pa30::apply(&reference, &delta) {
             Ok(out) if out == expected => {}
-            Ok(out) => failures.push(format!("{id}: output mismatch ({} vs {} bytes)", out.len(), expected.len())),
+            Ok(out) => failures.push(format!(
+                "{id}: output mismatch ({} vs {} bytes)",
+                out.len(),
+                expected.len()
+            )),
             Err(e) => failures.push(format!("{id}: {e}")),
         }
     }
 
-    assert!(failures.is_empty(), "reverse decode failures:\n{}", failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "reverse decode failures:\n{}",
+        failures.join("\n")
+    );
     if checked > 0 {
         eprintln!("reverse corpus: {checked} golds decoded correctly");
     }

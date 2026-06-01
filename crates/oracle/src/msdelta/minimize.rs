@@ -57,7 +57,10 @@ pub fn shrink_candidates(target: &[u8]) -> Vec<Candidate> {
     let mut out: Vec<Candidate> = Vec::new();
     let mut push = |label: String, bytes: Vec<u8>| {
         if bytes.len() >= MIN_LEN && bytes.len() < n {
-            out.push(Candidate { label, target: bytes });
+            out.push(Candidate {
+                label,
+                target: bytes,
+            });
         }
     };
 

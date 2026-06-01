@@ -16,12 +16,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use msdelta::pa30::{
-    apply, CreateOptions, Codec, FileType, FormatVersion, HASH_ALG_MD5, HASH_ALG_SHA256,
+    apply, Codec, CreateOptions, FileType, FormatVersion, HASH_ALG_MD5, HASH_ALG_SHA256,
 };
 use sha2::{Digest, Sha256};
 
 fn sha256_hex(data: &[u8]) -> String {
-    Sha256::digest(data).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(data)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 struct Case {
@@ -40,20 +43,24 @@ fn read_fixture(name: &str) -> Vec<u8> {
 }
 
 fn main() {
-    let out = PathBuf::from(std::env::args().nth(1).expect("usage: gen_roundtrip_corpus <out-dir>"));
+    let out = PathBuf::from(
+        std::env::args()
+            .nth(1)
+            .expect("usage: gen_roundtrip_corpus <out-dir>"),
+    );
     fs::create_dir_all(&out).unwrap();
 
-    let ref_text =
-        b"Hello, this is a reference buffer with some repeated content. Hello again! \
+    let ref_text = b"Hello, this is a reference buffer with some repeated content. Hello again! \
           The quick brown fox jumps over the lazy dog. Repeated content repeated content."
-            .to_vec();
-    let tgt_text =
-        b"Hello, this is a MODIFIED buffer with some repeated content. Goodbye now! \
+        .to_vec();
+    let tgt_text = b"Hello, this is a MODIFIED buffer with some repeated content. Goodbye now! \
           The quick brown fox jumps over the lazy cat. Repeated content repeated content."
-            .to_vec();
+        .to_vec();
 
     // A larger, compressible body to exercise multi-segment LZX.
-    let big_ref: Vec<u8> = (0..400_000u32).map(|i| (i.wrapping_mul(2654435761) >> 13) as u8).collect();
+    let big_ref: Vec<u8> = (0..400_000u32)
+        .map(|i| (i.wrapping_mul(2654435761) >> 13) as u8)
+        .collect();
     let mut big_tgt = big_ref.clone();
     for chunk in big_tgt.chunks_mut(4096) {
         if let Some(b) = chunk.get_mut(17) {
@@ -120,7 +127,9 @@ fn main() {
             name: "pe_cmd_amd64_pa31",
             reference: cmd.clone(),
             target: cmd_patched,
-            opts: CreateOptions::new().file_type(FileType::Auto).version(FormatVersion::PA31),
+            opts: CreateOptions::new()
+                .file_type(FileType::Auto)
+                .version(FormatVersion::PA31),
         },
         Case {
             name: "pe_advapi32_auto",

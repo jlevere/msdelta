@@ -63,11 +63,7 @@ pub trait Domain {
     /// and our-encoder `ours_delta` files under `dir`, and return the
     /// [`JobCase`] describing them. Errors propagate (e.g. our encoder failing
     /// on a case is itself a finding worth surfacing).
-    fn lower(
-        &self,
-        case: &Self::Case,
-        dir: &Path,
-    ) -> io::Result<JobCase<Self::NativeParams>>;
+    fn lower(&self, case: &Self::Case, dir: &Path) -> io::Result<JobCase<Self::NativeParams>>;
 
     /// Build a [`Job`] by lowering every case into `dir` and writing the
     /// manifest. Default impl is the common path; domains rarely override it.

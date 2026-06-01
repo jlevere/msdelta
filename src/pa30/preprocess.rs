@@ -128,7 +128,10 @@ mod genuine_pe_tests {
     use std::path::PathBuf;
 
     fn dir() -> PathBuf {
-        PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/deltas"))
+        PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/deltas"
+        ))
     }
 
     /// Our PE encoder must reproduce the genuine msdelta delta's transform
@@ -154,7 +157,10 @@ mod genuine_pe_tests {
         let g = crate::pa30::parse(&genuine).unwrap();
         let o = crate::pa30::parse(&ours).unwrap();
 
-        assert_eq!(o.header.file_type_set, g.header.file_type_set, "file_type_set");
+        assert_eq!(
+            o.header.file_type_set, g.header.file_type_set,
+            "file_type_set"
+        );
         assert_eq!(o.header.file_type, g.header.file_type, "file_type");
         assert_eq!(o.header.flags, g.header.flags, "flags (expect 0xe63e)");
 

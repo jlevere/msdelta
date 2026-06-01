@@ -446,7 +446,11 @@ pub fn decompress_wim_solid_range(resource: &[u8], off: u64, len: u64) -> Result
             .checked_add(clen)
             .filter(|&e| e <= resource.len())
             .ok_or(Error::Truncated)?;
-        expand_chunk(&resource[coff..end], layout.chunk_plain_len(i), &mut decoded)?;
+        expand_chunk(
+            &resource[coff..end],
+            layout.chunk_plain_len(i),
+            &mut decoded,
+        )?;
     }
 
     let skip = (off - first as u64 * layout.chunk_size as u64) as usize;
@@ -513,11 +517,11 @@ mod tests {
         // spans, the partial last chunk, and the full blob.
         let cases = [
             (0u64, 10u64),
-            (0, 4096),       // exactly chunk 0
-            (4090, 12),      // straddles chunk 0/1 boundary
-            (4096, 4096),    // exactly chunk 1
-            (5000, 9000),    // spans chunks 1..3
-            (16384, 1000),   // the whole partial last chunk
+            (0, 4096),     // exactly chunk 0
+            (4090, 12),    // straddles chunk 0/1 boundary
+            (4096, 4096),  // exactly chunk 1
+            (5000, 9000),  // spans chunks 1..3
+            (16384, 1000), // the whole partial last chunk
             (16384 + 999, 1),
             (0, data.len() as u64), // entire blob
         ];

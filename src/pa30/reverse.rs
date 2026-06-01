@@ -96,7 +96,7 @@ fn apply_copy(sr: &mut BitReader, target: &[u8], out: &mut [u8]) -> Result<()> {
     for (entry, &len) in rift.entries.iter().zip(&lengths) {
         let left = entry.source; // dest offset in source-being-rebuilt
         let right = entry.target; // source offset in target
-        // Clamp the run to both buffers (the genuine ReverseLzx silently truncates).
+                                  // Clamp the run to both buffers (the genuine ReverseLzx silently truncates).
         let max_len = len
             .min(out.len() as i64 - left.max(0))
             .min(target.len() as i64 - right.max(0));

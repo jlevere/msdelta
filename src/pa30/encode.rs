@@ -90,7 +90,7 @@ impl CreateOptions {
         let pe_info = if self.file_type == FileType::Auto {
             PeInfo::parse(reference)
                 .ok()
-                .and_then(|src| PeInfo::parse(target).ok().map(|tgt| (src, tgt)))
+                .zip(PeInfo::parse(target).ok())
         } else {
             None
         };

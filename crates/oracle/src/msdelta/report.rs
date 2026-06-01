@@ -54,26 +54,31 @@ pub struct Report {
 }
 
 /// Locally decode one genuine gold and compare to the expected target.
-fn decode_gold(
-    dir: &Path,
-    reference: &str,
-    gold: &str,
-    expected_sha: &str,
-) -> Verdict {
+fn decode_gold(dir: &Path, reference: &str, gold: &str, expected_sha: &str) -> Verdict {
     let refb = match fs::read(dir.join(reference)) {
         Ok(b) => b,
-        Err(e) => return Verdict::Error { detail: format!("read ref: {e}") },
+        Err(e) => {
+            return Verdict::Error {
+                detail: format!("read ref: {e}"),
+            }
+        }
     };
     let goldb = match fs::read(dir.join(gold)) {
         Ok(b) => b,
-        Err(e) => return Verdict::Error { detail: format!("read gold: {e}") },
+        Err(e) => {
+            return Verdict::Error {
+                detail: format!("read gold: {e}"),
+            }
+        }
     };
     match msdelta::pa30::apply(&refb, &goldb) {
         Ok(out) if sha256_hex(&out) == expected_sha => Verdict::Pass,
         Ok(out) => Verdict::Fail {
             detail: format!("decoded {} bytes, sha mismatch", out.len()),
         },
-        Err(e) => Verdict::Error { detail: format!("our decode: {e}") },
+        Err(e) => Verdict::Error {
+            detail: format!("our decode: {e}"),
+        },
     }
 }
 
@@ -161,9 +166,21 @@ pub fn build_report(dir: &Path) -> io::Result<Report> {
             tally(format!("{}/ours_to_native", dr.dll), &ours, &mut summary);
             tally(format!("{}/native_create", dr.dll), &create, &mut summary);
             tally(format!("{}/native_decode", dr.dll), &decode, &mut summary);
-            tally(format!("{}/native_to_native", dr.dll), &control, &mut summary);
-            tally(format!("{}/reverse_round_trip", dr.dll), &reverse, &mut summary);
-            tally(format!("{}/reverse_decode", dr.dll), &reverse_decode, &mut summary);
+            tally(
+                format!("{}/native_to_native", dr.dll),
+                &control,
+                &mut summary,
+            );
+            tally(
+                format!("{}/reverse_round_trip", dr.dll),
+                &reverse,
+                &mut summary,
+            );
+            tally(
+                format!("{}/reverse_decode", dr.dll),
+                &reverse_decode,
+                &mut summary,
+            );
 
             cases
                 .entry(rc.id.clone())
@@ -196,8 +213,20 @@ pub fn build_report(dir: &Path) -> io::Result<Report> {
             rows.push(("ours_to_native", dll, &c.category, &c.id, &r.ours_to_native));
             rows.push(("native_create", dll, &c.category, &c.id, &r.native_create));
             rows.push(("native_decode", dll, &c.category, &c.id, &r.native_decode));
-            rows.push(("native_to_native", dll, &c.category, &c.id, &r.native_to_native));
-            rows.push(("reverse_round_trip", dll, &c.category, &c.id, &r.reverse_round_trip));
+            rows.push((
+                "native_to_native",
+                dll,
+                &c.category,
+                &c.id,
+                &r.native_to_native,
+            ));
+            rows.push((
+                "reverse_round_trip",
+                dll,
+                &c.category,
+                &c.id,
+                &r.reverse_round_trip,
+            ));
             rows.push(("reverse_decode", dll, &c.category, &c.id, &r.reverse_decode));
         }
     }
