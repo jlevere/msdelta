@@ -34,7 +34,7 @@ pub(super) fn x86_filter_impl(data: &mut [u8], undo: bool) {
                 }
             }
             0xFF if data[(i + 1) as usize] == 0x15 => (2, X86_MAX_TRANSLATION_OFFSET),
-            0xF0 if data[(i + 1) as usize] == 0x83 && (data[(i + 2) as usize] & 0x07) == 0x05 => {
+            0xF0 if data[(i + 1) as usize] == 0x83 && data[(i + 2) as usize] == 0x05 => {
                 (3, X86_MAX_TRANSLATION_OFFSET)
             }
             0xE9 => {
