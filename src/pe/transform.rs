@@ -140,7 +140,10 @@ pub(crate) fn undo_x86_e8_translation(buf: &mut [u8]) -> u32 {
     }
 
     let len = buf.len();
-    if len < 10 {
+    // A CALL displacement is a signed i32 and the translation size is the image
+    // length; both must fit i32 for the guard/arithmetic to be meaningful (real
+    // targets are well under -- apply() caps at 256 MiB).
+    if len < 10 || len > i32::MAX as usize {
         return 0;
     }
     let ts = len as i32;
@@ -148,7 +151,9 @@ pub(crate) fn undo_x86_e8_translation(buf: &mut [u8]) -> u32 {
     let mut i = 0usize;
     // Classic LZX leaves the last 10 bytes untouched (a CALL displacement never
     // starts there). Every 0xE8 advances the cursor past its 4 operand bytes
-    // whether or not it is translated, matching the encoder's own scan.
+    // whether or not it is translated, matching the encoder's own scan. The
+    // rewrite is 32-bit wrapping arithmetic (`new = v - i` mod 2^32), matching
+    // genuine behaviour and avoiding overflow panics on adversarial input.
     while i < len - 10 {
         if buf[i] != 0xE8 {
             i += 1;
@@ -156,7 +161,11 @@ pub(crate) fn undo_x86_e8_translation(buf: &mut [u8]) -> u32 {
         }
         let v = i32::from_le_bytes(buf[i + 1..i + 5].try_into().unwrap());
         if v >= -(i as i32) && v < ts {
-            let new = if v >= 0 { v - i as i32 } else { v + ts };
+            let new = if v >= 0 {
+                v.wrapping_sub(i as i32)
+            } else {
+                v.wrapping_add(ts)
+            };
             buf[i + 1..i + 5].copy_from_slice(&new.to_le_bytes());
             count += 1;
         }
@@ -214,7 +223,9 @@ fn is_i386_native_pe(buf: &[u8]) -> bool {
         let va = rd_u32(s + 12).unwrap_or(0);
         let ro = rd_u32(s + 20).unwrap_or(0);
         if clr_rva >= va && clr_rva < va.wrapping_add(vs) {
-            let off = (ro + (clr_rva - va)) as usize;
+            // usize math: ro and (clr_rva - va) are u32, so this cannot overflow
+            // on a 64-bit target (a u32 + u32 add in u32 could, on a bad header).
+            let off = ro as usize + (clr_rva - va) as usize;
             if let Some(flags) = rd_u32(off + 16) {
                 return flags & 0x1 == 0; // ILONLY clear => native
             }
