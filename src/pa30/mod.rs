@@ -209,6 +209,7 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
                 &src_pe,
                 &pp.preprocess_rift,
                 parsed.header.flags as u64,
+                pp.target_image_base,
             );
         }
         pe_ref = r;
@@ -1105,10 +1106,30 @@ mod tests {
             eprintln!("pe fixtures absent; skipping");
             return;
         }
+        // FIX=<matrix-fixture-dirname> runs the oracle on a coverage-matrix
+        // fixture (base.bin/forward.delta/truth.bin) instead of comctl32.
+        if let Ok(fix) = std::env::var("FIX") {
+            let fd = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("notes/pe-fixtures-matrix")
+                .join(&fix);
+            return run_tsource_oracle(
+                &fix,
+                std::fs::read(fd.join("base.bin")).unwrap(),
+                std::fs::read(fd.join("forward.delta")).unwrap(),
+                std::fs::read(fd.join("truth.bin")).unwrap(),
+            );
+        }
         let check = |label: &str, oldf: &str, deltaf: &str, truthf: &str| {
             let old = std::fs::read(dir.join(oldf)).unwrap();
             let delta_raw = std::fs::read(dir.join(deltaf)).unwrap();
             let truth = std::fs::read(dir.join(truthf)).unwrap();
+            run_tsource_oracle(label, old, delta_raw, truth);
+        };
+        check("comctl32 x86", "comctl32x86_old.dll", "comctl32x86.delta", "comctl32x86_new.dll");
+    }
+
+    fn run_tsource_oracle(label: &str, old: Vec<u8>, delta_raw: Vec<u8>, truth: Vec<u8>) {
+        {
             let parsed = parse(&delta_raw).unwrap();
             let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
             let combined = build_pe_copy_rift(&old, &pp);
@@ -1142,6 +1163,7 @@ mod tests {
                 &spe,
                 &pp.preprocess_rift,
                 parsed.header.flags as u64,
+                pp.target_image_base,
             );
 
             let sec_of = |fo: usize| -> String {
@@ -1186,7 +1208,6 @@ mod tests {
                 "{label}: T(source) mismatches = {total} over {covered} copied bytes; by section: {by_sec:?}"
             );
         };
-        check("comctl32 x86", "comctl32x86_old.dll", "comctl32x86.delta", "comctl32x86_new.dll");
     }
 
     /// Dump the .reloc block structure of raw source vs genuine truth, to ground
@@ -1244,6 +1265,7 @@ mod tests {
             &spe,
             &pp.preprocess_rift,
             parsed.header.flags as u64,
+            pp.target_image_base,
         );
         dump("mine T(source)", &mine);
         // First divergence in .reloc between mine and truth.

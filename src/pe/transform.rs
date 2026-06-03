@@ -55,7 +55,13 @@ fn rva_to_file_off(pe: &PeInfo, rva: i64) -> Option<usize> {
 /// header transform-selection word. Transforms run in `g_transformsMap` order
 /// (relocations, then jmps, then calls), each consulting/updating a per-file-
 /// offset marker so a later transform never rewrites bytes an earlier one owns.
-pub(crate) fn build_transformed_source(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, flags: u64) {
+pub(crate) fn build_transformed_source(
+    buf: &mut [u8],
+    pe: &PeInfo,
+    rift: &RiftTable,
+    flags: u64,
+    target_base: u64,
+) {
     if pe.is_64bit {
         return; // i386 source transforms only (this path); x64 handled elsewhere
     }
@@ -64,13 +70,13 @@ pub(crate) fn build_transformed_source(buf: &mut [u8], pe: &PeInfo, rift: &RiftT
         mark_non_executable(buf, pe, &mut marker);
     }
     if flags & 0x4 != 0 {
-        transform_source_imports(buf, pe, rift, &mut marker);
+        transform_source_imports(buf, pe, rift, &mut marker, target_base);
     }
     if flags & 0x8 != 0 {
         transform_source_exports(buf, pe, rift, &mut marker);
     }
     if flags & 0x20 != 0 {
-        transform_source_relocs_i386(buf, pe, rift, &mut marker);
+        transform_source_relocs_i386(buf, pe, rift, &mut marker, target_base);
     }
     if flags & 0x80 != 0 {
         transform_source_jmps_i386(buf, pe, rift, &marker);
@@ -87,7 +93,13 @@ pub(crate) fn build_transformed_source(buf: &mut [u8], pe: &PeInfo, rift: &RiftT
 /// high bit set, are skipped); a BOUND IAT (TimeDateStamp != 0) holds absolute
 /// VAs mapped like relocations. Then map the descriptor's
 /// OriginalFirstThunk/Name/FirstThunk fields. i386 (PE32, 4-byte thunks).
-fn transform_source_imports(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marker: &mut [u8]) {
+fn transform_source_imports(
+    buf: &mut [u8],
+    pe: &PeInfo,
+    rift: &RiftTable,
+    marker: &mut [u8],
+    target_base: u64,
+) {
     if pe.is_64bit {
         return; // PE32+ (8-byte thunks) handled separately
     }
@@ -151,8 +163,10 @@ fn transform_source_imports(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marke
                     break;
                 }
                 if bound && tds != 0 {
-                    // bound: absolute VA -> map (VA - imageBase) as RVA.
-                    let nv = (v as i64 + rift.map(v as i64 - image_base)) as u32;
+                    // bound: absolute VA -> map (VA - sourceBase) as RVA, then
+                    // relinearize against the TARGET image base.
+                    let r = v as i64 - image_base;
+                    let nv = (target_base as i64 + r + rift.map(r)) as u32;
                     buf[fo..fo + 4].copy_from_slice(&nv.to_le_bytes());
                     for b in 0..4 {
                         marker[fo + b] |= 1;
@@ -271,6 +285,7 @@ fn transform_source_relocs_i386(
     pe: &PeInfo,
     rift: &RiftTable,
     marker: &mut [u8],
+    target_base: u64,
 ) {
     let image_base = pe.image_base as i64;
     let (reloc_rva, reloc_size) = match pe.data_directories.get(5).copied() {
@@ -314,7 +329,9 @@ fn transform_source_relocs_i386(
                         if op_fo + 4 <= buf.len() {
                             let v = i32::from_le_bytes(buf[op_fo..op_fo + 4].try_into().unwrap())
                                 as i64;
-                            let nv = (v + rift.map(v - image_base)) as i32;
+                            // Map the pointed-to RVA, relinearize on TARGET base.
+                            let r = v - image_base;
+                            let nv = (target_base as i64 + r + rift.map(r)) as i32;
                             buf[op_fo..op_fo + 4].copy_from_slice(&nv.to_le_bytes());
                             for b in 0..4 {
                                 marker[op_fo + b] |= 1;
