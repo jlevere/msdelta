@@ -1,8 +1,8 @@
 # PA31 decoder gaps — real Win11 24H2 LCU express deltas
 
 Tracking 16 real-world PA31 deltas pulled from a full OS cumulative update that
-`pa30::apply` could not reconstruct. **8 of 16 are now fixed**; the rest are
-characterized below. Status as of the LZMS rebuild-order + x86-filter fixes.
+`pa30::apply` could not reconstruct. **9 of 16 are now fixed**; the rest are
+characterized below, with the root cause of all remaining failures identified.
 
 ## Where these came from
 
@@ -66,34 +66,46 @@ exactly `target_size`, use it directly; otherwise fall back to bsdiff.
 
 Result: **00, 02, 04, 07, 09, 11, 14, 15 reconstruct bit-exactly.**
 
-## What remains (8/16)
+### Bug 4 — missing x86 RelativeCallsX86 transform (`src/pe/transform.rs`)
 
-### delta_03 — residual LZMS divergence (1 blob)
+The root cause of *every* remaining failure (delta_03 and all 7 LZX blobs) is
+the same: MSDelta's `RelativeCallsX86` preprocessing was never undone. Genuine
+`ApplyDeltaB` converts the 4-byte displacement after every `0xE8` (near CALL) in
+an executable section from an absolute form back to PC-relative, but **only on
+i386 PEs** (machine `0x14C`). That is exactly the failure pattern: the passing
+LZMS blobs are amd64/msil (skipped), the failing ones are x86. Verified by
+byte-diff against genuine output: `our_value - genuine == file_offset_of_E8`.
 
-`sxsoaps.dll` **x86**, 10752 bytes, the only delta-match-dominant LZMS blob.
-Now decodes to the right length and a valid PE header but wrong middle bytes.
-Confirmed **not** the x86 filter (hash identical with the filter bypassed) — a
-genuine LZMS bitstream divergence, most likely in the delta-match path on a
-case the eight passing blobs don't exercise.
+Added `undo_relative_calls_x86`, wired into `pa30::apply`, gated to i386 PEs and
+skipping IL-only (.NET) images (managed assemblies are machine `0x14C` too but
+must not be touched — `COMIMAGE_FLAGS_ILONLY`). This fixed **delta_03** (the lone
+x86 LZMS blob) outright and slashed the LZX diffs (delta_01 1011->24, delta_08
+3195->60, delta_12 8519->295).
 
-### Group B — PseudoLzx/LZX decode bug (7 blobs: 01,05,06,08,10,12,13)
+## The oracle (key unblock)
 
-`lzx::decompress_with_rift` decodes to the correct length but wrong bytes.
-Independent of LZMS. delta_05 (12800B, **single segment** per `LZX_SEG_DEBUG`)
-is the minimal repro — so it is **not** a multi-segment/segment-transition bug.
-A valid PE header decodes, so the Huffman construction is fundamentally right;
-the divergence is content-specific and later in the stream.
+`msdelta.dll` does **not** implement PA31 (zero `PA31` refs even at 26100.32370);
+its `ApplyDeltaB` returns `ERROR_INVALID_DATA`. PA31 lives in
+**`UpdateCompression.dll`** / **`dpx.dll`**, which export the same `ApplyDeltaB`.
+`DllImport`ing `reference/UpdateCompression.dll` by full path on the lab VM and
+applying baseless (empty source) yields the genuine target for all 16 (hashes
+match the embedded SHA256). Truth bytes -> `notes/pa31-lcu-gaps/truth_*.bin`
+(harness `/tmp/apply_uc.ps1`).
 
-## Why the oracle can't localize these yet
+## What remains (7/16, all the same class)
 
-The remaining two bugs produce right-length/wrong-bytes output; the embedded
-hash gives pass/fail but not the divergence offset. Ground-truth bytes from
-genuine `msdelta.dll` would pinpoint it. The lab VM (`jackson-dev`) runs **RTM
-26100.0**, whose `msdelta.dll` rejects these **26100.8457-era** deltas with
-`ERROR_INVALID_DATA` regardless of source (null, empty, or large zero-filled) or
-`ApplyFlags`. A `CreateDeltaB`+`ApplyDeltaB` self-test on the same box passes, so
-the P/Invoke harness is correct — it is a build/format gate. Unblocking needs a
-**build-matched (26100.8457) `msdelta.dll`**.
+### Residual E8 coverage (01, 08, 12)
+
+Mostly fixed; a handful of `0xE8` sites are still mistranslated or skipped
+(24/60/295 bytes) — the section/target-range guard does not yet match genuine
+exactly. Diff against the truth files to close the gap.
+
+### Separate LZX divergence (05, 06, 13)
+
+These are **not** (only) E8: the transform doesn't move them, and delta_13's
+first diff is at offset 232 — inside the PE headers, not an executable section.
+There is a distinct PseudoLzx decode divergence here, independent of the x86
+transform, to be localized against the truth bytes.
 
 ## Reproduction
 
@@ -110,10 +122,9 @@ cargo nextest run --test pa31_lcu_gaps    # asserts >= 8/16 reconstruct
 
 ## Next steps
 
-1. **Source a 26100.8457 `msdelta.dll`** (or update the lab VM) to unblock the
-   differential oracle; then byte-diff delta_03 and delta_05 to localize.
-2. **delta_03**: audit the LZMS delta-match decode path against wimlib for the
-   case it exercises that the eight passing blobs do not.
-3. **Group B**: localize the PseudoLzx divergence with delta_05 (single-segment,
-   12800B) once truth bytes are available.
-4. Raise `KNOWN_GOOD` in `tests/pa31_lcu_gaps.rs` toward 16/16 as each lands.
+1. **Close residual E8 coverage** for 01/08/12: byte-diff against the truth files
+   and align the section/target-range guard in `undo_relative_calls_x86` with
+   genuine `RelativeCallsX86` (consider `RelativeJmpsX86`/`SmashLockPrefixesX86`).
+2. **Localize the separate LZX divergence** for 05/06/13 against the truth bytes
+   (delta_13's first diff is at offset 232, in the PE headers).
+3. Raise `KNOWN_GOOD` in `tests/pa31_lcu_gaps.rs` toward 16/16 as each lands.

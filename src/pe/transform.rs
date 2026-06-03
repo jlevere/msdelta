@@ -115,6 +115,113 @@ pub fn transform_inferred_relocations_amd64(
     Ok(count)
 }
 
+/// Undo MSDelta's `RelativeCallsX86` preprocessing on a reconstructed image.
+///
+/// Genuine `ApplyDeltaB` (PA31, in UpdateCompression.dll / dpx.dll) converts the
+/// 4-byte displacement after every `0xE8` (x86 near CALL) in an executable
+/// section from the encoder's absolute form back to a PC-relative one. It runs
+/// ONLY on i386 PEs (`IMAGE_FILE_MACHINE_I386`, machine `0x14C`); amd64/arm/msil
+/// images are left untouched -- which is exactly why amd64/msil targets decode
+/// correctly without this and 32-bit ones did not.
+///
+/// For a baseless delta the rift is identity, so the net per-site transform is
+/// `displacement -= file_offset_of_the_E8` (verified byte-for-byte against
+/// genuine output). A candidate is translated only when the implied absolute
+/// target lands inside the image, which keeps incidental `0xE8` data bytes from
+/// being rewritten. Returns the number of sites translated.
+pub(crate) fn undo_relative_calls_x86(buf: &mut [u8]) -> u32 {
+    // i386 only. goblin parses the headers; bail (no-op) on anything else.
+    let Ok(pe) = goblin::pe::PE::parse(buf) else {
+        return 0;
+    };
+    if pe.header.coff_header.machine != goblin::pe::header::COFF_MACHINE_X86 {
+        return 0;
+    }
+    let Some(opt) = pe.header.optional_header else {
+        return 0;
+    };
+    let size_of_image = opt.windows_fields.size_of_image;
+
+    // Skip pure-managed (.NET) images. They carry machine `0x14C` too, but their
+    // "executable" section is CIL, not x86 -- genuine RelativeCallsX86 leaves
+    // them alone. Detected via the CLR runtime header's COMIMAGE_FLAGS_ILONLY.
+    const IMAGE_SCN_MEM_EXECUTE: u32 = 0x2000_0000;
+    if is_il_only(buf, &pe.sections, &opt) {
+        return 0;
+    }
+    let mut count = 0u32;
+
+    for s in &pe.sections {
+        if s.characteristics & IMAGE_SCN_MEM_EXECUTE == 0 {
+            continue;
+        }
+        let ro = s.pointer_to_raw_data as usize;
+        let va = s.virtual_address;
+        let span = s.virtual_size.min(s.size_of_raw_data) as usize;
+        let raw_end = (ro + span).min(buf.len());
+        if ro >= raw_end || raw_end < 5 {
+            continue;
+        }
+
+        let mut fo = ro;
+        while fo + 5 <= raw_end {
+            if buf[fo] != 0xE8 {
+                fo += 1;
+                continue;
+            }
+            let v = u32::from_le_bytes(buf[fo + 1..fo + 5].try_into().unwrap());
+            // Implied absolute target RVA = stored value + RVA of the next
+            // instruction. Genuine code only translates when this lands inside
+            // the image; otherwise the 0xE8 is data, not a call.
+            let next_insn_rva = va.wrapping_add((fo - ro) as u32).wrapping_add(5);
+            let target = v.wrapping_add(next_insn_rva);
+            if target < size_of_image {
+                let new = v.wrapping_sub(fo as u32);
+                buf[fo + 1..fo + 5].copy_from_slice(&new.to_le_bytes());
+                count += 1;
+                fo += 5;
+                continue;
+            }
+            fo += 1;
+        }
+    }
+    count
+}
+
+/// Is `buf` a pure-IL (.NET managed) PE? Reads the CLR runtime header
+/// (data directory 14) flags and tests `COMIMAGE_FLAGS_ILONLY` (bit 0).
+fn is_il_only(
+    buf: &[u8],
+    sections: &[goblin::pe::section_table::SectionTable],
+    opt: &goblin::pe::optional_header::OptionalHeader,
+) -> bool {
+    let Some(dd) = opt.data_directories.get_clr_runtime_header() else {
+        return false;
+    };
+    if dd.virtual_address == 0 {
+        return false;
+    }
+    let rva_to_off = |rva: u32| -> Option<usize> {
+        for s in sections {
+            if s.size_of_raw_data == 0 {
+                continue;
+            }
+            if rva >= s.virtual_address && rva < s.virtual_address + s.virtual_size {
+                return Some((s.pointer_to_raw_data + (rva - s.virtual_address)) as usize);
+            }
+        }
+        None
+    };
+    // COR20 header: Flags is a u32 at offset 16.
+    match rva_to_off(dd.virtual_address) {
+        Some(off) if off + 20 <= buf.len() => {
+            let flags = u32::from_le_bytes(buf[off + 16..off + 20].try_into().unwrap());
+            flags & 0x1 != 0 // COMIMAGE_FLAGS_ILONLY
+        }
+        _ => false,
+    }
+}
+
 /// File offset of the PE optional-header CheckSum field (4 bytes), if `data`
 /// is a PE. CheckSum sits at optional-header offset 0x40 for both PE32 and
 /// PE32+, and the optional header starts at e_lfanew + 4 (signature) + 20

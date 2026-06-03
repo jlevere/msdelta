@@ -115,6 +115,13 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
         apply_pe_timestamp_fixup(reference, pp, &mut output)?;
     }
 
+    // Undo MSDelta's x86 relative-CALL preprocessing. Genuine ApplyDeltaB runs
+    // this on the reconstructed image whenever it is a 32-bit (i386) PE,
+    // independent of the msdelta file_type (these LCU express deltas are RAW yet
+    // still carry the transform). It is a no-op on non-PE output and on
+    // amd64/msil images, so it is safe to call unconditionally here.
+    crate::pe::transform::undo_relative_calls_x86(&mut output);
+
     if parsed.header.hash_alg_id != 0 && !parsed.header.target_hash.is_empty() {
         let computed = get_signature(&output, parsed.header.hash_alg_id as u32)?;
         if computed.hash != parsed.header.target_hash {

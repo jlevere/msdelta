@@ -61,7 +61,7 @@ fn pa31_lcu_gap_corpus() {
     //
     // This asserts we do not regress below the known-good count; raise it as the
     // LZX path and delta_03 are fixed (target: 16/16).
-    const KNOWN_GOOD: usize = 8;
+    const KNOWN_GOOD: usize = 9;
     assert!(
         reconstruct >= KNOWN_GOOD,
         "regression: only {reconstruct}/{total} reconstruct, expected >= {KNOWN_GOOD}"
