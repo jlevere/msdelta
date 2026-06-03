@@ -67,17 +67,27 @@ fn build_pe_copy_rift(
 
     // io2rva for the SOURCE image, exactly as ExtractImageOffsetToRva.
     let io2rva_src = build_pe_io2rva(&src_pe);
-    // io2rva for the TARGET image: pe_rift is target RVA -> target file offset,
-    // so its reverse is target file offset -> target RVA. On amd64 this equals
-    // io2rva_src (file offset == RVA); on i386 it carries the tail-section
-    // FileAlignment relayout that the source map cannot express.
-    let io2rva_tgt = pp.pe_rift.reverse();
 
-    // final = io2rva_src^-1 . rift_B^-1 . io2rva_tgt  (our `a.multiply(b)` ==
-    // `b . a`, so the composition reads left-to-right as applied innermost-first).
-    let composed = io2rva_tgt
-        .multiply(&pp.preprocess_rift.reverse())
-        .multiply(&io2rva_src.reverse());
+    // Genuine `PreProcessPEForApply` builds the FORWARD chain in the source
+    // file-offset -> target file-offset direction and applies a SINGLE
+    // `Reverse` to the whole thing (then `Sum`s with the empty CLI map, which
+    // is identity, so no Sum is needed here):
+    //
+    //   forward(source_fo) = pe_rift( preprocess_rift( io2rva_src(source_fo) ) )
+    //                      = source_fo --io2rva_src--> rva
+    //                                  --preprocess_rift--> target_rva
+    //                                  --pe_rift--> target_fo
+    //
+    // (`a.multiply(b)` composes as `b . a`, applied innermost-first, so the
+    // left-to-right `io2rva_src . preprocess_rift . pe_rift` is exactly that
+    // chain.) `pe_rift` is the target RVA -> target file-offset map, used
+    // directly -- no per-factor reverse. The single `Reverse` of the forward
+    // chain handles the i386 FileAlignment relayout's overlaps and gaps via the
+    // genuine working-buffer interval logic, which a naive swap cannot.
+    let forward = io2rva_src
+        .multiply(&pp.preprocess_rift)
+        .multiply(&pp.pe_rift);
+    let composed = forward.reverse();
 
     // composed maps target file offset -> source file offset. Fold into the
     // decompressor's keying: entry source = ref_len + target_fo, target = src_fo.
@@ -1420,6 +1430,29 @@ mod tests {
             eprintln!("build_pe_copy_rift ({} entries) [source-ref_len, target]:", composed.entries.len());
             for e in &composed.entries {
                 eprintln!("  {:x},{:x}", e.source - reflen, e.target);
+            }
+            // FORWARDCHAIN: dump the forward chain (source_fo -> target_fo)
+            // io2rva_src . preprocess_rift . pe_rift, as raw (source,target) pairs
+            // so the scratch Reverse port can be validated against genuine.
+            if std::env::var("FORWARDCHAIN").is_ok() {
+                if let Ok(src_pe) = crate::pe::parse::PeInfo::parse_lenient(&base) {
+                    let io2rva_src = build_pe_io2rva(&src_pe);
+                    eprintln!("io2rva_src ({} entries):", io2rva_src.entries.len());
+                    for e in &io2rva_src.entries {
+                        eprintln!("  {:x},{:x}", e.source, e.target);
+                    }
+                    eprintln!("pe_rift ({} entries):", pp.pe_rift.entries.len());
+                    for e in &pp.pe_rift.entries {
+                        eprintln!("  {:x},{:x}", e.source, e.target);
+                    }
+                    let fwd = io2rva_src
+                        .multiply(&pp.preprocess_rift)
+                        .multiply(&pp.pe_rift);
+                    eprintln!("forward_chain ({} entries) [source_fo,target_fo]:", fwd.entries.len());
+                    for e in &fwd.entries {
+                        eprintln!("  {:x},{:x}", e.source, e.target);
+                    }
+                }
             }
         }
         let tpe = crate::pe::parse::PeInfo::parse_lenient(&truth).unwrap();
