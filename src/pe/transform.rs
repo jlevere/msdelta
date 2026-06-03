@@ -817,6 +817,432 @@ pub(crate) fn remap_pdata_rvas(
     changed
 }
 
+// --- AMD64 DisasmX64 transform (g_transformsMap mask 0x200) -----------------
+//
+// The amd64 `.text` (and any executable range covered by `.pdata`) carries
+// RIP-relative disp32 operands and rel32 branch displacements. When the patch
+// relays out the image, the bytes those displacements point at move; genuine
+// `ApplyDeltaB`'s `TransformDisasmX64` apply pass rewrites each such 4-byte
+// field so it still points at the right (target-layout) location.
+//
+// The pass is driven by `.pdata` enumeration -- it does NOT sweep `.text`
+// blindly. For each `RUNTIME_FUNCTION` `[BeginAddress, EndAddress)` (RVAs), it
+// length-disassembles forward instruction-by-instruction. For every
+// instruction that ends in a RIP-relative disp32 (ModRM mod=00 rm=101) or a
+// rel32 branch (E8/E9, 0F 8x), the disp32 is remapped:
+//
+//   next_rva = instr_start_rva + instr_total_len   (x64 RIP base = END of insn)
+//   new_disp = MapRva(next_rva + old_disp) - MapRva(next_rva)
+//
+// where `MapRva(rva) = rva + rift.map(rva)`. No rift entries are added on apply.
+
+/// Result of one length-disassembly step over an amd64 instruction.
+struct DisasmInsn {
+    /// Total instruction length in bytes (0 => decode error / truncated).
+    len: u8,
+    /// Byte offset (within the instruction) of the 4-byte field to remap.
+    field_off: u8,
+    /// True when the instruction carries a remappable rel32/RIP-relative disp32.
+    remap: bool,
+}
+
+/// Per-opcode "operand kind" classifying ModRM/displacement handling.
+/// Index 0..256 = 1-byte opcodes; the 0F-escaped map is selected separately.
+/// Values mirror the `iVar12` table in `DisassemblerAmd64` (dpx 0x180044b58):
+/// 0 = no ModRM, 1 = invalid, 2 = ModRM, 3 = moffs (disp32/disp64 by addr-size),
+/// 4 = rel8 (1 trailing byte, no ModRM), 5 = rel32 (4 trailing bytes, REMAP).
+const MODRM_1B: [u8; 256] = [
+    2, 2, 2, 2, 0, 0, 1, 1, 2, 2, 2, 2, 0, 0, 1, 1,
+    2, 2, 2, 2, 0, 0, 1, 1, 2, 2, 2, 2, 0, 0, 1, 1,
+    2, 2, 2, 2, 0, 0, 1, 1, 2, 2, 2, 2, 0, 0, 1, 1,
+    2, 2, 2, 2, 0, 0, 1, 1, 2, 2, 2, 2, 0, 0, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 1, 1, 2, 1, 1, 1, 1, 0, 2, 0, 2, 0, 0, 0, 0,
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    2, 2, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1,
+    3, 3, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    2, 2, 0, 0, 1, 1, 2, 2, 0, 0, 0, 0, 0, 0, 1, 0,
+    2, 2, 2, 2, 1, 1, 1, 0, 2, 2, 2, 2, 2, 2, 2, 2,
+    4, 4, 4, 4, 0, 0, 0, 0, 5, 5, 1, 4, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 0, 2, 2,
+];
+
+/// 0F-escaped ModRM/operand kinds (`iVar12` table at base 0x100).
+const MODRM_0F: [u8; 256] = [
+    2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 1, 0, 1, 2, 0, 2,
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1,
+    2, 2, 2, 2, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2,
+    0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    2, 2, 2, 2, 2, 2, 2, 0, 1, 1, 1, 1, 1, 1, 2, 2,
+    5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    0, 0, 0, 2, 2, 2, 1, 1, 0, 0, 0, 2, 2, 2, 2, 2,
+    2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2,
+    2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1,
+];
+
+/// Immediate-size kind per 1-byte opcode (`iVar17` table at base 0x200).
+/// 0 = none, 1 = imm8, 2 = imm16/32 (operand-size sensitive), 3 = moffs-addr,
+/// 4 = imm16/32/64 (MOV imm, REX.W => imm64), 5 = imm16/32 + reljmp marker,
+/// 6/7 = group F6/F7 (imm present only for /0 /1 = TEST).
+const IMM_1B: [u8; 256] = [
+    0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0,
+    0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0,
+    0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0,
+    0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 1, 1, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 5, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0,
+    1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4,
+    1, 1, 2, 0, 0, 0, 1, 5, 3, 0, 2, 0, 0, 1, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
+/// Immediate-size kind per 0F-escaped opcode (`iVar17` table at base 0x300).
+const IMM_0F: [u8; 256] = [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+    0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
+/// Length-disassemble one amd64 instruction at `code[0..]`.
+///
+/// Returns the total length, the offset of the remappable disp32 field (only
+/// meaningful when `remap` is true) and whether such a field is present. A
+/// `len == 0` result signals truncation/decode failure (caller stops the run).
+/// This mirrors `DisassemblerAmd64::Disassemble` (dpx 0x1800a35c8): it is a
+/// pure length decoder that also flags the single 4-byte RIP-relative/rel32
+/// field genuine `TransformDisasmX64` rewrites. Only that field matters; all
+/// other displacement/immediate forms are length-only.
+fn disasm_amd64(code: &[u8]) -> DisasmInsn {
+    let avail = code.len().min(15);
+    if avail == 0 {
+        return DisasmInsn { len: 0, field_off: 0xff, remap: false };
+    }
+    // Genuine `Disassemble` never returns length 0 on a non-empty buffer: on any
+    // truncation / unknown-opcode (`break`), it returns the bytes consumed so
+    // far and the driver advances by that, re-decoding the rest as fresh
+    // instructions (no remap). `stop!` mirrors that: emit the consumed length,
+    // no remappable field.
+    macro_rules! stop {
+        ($pos:expr) => {
+            return DisasmInsn { len: $pos as u8, field_off: 0xff, remap: false }
+        };
+    }
+    // Legacy prefixes.
+    let mut pos = 0usize;
+    let mut opsize16 = false; // 0x66
+    let mut addrsize32 = false; // 0x67
+    while pos < avail {
+        match code[pos] {
+            0x66 => opsize16 = true,
+            0x67 => addrsize32 = true,
+            0x26 | 0x2e | 0x36 | 0x3e | 0x64 | 0x65 | 0xf0 | 0xf2 | 0xf3 => {}
+            _ => break,
+        }
+        pos += 1;
+    }
+    if pos >= avail {
+        stop!(pos);
+    }
+    // Optional REX byte (only the immediately-preceding one counts).
+    let mut rex_w = false;
+    if code[pos] & 0xf0 == 0x40 {
+        rex_w = code[pos] & 0x08 != 0;
+        pos += 1;
+        if pos >= avail {
+            stop!(pos);
+        }
+        // A second 0x40..0x4f here is not a REX -- genuine code stops (a REX must
+        // immediately precede the opcode); the length stays at the first REX.
+        if code[pos] & 0xf0 == 0x40 {
+            stop!(pos);
+        }
+    }
+    // Opcode: 1-byte, or 0F-escaped 2-byte. (0F 38 / 0F 3A three-byte maps fall
+    // through the 0F table; their ModRM/immediate forms are length-equivalent
+    // to a normal 0F ModRM op for the purposes of this decoder, matching the
+    // genuine table which assigns them ModRM kind 2 / no-immediate.)
+    let modrm_kind;
+    let imm_kind;
+    if code[pos] == 0x0f {
+        pos += 1;
+        if pos >= avail {
+            stop!(pos);
+        }
+        let op = code[pos] as usize;
+        modrm_kind = MODRM_0F[op];
+        imm_kind = IMM_0F[op];
+    } else {
+        let op = code[pos] as usize;
+        modrm_kind = MODRM_1B[op];
+        imm_kind = IMM_1B[op];
+    }
+    pos += 1; // consume opcode byte
+
+    // Unknown opcode (table kind 1): genuine code stops here with the length at
+    // the end of the opcode, no operands, no remap.
+    if modrm_kind == 1 {
+        stop!(pos);
+    }
+
+    // `field_off`/`remap` describe the single remappable 4-byte field;
+    // `group_has_imm` tracks whether an F6/F7 group op carries an immediate.
+    let mut field_off = 0xffu8;
+    let mut remap = false;
+    let mut group_has_imm = false;
+
+    // ModRM decode.
+    match modrm_kind {
+        2 => {
+            if pos >= avail {
+                stop!(pos);
+            }
+            let modrm = code[pos];
+            pos += 1;
+            let md = modrm >> 6;
+            let rm = modrm & 7;
+            // For the F6/F7 group, the reg field selects the operation: only
+            // /0 and /1 (TEST) carry an immediate.
+            let reg = (modrm >> 3) & 7;
+            group_has_imm = reg == 0 || reg == 1;
+            if md == 3 {
+                // register-direct: no displacement/SIB.
+            } else if rm == 5 && md == 0 {
+                // RIP-relative disp32 -- the remap target.
+                if avail - pos < 4 {
+                    stop!(pos);
+                }
+                remap = true;
+                field_off = pos as u8;
+                pos += 4;
+            } else if rm == 4 {
+                // SIB byte.
+                if pos >= avail {
+                    stop!(pos);
+                }
+                let sib = code[pos];
+                pos += 1;
+                if md == 0 {
+                    if sib & 7 == 5 {
+                        // base=101 + mod=00 => disp32 (absolute, not remapped).
+                        if avail - pos < 4 {
+                            stop!(pos);
+                        }
+                        pos += 4;
+                    }
+                } else if md == 1 {
+                    if pos >= avail {
+                        stop!(pos);
+                    }
+                    pos += 1; // disp8
+                } else {
+                    // md == 2
+                    if avail - pos < 4 {
+                        stop!(pos);
+                    }
+                    pos += 4; // disp32
+                }
+            } else if md == 1 {
+                if pos >= avail {
+                    stop!(pos);
+                }
+                pos += 1; // disp8
+            } else if md == 2 {
+                if avail - pos < 4 {
+                    stop!(pos);
+                }
+                pos += 4; // disp32
+            }
+        }
+        3 => {
+            // moffs (MOV AL/eAX, [moffs]): address-size sized direct offset.
+            let n = if addrsize32 { 4 } else { 8 };
+            if avail - pos < n {
+                stop!(pos);
+            }
+            pos += n;
+        }
+        4 => {
+            // rel8 (Jcc/LOOP/JMP short): 1 trailing byte, not remapped.
+            if pos >= avail {
+                stop!(pos);
+            }
+            pos += 1;
+        }
+        5 => {
+            // rel32 branch (E8/E9, 0F 8x): the remap target.
+            if avail - pos < 4 {
+                stop!(pos);
+            }
+            remap = true;
+            field_off = pos as u8;
+            pos += 4;
+        }
+        _ => {}
+    }
+
+    // Immediate.
+    match imm_kind {
+        1 => {
+            if pos >= avail {
+                stop!(pos);
+            }
+            pos += 1;
+        }
+        2 | 5 => {
+            // imm16 with 0x66, else imm32.
+            let n = if opsize16 { 2 } else { 4 };
+            if avail - pos < n {
+                stop!(pos);
+            }
+            pos += n;
+        }
+        3 => {
+            // moffs address-immediate (A0..A3): handled as the operand above;
+            // genuine code emits no additional immediate here.
+        }
+        4 => {
+            // MOV imm: imm64 with REX.W, imm16 with 0x66, else imm32.
+            let n = if rex_w {
+                8
+            } else if opsize16 {
+                2
+            } else {
+                4
+            };
+            if avail - pos < n {
+                stop!(pos);
+            }
+            pos += n;
+        }
+        // F6 group: imm8 only for TEST (/0 /1).
+        6 if group_has_imm => {
+            if pos >= avail {
+                stop!(pos);
+            }
+            pos += 1;
+        }
+        // F7 group: imm16/32 only for TEST (/0 /1).
+        7 if group_has_imm => {
+            let n = if opsize16 { 2 } else { 4 };
+            if avail - pos < n {
+                stop!(pos);
+            }
+            pos += n;
+        }
+        _ => {}
+    }
+
+    DisasmInsn { len: pos as u8, field_off, remap }
+}
+
+/// `TransformDisasmX64` apply pass (dpx, g_transformsMap mask 0x200, machine
+/// 0x8664). Driven by `.pdata` (the exception directory, data dir index 3):
+/// each `RUNTIME_FUNCTION` `[BeginAddress, EndAddress)` RVA range is
+/// length-disassembled forward in `output` (target layout) and every
+/// RIP-relative disp32 / rel32 displacement is remapped through the preprocess
+/// `rift` so it still resolves to the right target byte. No-op when the rift is
+/// empty (no relayout) or there is no `.pdata`. Returns the count of fields
+/// rewritten.
+pub(crate) fn transform_disasm_x64(
+    output: &mut [u8],
+    pe: &PeInfo,
+    rift: &RiftTable,
+) -> u32 {
+    if rift.entries.is_empty() {
+        return 0;
+    }
+    const EXCEPTION_DIR: usize = 3;
+    let Some(&(pdata_rva, pdata_size)) = pe.data_directories.get(EXCEPTION_DIR) else {
+        return 0;
+    };
+    if pdata_rva == 0 || pdata_size < 12 {
+        return 0;
+    }
+    let Some(pdata_off) = rva_to_file_off(pe, pdata_rva as i64) else {
+        return 0;
+    };
+    let n_funcs = (pdata_size / 12) as usize;
+    let mut changed = 0u32;
+    for i in 0..n_funcs {
+        let ent = pdata_off + i * 12;
+        if ent + 12 > output.len() {
+            break;
+        }
+        let begin = u32::from_le_bytes(output[ent..ent + 4].try_into().unwrap()) as i64;
+        let end = u32::from_le_bytes(output[ent + 4..ent + 8].try_into().unwrap()) as i64;
+        if begin == 0 || end <= begin {
+            continue;
+        }
+        let Some(func_off) = rva_to_file_off(pe, begin) else {
+            continue;
+        };
+        let mut rva = begin;
+        let mut off = func_off;
+        while rva < end {
+            let remaining = (end - rva) as usize;
+            let avail_file = output.len().saturating_sub(off);
+            if avail_file == 0 {
+                break;
+            }
+            let window = remaining.min(avail_file).min(15);
+            let insn = disasm_amd64(&output[off..off + window]);
+            if insn.len == 0 {
+                break; // decode error -- stop this function run
+            }
+            let len = insn.len as i64;
+            if insn.remap {
+                let fpos = off + insn.field_off as usize;
+                if fpos + 4 <= output.len() {
+                    let old_disp =
+                        i32::from_le_bytes(output[fpos..fpos + 4].try_into().unwrap()) as i64;
+                    let next_rva = rva + len;
+                    let base = map_rva(rift, next_rva);
+                    let mapped = map_rva(rift, next_rva + old_disp);
+                    let new_disp = mapped - base;
+                    if new_disp != old_disp {
+                        output[fpos..fpos + 4]
+                            .copy_from_slice(&(new_disp as i32).to_le_bytes());
+                        changed += 1;
+                    }
+                }
+            }
+            rva += len;
+            off += insn.len as usize;
+        }
+    }
+    changed
+}
+
 /// Undo MSDelta's x86 `0xE8` (near CALL) preprocessing on a reconstructed image.
 ///
 /// Genuine `ApplyDeltaB` (PA31, in UpdateCompression.dll / dpx.dll -- msdelta.dll
@@ -1083,5 +1509,47 @@ mod tests {
     fn raw_file_type_no_transform() {
         // FILE_TYPE_RAW doesn't trigger transforms
         assert_eq!(FILE_TYPE_RAW, 1);
+    }
+
+    /// Pin the amd64 length-disassembler against the representative opcode forms
+    /// the `.pdata`-driven DisasmX64 pass walks: RIP-relative CALL/LEA/MOV (the
+    /// remap sites), rel32 branches, multi-byte NOP padding, SIB/disp forms and
+    /// MOV-imm64. `(len, field_off, remap)` must match exactly or the pass
+    /// desyncs over a function range.
+    #[test]
+    fn disasm_amd64_forms() {
+        let c = |b: &[u8]| {
+            let i = disasm_amd64(b);
+            (i.len, i.field_off, i.remap)
+        };
+        // CALL [rip+disp32]: FF /2, modrm 15 (mod00 rm101). len 6, disp at +2.
+        assert_eq!(c(&[0xff, 0x15, 0x00, 0x10, 0x00, 0x00]), (6, 2, true));
+        // REX.W LEA rsi,[rip+disp32]: 48 8d 35 ... len 7, disp at +3.
+        assert_eq!(c(&[0x48, 0x8d, 0x35, 0, 0, 0, 0]), (7, 3, true));
+        // 4c 8d 25 (LEA r12,[rip+disp32]) len 7.
+        assert_eq!(c(&[0x4c, 0x8d, 0x25, 0, 0, 0, 0]), (7, 3, true));
+        // MOV [rip+disp32], imm32: C7 05 disp32 imm32. len 10, disp at +2.
+        assert_eq!(c(&[0xc7, 0x05, 0, 0, 0, 0, 1, 0, 0, 0]), (10, 2, true));
+        // rel32 CALL E8: len 5, field at +1, remap.
+        assert_eq!(c(&[0xe8, 0, 0, 0, 0]), (5, 1, true));
+        // rel32 JMP E9.
+        assert_eq!(c(&[0xe9, 0, 0, 0, 0]), (5, 1, true));
+        // 0F 8x near Jcc (rel32): len 6, field at +2, remap.
+        assert_eq!(c(&[0x0f, 0x84, 0, 0, 0, 0]), (6, 2, true));
+        // rel8 short JMP EB: len 2, no remap.
+        assert_eq!(c(&[0xeb, 0x00]), (2, 0xff, false));
+        // 5-byte multi-byte NOP 0F 1F 44 00 00 (table kind 1 stops after opcode,
+        // length 2; the driver re-decodes the 44 00 00 tail).
+        assert_eq!(c(&[0x0f, 0x1f, 0x44, 0x00, 0x00]).0, 2);
+        // PUSH rbp under REX (40 55): len 2, no operands.
+        assert_eq!(c(&[0x40, 0x55]), (2, 0xff, false));
+        // REX.W MOV rax, imm64 (48 B8 + imm64): len 10.
+        assert_eq!(c(&[0x48, 0xb8, 1, 2, 3, 4, 5, 6, 7, 8]), (10, 0xff, false));
+        // MOV r/m,reg with SIB+disp32 (48 89 84 24 disp32): len 8.
+        assert_eq!(c(&[0x48, 0x89, 0x84, 0x24, 0, 0, 0, 0]), (8, 0xff, false));
+        // SUB rsp, imm32 (48 81 ec imm32): len 7.
+        assert_eq!(c(&[0x48, 0x81, 0xec, 0, 0, 0, 0]), (7, 0xff, false));
+        // A plain reg-direct XOR (48 33 c4): len 3.
+        assert_eq!(c(&[0x48, 0x33, 0xc4]), (3, 0xff, false));
     }
 }

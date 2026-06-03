@@ -258,6 +258,16 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
             && !pp.preprocess_rift.entries.is_empty()
         {
             if let Ok(out_pe) = crate::pe::parse::PeInfo::parse(&output) {
+                // DisasmX64 (g_transformsMap mask 0x200): remap RIP-relative
+                // disp32 / rel32 displacements in executable ranges before the
+                // .pdata RVA fields themselves are rewritten. The pass reads
+                // .pdata's (still source-domain) Begin/End RVAs to locate
+                // functions, so it must run ahead of remap_pdata_rvas.
+                crate::pe::transform::transform_disasm_x64(
+                    &mut output,
+                    &out_pe,
+                    &pp.preprocess_rift,
+                );
                 const EXCEPTION_DIR: usize = 3;
                 if let Some(&(pdata_rva, pdata_size)) =
                     out_pe.data_directories.get(EXCEPTION_DIR)
