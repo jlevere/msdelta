@@ -1051,8 +1051,8 @@ mod tests {
         let x86_text = section_diff(&x86_truth, &x86_out, ".text");
         eprintln!("comctl32 x86 .text diff = {x86_text}");
         assert!(
-            x86_text <= 700,
-            "comctl32 x86 .text regressed (expected <= 700, was 16690 pre-T(source))"
+            x86_text <= 600,
+            "comctl32 x86 .text regressed (expected <= 600; 16690 pre-T(source), 618 pre-MarkNonExe)"
         );
         // .reloc still needs the block REBUILD (regroup by mapped page); the
         // copied source blocks differ from the regenerated target table.
@@ -1165,12 +1165,22 @@ mod tests {
                 let Some(t) = obs else { continue };
                 covered += 1;
                 if mine[s] != *t {
-                    *by_sec.entry(sec_of(s)).or_default() += 1;
-                    if shown < 16 {
-                        eprintln!(
-                            "  TSDIFF fo={s:#x} sec={} mine={:02x} genuine={:02x} raw={:02x}",
-                            sec_of(s), mine[s], t, old[s]
-                        );
+                    let sec = sec_of(s);
+                    *by_sec.entry(sec.clone()).or_default() += 1;
+                    if shown < 14 && sec == ".text" {
+                        let w = |buf: &[u8]| -> String {
+                            (s.saturating_sub(6)..(s + 6).min(buf.len()))
+                                .map(|k| format!("{:02x}", buf[k]))
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        };
+                        let g: Vec<u8> = (s.saturating_sub(6)..(s + 6).min(old.len()))
+                            .map(|k| observed[k].unwrap_or(old[k]))
+                            .collect();
+                        eprintln!("  TSDIFF fo={s:#x} [.text]");
+                        eprintln!("    raw    : {}", w(&old));
+                        eprintln!("    genuine: {}", g.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" "));
+                        eprintln!("    mine   : {}", w(&mine));
                         shown += 1;
                     }
                 }

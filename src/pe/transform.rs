@@ -60,6 +60,9 @@ pub(crate) fn build_transformed_source(buf: &mut [u8], pe: &PeInfo, rift: &RiftT
         return; // i386 source transforms only (this path); x64 handled elsewhere
     }
     let mut marker = vec![0u8; buf.len()];
+    if flags & 0x2 != 0 {
+        mark_non_executable(buf, pe, &mut marker);
+    }
     if flags & 0x20 != 0 {
         transform_source_relocs_i386(buf, pe, rift, &mut marker);
     }
@@ -68,6 +71,27 @@ pub(crate) fn build_transformed_source(buf: &mut [u8], pe: &PeInfo, rift: &RiftT
     }
     if flags & 0x100 != 0 {
         transform_source_calls_i386(buf, pe, rift, &marker);
+    }
+}
+
+/// `MarkNonExe` (dpx, g_transformsMap mask 0x2, runs first): mark every byte
+/// that is NOT inside an executable section. The instruction transforms then
+/// rewrite a relative branch only when its target is UNMARKED (i.e. lands in
+/// executable code) -- this is what rejects the false-positive 0xE8/0xE9 bytes
+/// embedded in data/operands whose bogus target lands outside code.
+fn mark_non_executable(buf: &[u8], pe: &PeInfo, marker: &mut [u8]) {
+    for m in marker.iter_mut() {
+        *m |= 1;
+    }
+    for sec in &pe.sections {
+        if sec.characteristics & 0x2000_0000 == 0 {
+            continue;
+        }
+        let a = sec.raw_offset as usize;
+        let end = (a + sec.virtual_size.min(sec.raw_size) as usize).min(buf.len());
+        for m in &mut marker[a..end] {
+            *m &= !1;
+        }
     }
 }
 
