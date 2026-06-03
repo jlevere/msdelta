@@ -182,10 +182,12 @@ pub(crate) fn undo_x86_e8_translation(buf: &mut [u8]) -> u32 {
 /// images whose CLR runtime header (data directory 14) has `COMIMAGE_FLAGS_ILONLY`.
 fn is_i386_native_pe(buf: &[u8]) -> bool {
     let rd_u16 = |o: usize| -> Option<u16> {
-        buf.get(o..o + 2).map(|b| u16::from_le_bytes(b.try_into().unwrap()))
+        buf.get(o..o + 2)
+            .map(|b| u16::from_le_bytes(b.try_into().unwrap()))
     };
     let rd_u32 = |o: usize| -> Option<u32> {
-        buf.get(o..o + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+        buf.get(o..o + 4)
+            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
     };
 
     let e_lfanew = match rd_u32(0x3c) {
@@ -223,8 +225,7 @@ fn is_i386_native_pe(buf: &[u8]) -> bool {
         let va = rd_u32(s + 12).unwrap_or(0);
         let ro = rd_u32(s + 20).unwrap_or(0);
         if clr_rva >= va && clr_rva < va.wrapping_add(vs) {
-            // usize math: ro and (clr_rva - va) are u32, so this cannot overflow
-            // on a 64-bit target (a u32 + u32 add in u32 could, on a bad header).
+            // usize add (a u32 add could overflow on a hostile header).
             let off = ro as usize + (clr_rva - va) as usize;
             if let Some(flags) = rd_u32(off + 16) {
                 return flags & 0x1 == 0; // ILONLY clear => native

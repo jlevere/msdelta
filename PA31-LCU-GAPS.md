@@ -91,7 +91,8 @@ its `ApplyDeltaB` returns `ERROR_INVALID_DATA`. PA31 lives in
 `DllImport`ing `reference/UpdateCompression.dll` by full path on the lab VM and
 applying baseless (empty source) yields the genuine target for all 16 (hashes
 match the embedded SHA256). Truth bytes -> `notes/pa31-lcu-gaps/truth_*.bin`
-(harness `/tmp/apply_uc.ps1`).
+(harness `/tmp/apply_uc.ps1`; pull large files with `scp -O`, the SFTP path
+truncates at 200 KiB).
 
 The exact translation was pinned with the oracle: dumping every `0xE8` site's
 stored value and comparing translated-vs-not against the genuine output showed
@@ -104,17 +105,6 @@ images (e.g. comctl32), which had left delta_13 untransformed.
 This fixed the lone x86 LZMS blob (delta_03) and all seven LZX blobs, taking the
 corpus to **16/16**. amd64/arm64 and managed (.NET) targets correctly skip the
 transform.
-
-## The oracle (key unblock)
-
-`msdelta.dll` does **not** implement PA31 (zero `PA31` refs even at 26100.32370);
-its `ApplyDeltaB` returns `ERROR_INVALID_DATA`. PA31 lives in
-**`UpdateCompression.dll`** / **`dpx.dll`**, which export the same `ApplyDeltaB`.
-`DllImport`ing `reference/UpdateCompression.dll` by full path on the lab VM and
-applying baseless (empty source) yields the genuine target for all 16 (hashes
-match the embedded SHA256). Truth bytes -> `notes/pa31-lcu-gaps/truth_*.bin`
-(harness `/tmp/apply_uc.ps1`; pull large files with `scp -O`, the SFTP path
-truncates at 200 KiB).
 
 ## Reproduction
 
