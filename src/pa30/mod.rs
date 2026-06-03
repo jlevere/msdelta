@@ -1383,6 +1383,24 @@ mod tests {
             )
         };
         let out = apply_impl(&base, &delta, false).unwrap();
+        // DUMP_TSRC=<path>: write OUR build_transformed_source output (T(source))
+        // for byte-diff against genuine's dpx-dumped T(source) (lab harness).
+        if let Ok(path) = std::env::var("DUMP_TSRC") {
+            let parsed = parse(&delta).unwrap();
+            let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
+            let mut t = base.clone();
+            crate::pe::transform::zero_pe_checksum(&mut t);
+            let spe = crate::pe::parse::PeInfo::parse_lenient(&t).unwrap();
+            crate::pe::transform::build_transformed_source(
+                &mut t,
+                &spe,
+                &pp.preprocess_rift,
+                parsed.header.flags as u64,
+                pp.target_image_base,
+            );
+            std::fs::write(&path, &t).unwrap();
+            eprintln!("wrote our T(source) to {path} ({} bytes)", t.len());
+        }
         if std::env::var("RIFTDUMP").is_ok() {
             let parsed = parse(&delta).unwrap();
             let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
@@ -1394,6 +1412,14 @@ mod tests {
                     e.target,
                     e.target - e.source
                 );
+            }
+            // Our composed copy rift, with the ref_len shift removed so it is in
+            // the same target_fo -> source_fo domain as genuine's dumped rift.
+            let reflen = base.len() as i64;
+            let composed = build_pe_copy_rift(&base, &pp);
+            eprintln!("build_pe_copy_rift ({} entries) [source-ref_len, target]:", composed.entries.len());
+            for e in &composed.entries {
+                eprintln!("  {:x},{:x}", e.source - reflen, e.target);
             }
         }
         let tpe = crate::pe::parse::PeInfo::parse_lenient(&truth).unwrap();
