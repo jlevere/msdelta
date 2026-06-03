@@ -20,7 +20,7 @@ UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 | `GetDeltaSignatureB` | **done** | `pa30::get_signature()` |
 | `GetDeltaSignatureA` / `GetDeltaSignatureW` | n/a | ANSI/Unicode wrappers |
 | `DeltaFree` | n/a | Rust ownership handles this |
-| `DeltaNormalizeProvidedB` | missing | normalize a buffer for signature computation |
+| `DeltaNormalizeProvidedB` | **done** | `pa30::normalize_for_signature()` |
 
 ### UpdateCompression.dll extras (1 additional)
 
@@ -96,18 +96,62 @@ UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 
 ## PE transform pipeline
 
-### Decode (apply) side
+> Authoritative status from the 2026-06 transform-coverage audit (full matrix,
+> tier-ranked worklist, per-transform in-vacuum test plan, and per-arch fixture
+> plan in `notes/pa31-lcu-gaps/TRANSFORM-COVERAGE-AUDIT.md`).
 
-| Transform | Status | Notes |
-|-----------|--------|-------|
-| Preprocess buffer parsing | **done** | image base, timestamp, 2 rift tables, CLI flags |
-| Rift table decode | **done** | IntFormat Huffman + delta encoding |
-| Rift-adjusted decompression | **done** | `decompress_with_rift()` |
-| PE timestamp fixup | **done** | COFF header, export dir, debug dir, debug data scan |
-| Inferred relocations (x86-32) | **partial** | function exists but not wired into apply() |
-| Inferred relocations (x86-64) | missing | no AMD64 variant |
-| CLI metadata handling | missing | errors if CLI flag set (affects .NET assemblies) |
-| CLI map handling | missing | errors if CLI map flag set |
+**Architecture.** Which transforms run on apply is selected by a flag word in the
+delta header (`+0x20`, set by the encoder) AND'd against a static transform table
+— *not* re-derived from the PE machine at apply time. `file_type == 1` (RAW)
+skips the whole PE pipeline; only flag-gated output post-processes apply (e.g.
+the `0xE8`/`0xE9` x86 filter on flag bit 0). The shipped/express corpus is **all
+RAW**, so it exercises **zero** PE transforms.
+
+**Honest coverage: ~1 of 17 PE transforms.** RAW is complete; the PE/CLI path
+(`file_type != 1`) is the open frontier. `rift_from_exports/pdata/resources` and
+`transform_inferred_relocations_*` are **dead code with no live callers** — not
+coverage.
+
+| # | Transform | Rewrites content? | Our status | Risk |
+|---|-----------|:---:|---|:---:|
+| 1 | RelativeCallsX86 (0xE8) | yes | **done** — header-flag-gated (bit 0) | — |
+| 2 | RelativeJmpsX86 (0xE9) | yes | missing | high |
+| 3 | SmashLockPrefixesX86 (0xF0) | yes | missing | high |
+| 4 | TransformDisasmX64 (RIP-rel) | yes | missing | high |
+| 5 | TransformDisasmARM (Thumb-2) | yes | missing | low |
+| 6 | TransformDisasmARM64 | yes | missing | high |
+| 7-8 | TransformCli(4)Disasm (IL RID) | yes | missing | high |
+| 9-10 | TransformCli(4)Metadata (#~) | yes | missing (cli_metadata/cli_map discarded) | high |
+| 11 | TransformImports (0x03 fill + RVA) | yes | partial (offset half only) | high |
+| 12 | TransformExports (EAT/NPT RVA) | yes | missing (rift_from_exports dead) | med |
+| 13 | TransformRelocations (HIGHLOW/DIR64) | yes | partial (Mode B dead, Mode A absent) | high |
+| 14 | TransformResources (.rsrc RVA tree) | yes | partial (coarse, dead) | high |
+| 15 | TransformPdataX64 (RUNTIME_FUNCTION) | yes | missing | high |
+| 16-17 | TransformPdata ARM / ARM64 | yes | missing | high |
+
+Offset-only, working: PseudoLzx/LZMS/BsDiff payloads, LRU/rift offset remap, PE
+timestamp fixup, RAW decode.
+
+**Tiered worklist** (content-rewrite × artifact frequency × silent-corruption risk):
+- **T0 (do first): loud-fail detector** — hard-error when a delta enables a
+  transform we don't faithfully implement (non-empty `cli_metadata`/`cli_map`, or
+  an unhandled transform flag bit), turning silent `HashMismatch` corruption into
+  an honest "unsupported transform" error.
+- **T1 (amd64-dense corpus):** TransformPdataX64, TransformRelocations (Mode A),
+  TransformDisasmX64.
+- **T2:** TransformImports (0x03 fill undo), TransformExports, TransformResources.
+- **T3:** RelativeJmpsX86, SmashLockPrefixesX86, TransformDisasmARM64/PdataARM64.
+- **T4:** the four CLI transforms (managed assemblies), DisasmARM/PdataARM (ARM32).
+
+Each transform is a pure byte→byte fn and must get its own in-vacuum tests
+(round-trip identity, proptest, negative-gating, oracle differential) — never
+relying on the full `apply()` pipeline or a single population corpus.
+
+**Fixtures (the corpus has NO `file_type != 1` deltas):** source per-arch PE
+deltas via `uup` (`fe3` enumerate + `psf` extract) + `msu gaps`: amd64 LCU/SSU
+(pdata/reloc/disasm), i386 (code DLL + the `.mui` gating pair), ARM64
+(pdata/disasm — growing, silent-prone), and a real .NET servicing PSF (or two
+`CreateDeltaB` C# assemblies) for the CLI transforms.
 
 ### Encode (create) side
 
@@ -117,13 +161,8 @@ UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 | Preprocess buffer construction | **done** | `build_pe_preprocess()` |
 | Rift table serialization | **done** | IntFormat write side |
 | Timestamp normalization | **done** | replace target timestamps with source |
-| Section rift generation | **done** | match by name, VA-1 entries |
-| Data directory rift generation | **done** | match by fixed index |
-| Import descriptor rift | **done** | match by DLL name (simplified) |
-| Export table rift | **done** | match by function name |
-| Resource section rift | **done** | `RiftTableFromResourcesFactory` |
-| Pdata/exception rift | **done** | `RiftTableFromPdatasFactory` |
-| Import thunk-level rift | **done** | per-function IAT matching within each DLL |
+| Section / data-dir rift generation | **done** | match by name / fixed index |
+| Import / export / resource / pdata rift | **partial** | offset half only; content-rewrite half (see matrix) missing, and these mostly aren't wired on the apply side |
 | Rift-aware match finding | missing | encoder ignores rift during LZX compression |
 
 ---
@@ -132,7 +171,7 @@ UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 
 | Bug | Severity | Notes |
 |-----|----------|-------|
-| WOW64 proxystub fixture divergence | **high** | 1 of 7 DCM fixtures fails: output diverges at byte 249 of 3.2MB. Multi-segment complex-mode stream. Likely off-by-1 in bit consumption. Needs Frida instrumentation of msdelta.dll to debug. |
+| (none open) | — | The WOW64 proxystub multi-segment divergence is **fixed** (`debug_wow64_divergence` passes). The big open work is the PE transform pipeline above, not a discrete bug. |
 
 ---
 
@@ -140,13 +179,14 @@ UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 
 | Feature | Priority | Notes |
 |---------|----------|-------|
-| `ApplyDeltaProvidedB` equivalent | low | caller-provided output buffer to avoid allocation |
-| `DeltaNormalizeProvidedB` equivalent | low | normalize buffer for cross-platform signature verification |
-| `GetDeltaInfoExB` equivalent | low | PA31 extra fields already parsed, just needs pub wrapper |
+| **PE transform pipeline** | **high** | the frontier — see the matrix above; start with the T0 loud-fail detector |
 | Configurable target size limit | low | currently hardcoded 64 MB |
 | PA31 encoding | medium | header extension fields; decoder already handles it |
 | `no_std` support | low | would need to feature-gate `std`, replace `Vec` allocations |
 | Streaming API | low | current API is one-shot `&[u8]` → `Vec<u8>` |
+
+(`ApplyDeltaProvidedB`, `DeltaNormalizeProvidedB`, `GetDeltaInfoExB` are all
+implemented — see the API surface table in the README.)
 
 ---
 
@@ -154,13 +194,14 @@ UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 
 | Area | Status | Notes |
 |------|--------|-------|
-| DCM manifest roundtrips | **done** | 6 of 7 fixtures pass (proxystub blocked) |
+| DCM manifest roundtrips | **done** | all bundled fixtures pass (incl. WOW64 proxystub) |
 | RAW delta roundtrips | **done** | PseudoLzx + BsDiff |
 | PE delta roundtrips | **done** | cmd→cmd_patched, advapi32_old→advapi32_new |
 | PA19 decode | **done** | fixture from Windows |
-| PA31 decode | missing | no PA31 test fixture |
-| Fuzz: decoder robustness | **done** | 5 cargo-fuzz targets, 7 crash bugs found and fixed |
-| Fuzz: roundtrip (LZX) | **done** | 183K+ iterations clean |
-| Fuzz: roundtrip (BsDiff) | **done** | 183K+ iterations clean |
-| Cross-validation with msdelta.dll | partial | manual only, no CI automation |
+| PA31 decode (full population) | **done** | 377/377 LCU express deltas, gated in `tests/pa31_lcu_gaps.rs` |
+| Fuzz: decoder robustness | **done** | 8 cargo-fuzz targets (incl. fuzz_pa31_apply, fuzz_lzx, fuzz_x86_e8) |
+| Fuzz: roundtrip (LZX / BsDiff) | **done** | clean |
+| Per-transform in-vacuum tests | **missing** | each PE transform needs isolated round-trip + proptest + oracle (see audit) |
+| PE-type (`file_type != 1`) population oracle | **missing** | corpus is all RAW; need per-arch PE deltas via uup (see audit fixture plan) |
+| Cross-validation with `UpdateCompression.dll` | partial | manual lab rig; the real PA31 oracle (msdelta.dll has no PA31) |
 | Large file tests (>1MB) | missing | only the proxystub fixture (broken) exercises this |
