@@ -72,10 +72,20 @@ pub(crate) fn build_transformed_source(
         // literal-provided fields (e.g. comctl32 amd64 .pdata UnwindData).
         // DisasmX64 must precede PdataX64: its driver reads the (still source-
         // domain) .pdata Begin/End RVAs to locate functions.
-        // PE32+ imports / resources for amd64 are not yet implemented on this
-        // path. Relocations (0x20) precede DisasmX64 (0x200) in g_transformsMap.
+        // g_transformsMap order: Imports (0x4), Exports (0x8), Resources (0x10),
+        // Relocations (0x20), then DisasmX64 (0x200), PdataX64 (0x400). The
+        // marker only gates the i386 instruction passes, so it is unused here.
+        let mut marker = vec![0u8; buf.len()];
+        if flags & 0x4 != 0 {
+            transform_source_imports(buf, pe, rift, &mut marker, target_base);
+        }
+        if flags & 0x8 != 0 {
+            transform_source_exports(buf, pe, rift, &mut marker);
+        }
+        if flags & 0x10 != 0 {
+            transform_source_resources(buf, pe, rift, &mut marker);
+        }
         if flags & 0x20 != 0 {
-            let mut marker = vec![0u8; buf.len()];
             transform_source_relocs(buf, pe, rift, &mut marker, target_base);
         }
         if flags & 0x200 != 0 {
@@ -123,7 +133,9 @@ pub(crate) fn build_transformed_source(
 /// by-name thunk holds an IMAGE_IMPORT_BY_NAME RVA to map (by-ordinal entries,
 /// high bit set, are skipped); a BOUND IAT (TimeDateStamp != 0) holds absolute
 /// VAs mapped like relocations. Then map the descriptor's
-/// OriginalFirstThunk/Name/FirstThunk fields. i386 (PE32, 4-byte thunks).
+/// OriginalFirstThunk/Name/FirstThunk fields. Handles both PE32 (4-byte thunks,
+/// ordinal flag bit 31) and PE32+ (8-byte thunks, ordinal flag bit 63); the
+/// descriptor layout and its RVA fields are identical across both.
 fn transform_source_imports(
     buf: &mut [u8],
     pe: &PeInfo,
@@ -131,9 +143,8 @@ fn transform_source_imports(
     marker: &mut [u8],
     target_base: u64,
 ) {
-    if pe.is_64bit {
-        return; // PE32+ (8-byte thunks) handled separately
-    }
+    let ptr = if pe.is_64bit { 8usize } else { 4 };
+    let ordinal_flag: u64 = if pe.is_64bit { 1 << 63 } else { 1 << 31 };
     let image_base = pe.image_base as i64;
     let (imp_rva, _imp_size) = match pe.data_directories.get(1).copied() {
         Some(v) if v.0 != 0 => v,
@@ -175,6 +186,18 @@ fn transform_source_imports(
         if oft == 0 && name == 0 && ft == 0 {
             break; // null terminator descriptor
         }
+        // Read a pointer-sized thunk (4 or 8 bytes) at file offset `fo`.
+        let rd_thunk = |b: &[u8], fo: usize| -> u64 {
+            if pe.is_64bit {
+                b.get(fo..fo + 8)
+                    .map(|s| u64::from_le_bytes(s.try_into().unwrap()))
+                    .unwrap_or(0)
+            } else {
+                b.get(fo..fo + 4)
+                    .map(|s| u32::from_le_bytes(s.try_into().unwrap()) as u64)
+                    .unwrap_or(0)
+            }
+        };
         // Walk a thunk array at `arr_rva`. `bound` => bound IAT (VAs).
         let walk = |buf: &mut [u8], marker: &mut [u8], arr_rva: u32, bound: bool| {
             if arr_rva == 0 {
@@ -185,29 +208,41 @@ fn transform_source_imports(
             };
             let mut k = 0usize;
             loop {
-                let fo = base + k * 4;
-                if fo + 4 > buf.len() {
+                let fo = base + k * ptr;
+                if fo + ptr > buf.len() {
                     break;
                 }
-                let v = rd(buf, fo);
+                let v = rd_thunk(buf, fo);
                 if v == 0 {
                     break;
                 }
                 if bound && tds != 0 {
                     // bound: absolute VA -> map (VA - sourceBase) as RVA, then
-                    // relinearize against the TARGET image base.
+                    // relinearize against the TARGET image base. Pointer-sized.
                     let r = v as i64 - image_base;
-                    let nv = (target_base as i64 + r + rift.map(r)) as u32;
-                    buf[fo..fo + 4].copy_from_slice(&nv.to_le_bytes());
-                    for b in 0..4 {
+                    let nv = (target_base as i64)
+                        .wrapping_add(r)
+                        .wrapping_add(rift.map(r)) as u64;
+                    if pe.is_64bit {
+                        buf[fo..fo + 8].copy_from_slice(&nv.to_le_bytes());
+                    } else {
+                        buf[fo..fo + 4].copy_from_slice(&(nv as u32).to_le_bytes());
+                    }
+                    for b in 0..ptr {
                         marker[fo + b] |= 1;
                     }
-                } else if v & 0x8000_0000 == 0 {
-                    // by-name: the entry is an IMAGE_IMPORT_BY_NAME RVA.
+                } else if v & ordinal_flag == 0 {
+                    // by-name: the low 32 bits are the IMAGE_IMPORT_BY_NAME RVA
+                    // (a 32-bit RVA even in an 8-byte PE32+ thunk; high dword 0).
                     map_rva_field(buf, marker, fo);
+                    if pe.is_64bit {
+                        for b in 4..8 {
+                            marker[fo + b] |= 1;
+                        }
+                    }
                 } else {
                     // by-ordinal: not an RVA, but still claim the slot.
-                    for b in 0..4 {
+                    for b in 0..ptr {
                         marker[fo + b] |= 1;
                     }
                 }
