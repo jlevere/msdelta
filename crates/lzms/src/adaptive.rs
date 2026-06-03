@@ -257,12 +257,25 @@ impl AdaptiveCode {
         self.freqs[sym] += 1;
         self.countdown -= 1;
         if self.countdown == 0 {
-            for f in &mut self.freqs {
-                *f = (*f >> 1) + 1;
-            }
-            self.rebuild();
-            self.countdown = self.rebuild_freq;
+            self.rebuild_and_dilute();
         }
+    }
+
+    /// Rebuild the code, then dilute the frequencies for the next window.
+    ///
+    /// Order is load-bearing: the next code is built from the *accumulated*
+    /// (un-diluted) frequencies, and only afterward are they halved
+    /// (`(f >> 1) + 1`) for the following window. msdelta/cabinet.dll/wimlib all
+    /// build-then-dilute; diluting first yields a different canonical code and
+    /// desyncs the bitstream after the first rebuild (every `rebuild_freq`
+    /// symbols, i.e. 512-1024 in). Short or hugely-repetitive streams never hit
+    /// a rebuild, which is why this stayed latent.
+    fn rebuild_and_dilute(&mut self) {
+        self.rebuild();
+        for f in &mut self.freqs {
+            *f = (*f >> 1) + 1;
+        }
+        self.countdown = self.rebuild_freq;
     }
 
     pub(super) fn decode_symbol(&mut self, bs: &mut BackBits) -> Result<usize> {
@@ -300,11 +313,7 @@ impl AdaptiveCode {
         self.freqs[sym] += 1;
         self.countdown -= 1;
         if self.countdown == 0 {
-            for f in &mut self.freqs {
-                *f = (*f >> 1) + 1;
-            }
-            self.rebuild();
-            self.countdown = self.rebuild_freq;
+            self.rebuild_and_dilute();
         }
 
         Ok(sym)

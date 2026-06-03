@@ -98,3 +98,24 @@ path = "fuzz_targets/fuzz_lzms_mutate.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fuzz_pa31_apply"
+path = "fuzz_targets/fuzz_pa31_apply.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_x86_e8"
+path = "fuzz_targets/fuzz_x86_e8.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_lzx"
+path = "fuzz_targets/fuzz_lzx.rs"
+test = false
+doc = false
+bench = false

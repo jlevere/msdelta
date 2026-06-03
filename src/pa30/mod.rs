@@ -88,10 +88,20 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
     // LZMS-wrapped bsdiff container (also 0x101). Only a real LZMS compression-
     // API container starts with its magic; everything else is PseudoLzx.
     const LZMS_API_MAGIC: [u8; 4] = 0xC0E5_510Au32.to_le_bytes();
-    let is_lzms_bsdiff = parsed.patch_data.len() >= 4 && parsed.patch_data[..4] == LZMS_API_MAGIC;
-    let mut output = if is_lzms_bsdiff {
+    let is_lzms = parsed.patch_data.len() >= 4 && parsed.patch_data[..4] == LZMS_API_MAGIC;
+    let mut output = if is_lzms {
         let decompressed = lzms::decompress_compression_api(&parsed.patch_data)?;
-        crate::bsdiff::bspatch(reference, target_size, &decompressed)?
+        // An LZMS Compression-API container in a PA3x delta normally holds the
+        // target image directly: RAW/baseless content compressed whole, so the
+        // container's uncompressed_total equals target_size and the decompressed
+        // bytes ARE the target -- there is no bsdiff layer to replay. Only when
+        // the payload differs in length from the target do we fall back to
+        // treating it as a bsdiff patch stream against the reference.
+        if decompressed.len() == target_size {
+            decompressed
+        } else {
+            crate::bsdiff::bspatch(reference, target_size, &decompressed)?
+        }
     } else {
         crate::lzx::decompress_with_rift(
             decode_ref,
@@ -104,6 +114,13 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
     if let Some(pp) = &pp {
         apply_pe_timestamp_fixup(reference, pp, &mut output)?;
     }
+
+    // Undo MSDelta's x86 relative-CALL preprocessing. Genuine ApplyDeltaB runs
+    // this on the reconstructed image whenever it is a 32-bit (i386) PE,
+    // independent of the msdelta file_type (these LCU express deltas are RAW yet
+    // still carry the transform). It is a no-op on non-PE output and on
+    // amd64/msil images, so it is safe to call unconditionally here.
+    crate::pe::transform::undo_x86_e8_translation(&mut output);
 
     if parsed.header.hash_alg_id != 0 && !parsed.header.target_hash.is_empty() {
         let computed = get_signature(&output, parsed.header.hash_alg_id as u32)?;

@@ -88,6 +88,21 @@ pub mod fuzzing {
         crate::xpress::decompress_container(data)
     }
 
+    /// Decode the PseudoLzx patch codec directly (returns partial output on
+    /// error) for differential debugging against real artifacts.
+    pub fn lzx_decompress_partial(
+        reference: &[u8],
+        patch_data: &[u8],
+        target_size: usize,
+    ) -> (Vec<u8>, Option<crate::Error>) {
+        crate::lzx::decompress_partial(reference, patch_data, target_size)
+    }
+
+    /// Apply the x86 `0xE8` un-translation in place (differential debug).
+    pub fn undo_x86_e8_translation(buf: &mut [u8]) -> u32 {
+        crate::pe::transform::undo_x86_e8_translation(buf)
+    }
+
     /// Fuzz the reverse-delta (`ReversePatchFormat`) apply against a reference.
     pub fn apply_reversal(
         target: &[u8],

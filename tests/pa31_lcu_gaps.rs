@@ -52,4 +52,14 @@ fn pa31_lcu_gap_corpus() {
 
     eprintln!("\nPA31 LCU gaps: {reconstruct}/{total} reconstruct (null base)");
     assert!(total > 0, "manifest had no entries");
+
+    // Regression gate. All 16 reconstruct bit-exactly against their embedded
+    // SHA256 after: the LZMS Huffman rebuild-order fix, the LZMS x86-filter
+    // lock-prefix fix, the LZMS-vs-raw container dispatch, and the x86 0xE8
+    // call un-translation on i386 PE targets. See PA31-LCU-GAPS.md.
+    const KNOWN_GOOD: usize = 16;
+    assert!(
+        reconstruct >= KNOWN_GOOD,
+        "regression: only {reconstruct}/{total} reconstruct, expected >= {KNOWN_GOOD}"
+    );
 }
