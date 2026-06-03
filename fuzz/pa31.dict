@@ -1,0 +1,11 @@
+# libFuzzer dictionary for the PA31 apply target (fuzz_pa31_apply).
+# Gets the mutator past the magic gates: the PA31 delta magic, the LZMS
+# Compression-API container magic, and the PE/MZ signatures the x86 transform
+# keys on. Pass explicitly: cargo fuzz run fuzz_pa31_apply -- -dict=fuzz/pa31.dict
+pa31_magic="PA31"
+pa30_magic="PA30"
+lzms_api_magic="\x0a\x51\xe5\xc0"
+mz="MZ"
+pe_sig="PE\x00\x00"
+machine_i386="\x4c\x01"
+pe32_magic="\x0b\x01"

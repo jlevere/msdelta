@@ -43,6 +43,18 @@ if [ -d "$gen" ]; then
   copy fuzz_xpress "$gen"/xpress/blob.bin
 fi
 
+# PA31-guided apply: the genuine Win11 LCU express PA31 deltas (baseless).
+# x86 0xE8 transform: the genuine reconstructed PE images are ideal seeds for
+# the header parser + CALL walker. Both dirs are gitignored (raw MS payload);
+# no-ops on a fresh clone.
+pa31="$root/notes/pa31-lcu-gaps"
+if [ -d "$pa31" ]; then
+  copy fuzz_pa31_apply "$pa31"/delta_*.bin
+  copy fuzz_x86_e8     "$pa31"/truth_*.bin "$pa31"/delta_*.bin
+  # fuzz_lzx peels the PA3x header at runtime to reach the real LZX payload.
+  copy fuzz_lzx        "$pa31"/delta_*.bin
+fi
+
 echo "Seeded:"
 for d in "$here"/corpus/*/; do
   [ -d "$d" ] || continue
