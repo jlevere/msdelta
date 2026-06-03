@@ -6,3 +6,6 @@ result
 # Pulled from a Windows host; not redistributable.
 /reference/
 /notes/
+
+# Claude Code local state
+.claude/
