@@ -113,6 +113,10 @@ fn transform_source_relocs_i386(
         return;
     };
     let blocks_end = (base + reloc_size as usize).min(buf.len());
+
+    // Collected entries for the block rebuild: (mapped location RVA, type, extra).
+    let mut entries: Vec<(u32, u16, u16)> = Vec::new();
+
     let mut bo = base;
     while bo + 8 <= blocks_end {
         let page = u32::from_le_bytes(buf[bo..bo + 4].try_into().unwrap()) as i64;
@@ -126,9 +130,16 @@ fn transform_source_relocs_i386(
             let eo = bo + 8 + j * 2;
             let e = u16::from_le_bytes(buf[eo..eo + 2].try_into().unwrap());
             let typ = e >> 12;
+            if typ == 0 {
+                break; // type-0 padding terminates the block (not a real entry)
+            }
             let offset = (e & 0xfff) as i64;
-            let src_rva = page + offset;
-            if let Some(op_fo) = rva_to_file_off(pe, src_rva) {
+            let loc_rva = page + offset;
+            // The rebuilt block entry stores the MAPPED location RVA.
+            let mapped_loc = (loc_rva + rift.map(loc_rva)) as u32;
+            let mut extra = 0u16;
+            let mut kept = typ;
+            if let Some(op_fo) = rva_to_file_off(pe, loc_rva) {
                 match typ {
                     3 => {
                         // HIGHLOW: rewrite the 32-bit operand, mark 4 bytes.
@@ -150,20 +161,85 @@ fn transform_source_relocs_i386(
                         }
                     }
                     4 => {
-                        // HIGHADJ consumes the following u16 entry.
+                        // HIGHADJ consumes the following u16 as its extra field.
                         for b in 0..2 {
                             if op_fo + b < marker.len() {
                                 marker[op_fo + b] |= 1;
                             }
                         }
+                        if j + 1 < n {
+                            let xo = bo + 8 + (j + 1) * 2;
+                            extra = u16::from_le_bytes(buf[xo..xo + 2].try_into().unwrap());
+                        }
                         j += 1;
                     }
-                    _ => {}
+                    _ => kept = 0,
                 }
             }
+            entries.push((mapped_loc, kept, extra));
             j += 1;
         }
         bo += blk;
+    }
+
+    rebuild_reloc_blocks(buf, pe, reloc_rva, reloc_size, base, &mut entries);
+}
+
+/// Regenerate the base-relocation directory in place from the collected,
+/// rift-mapped entries. Mirrors `WriteRelocationEntries` (dpx 0x18004048c):
+/// stable-sort ascending by mapped location RVA, regroup by 4 KiB page, each
+/// `u16 = type<<12 | (rva & 0xfff)` (HIGHADJ followed by its extra u16), pad
+/// each block to a 4-byte boundary with a zero `u16` when the entry count is
+/// odd, recompute `SizeOfBlock`, all within the `.reloc` section extent.
+fn rebuild_reloc_blocks(
+    buf: &mut [u8],
+    pe: &PeInfo,
+    reloc_rva: u32,
+    reloc_size: u32,
+    base: usize,
+    entries: &mut [(u32, u16, u16)],
+) {
+    entries.sort_by_key(|e| e.0);
+
+    // Budget = bytes of `.reloc` from the dir start to the section end
+    // (VirtualSize, even), clamped to at least the data-directory size.
+    let extent = pe
+        .sections
+        .iter()
+        .find(|s| {
+            reloc_rva >= s.virtual_address
+                && reloc_rva < s.virtual_address + s.virtual_size.max(s.raw_size)
+        })
+        .map(|s| s.virtual_address + s.virtual_size - reloc_rva)
+        .unwrap_or(reloc_size)
+        .max(reloc_size);
+    let limit = (base + (extent & !1) as usize).min(buf.len());
+
+    let mut out = base;
+    let mut i = 0usize;
+    while out + 8 <= limit && i < entries.len() {
+        let page = entries[i].0 & 0xffff_f000;
+        let header = out;
+        out += 8;
+        let body_start = out;
+        while out + 2 <= limit && i < entries.len() && (entries[i].0 & 0xffff_f000) == page {
+            let (rva, typ, extra) = entries[i];
+            let e = (typ << 12) | (rva & 0xfff) as u16;
+            buf[out..out + 2].copy_from_slice(&e.to_le_bytes());
+            out += 2;
+            if typ == 4 && out + 2 <= limit {
+                buf[out..out + 2].copy_from_slice(&extra.to_le_bytes());
+                out += 2;
+            }
+            i += 1;
+        }
+        if ((out - body_start) / 2) % 2 == 1 && out + 2 <= limit {
+            buf[out..out + 2].copy_from_slice(&0u16.to_le_bytes());
+            out += 2;
+        }
+        let size = (out - header) as u32;
+        buf[header..header + 4].copy_from_slice(&page.to_le_bytes());
+        buf[header + 4..header + 8].copy_from_slice(&size.to_le_bytes());
     }
 }
 

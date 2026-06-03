@@ -1046,19 +1046,20 @@ mod tests {
         );
         // .text: the T(source) architecture (i386 relative calls/jmps +
         // relocation operands transformed on the source before the LZX copy)
-        // drops this from 338983 (pre-rift) / 16690 (pre-T(source)) to ~638.
-        // The residual is reloc-rebuild-dependent absolute operands.
+        // drops this from 338983 (pre-rift) / 16690 (pre-T(source)) to ~587.
+        // The residual is RVA-table fields a structural transform still maps.
         let x86_text = section_diff(&x86_truth, &x86_out, ".text");
         eprintln!("comctl32 x86 .text diff = {x86_text}");
         assert!(
             x86_text <= 600,
-            "comctl32 x86 .text regressed (expected <= 600; 16690 pre-T(source), 618 pre-MarkNonExe)"
+            "comctl32 x86 .text regressed (expected <= 600; 16690 pre-T(source))"
         );
-        // .reloc still needs the block REBUILD (regroup by mapped page); the
-        // copied source blocks differ from the regenerated target table.
-        assert!(
-            section_diff(&x86_truth, &x86_out, ".reloc") <= 19453,
-            "comctl32 x86 .reloc regressed (expected <= 19453, was 73198 pre-rift)"
+        // .reloc: the block REBUILD (regroup by rift-mapped page) reconstructs
+        // the table byte-exactly -- 73198 pre-rift / 19453 pre-rebuild -> 0.
+        assert_eq!(
+            section_diff(&x86_truth, &x86_out, ".reloc"),
+            0,
+            "comctl32 x86 .reloc regressed (was 19453 pre-rebuild)"
         );
     }
 
@@ -1191,6 +1192,83 @@ mod tests {
             );
         };
         check("comctl32 x86", "comctl32x86_old.dll", "comctl32x86.delta", "comctl32x86_new.dll");
+    }
+
+    /// Dump the .reloc block structure of raw source vs genuine truth, to ground
+    /// the block-rebuild implementation. Ignored; `--ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn reloc_structure_dump() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures");
+        if !dir.join("comctl32x86.delta").exists() {
+            return;
+        }
+        let old = std::fs::read(dir.join("comctl32x86_old.dll")).unwrap();
+        let truth = std::fs::read(dir.join("comctl32x86_new.dll")).unwrap();
+        let dump = |label: &str, img: &[u8]| {
+            let pe = crate::pe::parse::PeInfo::parse_lenient(img).unwrap();
+            let (rrva, rsize) = pe.data_directories[5];
+            let fo = pe
+                .sections
+                .iter()
+                .find(|s| rrva >= s.virtual_address && rrva < s.virtual_address + s.virtual_size.max(s.raw_size))
+                .map(|s| (s.raw_offset + (rrva - s.virtual_address)) as usize)
+                .unwrap();
+            eprintln!("{label}: reloc rva={rrva:#x} size={rsize:#x} fo={fo:#x}");
+            let mut bo = fo;
+            let end = fo + rsize as usize;
+            let mut blocks = 0;
+            while bo + 8 <= end && blocks < 8 {
+                let page = u32::from_le_bytes(img[bo..bo + 4].try_into().unwrap());
+                let sz = u32::from_le_bytes(img[bo + 4..bo + 8].try_into().unwrap());
+                let nent = if sz >= 8 { (sz - 8) / 2 } else { 0 };
+                let first: Vec<String> = (0..nent.min(4))
+                    .map(|j| {
+                        let e = u16::from_le_bytes(img[bo + 8 + j as usize * 2..bo + 8 + j as usize * 2 + 2].try_into().unwrap());
+                        format!("t{}:{:#05x}", e >> 12, e & 0xfff)
+                    })
+                    .collect();
+                eprintln!("  page={page:#x} size={sz:#x} nent={nent} [{}]", first.join(" "));
+                if sz < 8 { break; }
+                bo += sz as usize;
+                blocks += 1;
+            }
+        };
+        dump("raw source", &old);
+        dump("genuine truth", &truth);
+
+        // Build our T(source) and compare its .reloc to truth's.
+        let delta_raw = std::fs::read(dir.join("comctl32x86.delta")).unwrap();
+        let parsed = parse(&delta_raw).unwrap();
+        let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
+        let mut mine = old.clone();
+        crate::pe::transform::zero_pe_checksum(&mut mine);
+        let spe = crate::pe::parse::PeInfo::parse_lenient(&mine).unwrap();
+        crate::pe::transform::build_transformed_source(
+            &mut mine,
+            &spe,
+            &pp.preprocess_rift,
+            parsed.header.flags as u64,
+        );
+        dump("mine T(source)", &mine);
+        // First divergence in .reloc between mine and truth.
+        let (rrva, rsize) = spe.data_directories[5];
+        let mfo = spe
+            .sections
+            .iter()
+            .find(|s| rrva >= s.virtual_address && rrva < s.virtual_address + s.virtual_size.max(s.raw_size))
+            .map(|s| (s.raw_offset + (rrva - s.virtual_address)) as usize)
+            .unwrap();
+        let tpe = crate::pe::parse::PeInfo::parse_lenient(&truth).unwrap();
+        let (trva, _) = tpe.data_directories[5];
+        let tfo = tpe.sections.iter().find(|s| trva >= s.virtual_address && trva < s.virtual_address + s.virtual_size.max(s.raw_size)).map(|s| (s.raw_offset + (trva - s.virtual_address)) as usize).unwrap();
+        for k in 0..(rsize as usize) {
+            if mine.get(mfo + k) != truth.get(tfo + k) {
+                eprintln!("first .reloc divergence at block-rel {:#x}: mine={:02x?} truth={:02x?}",
+                    k, &mine[mfo + k..mfo + k + 16], &truth[tfo + k..tfo + k + 16]);
+                break;
+            }
+        }
     }
 
     const DELTA_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/deltas");
