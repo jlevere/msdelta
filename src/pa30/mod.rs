@@ -188,9 +188,22 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
     // optional-header CheckSum before applying. Mirror that so copies resolve
     // identically (the target's real checksum is carried as literals).
     let pe_ref;
-    let decode_ref: &[u8] = if pp.is_some() {
+    let decode_ref: &[u8] = if let Some(pp) = &pp {
         let mut r = reference.to_vec();
         crate::pe::transform::zero_pe_checksum(&mut r);
+        // Build T(source): transform the reference exactly as genuine
+        // PreProcessPEForApply does before the LZX copy stage, so copies land
+        // bit-identical. i386 relative calls/jmps + relocation operands, gated
+        // by the header transform-selection flags. No-op on amd64 (handled by a
+        // separate pass) and on images whose flags leave these transforms off.
+        if let Ok(src_pe) = crate::pe::parse::PeInfo::parse_lenient(&r) {
+            crate::pe::transform::build_transformed_source(
+                &mut r,
+                &src_pe,
+                &pp.preprocess_rift,
+                parsed.header.flags as u64,
+            );
+        }
         pe_ref = r;
         &pe_ref
     } else {
@@ -1031,135 +1044,55 @@ mod tests {
             section_diff(&x86_truth, &x86_out, ".data") <= 5,
             "comctl32 x86 .data regressed (was 5, pre-rift 764)"
         );
-        // Upper bounds that must not regress while the .text/.reloc transforms
-        // remain unimplemented (pre-rift these were 338983 and 73198).
+        // .text: the T(source) architecture (i386 relative calls/jmps +
+        // relocation operands transformed on the source before the LZX copy)
+        // drops this from 338983 (pre-rift) / 16690 (pre-T(source)) to ~638.
+        // The residual is reloc-rebuild-dependent absolute operands.
+        let x86_text = section_diff(&x86_truth, &x86_out, ".text");
+        eprintln!("comctl32 x86 .text diff = {x86_text}");
         assert!(
-            section_diff(&x86_truth, &x86_out, ".text") <= 16690,
-            "comctl32 x86 .text regressed (expected <= 16690, was 338983 pre-rift)"
+            x86_text <= 700,
+            "comctl32 x86 .text regressed (expected <= 700, was 16690 pre-T(source))"
         );
+        // .reloc still needs the block REBUILD (regroup by mapped page); the
+        // copied source blocks differ from the regenerated target table.
         assert!(
             section_diff(&x86_truth, &x86_out, ".reloc") <= 19453,
             "comctl32 x86 .reloc regressed (expected <= 19453, was 73198 pre-rift)"
         );
     }
 
-    /// Exploratory: decode comctl32 x86 with the copy-vs-literal provenance map
-    /// and correlate .text byte diffs (truth vs our untransformed output) with
-    /// the marker bitmap and E8/E9 relative call/jmp sites. Confirms genuine
-    /// msdelta's instruction transform applies ONLY to copied bytes. Ignored by
-    /// default (needs the gitignored fixtures); run with `--ignored --nocapture`.
+    /// Per-section diff report for the genuine PE fixtures via the full
+    /// `apply()` path. A progress harness for the remaining transforms
+    /// (notably the i386 .reloc block rebuild). Ignored (needs the gitignored
+    /// fixtures); run with `--ignored --nocapture`.
     #[test]
     #[ignore]
-    fn analyze_x86_text_marker() {
+    fn pe_fixture_section_report() {
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures");
         if !dir.join("comctl32x86.delta").exists() {
-            eprintln!("comctl32x86 fixtures absent; skipping");
+            eprintln!("pe fixtures absent; skipping");
             return;
         }
-        let old = std::fs::read(dir.join("comctl32x86_old.dll")).unwrap();
-        let delta_raw = std::fs::read(dir.join("comctl32x86.delta")).unwrap();
-        let truth = std::fs::read(dir.join("comctl32x86_new.dll")).unwrap();
-
-        let parsed = parse(&delta_raw).unwrap();
-        let target_size = parsed.header.target_size as usize;
-        let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
-        let combined = build_pe_copy_rift(&old, &pp);
-
-        let mut pe_ref = old.clone();
-        crate::pe::transform::zero_pe_checksum(&mut pe_ref);
-        let (out, prov) = crate::lzx::decompress_with_provenance(
-            &pe_ref,
-            &parsed.patch_data,
-            target_size,
-            Some(&combined),
-        )
-        .unwrap();
-        assert_eq!(out.len(), truth.len());
-        assert_eq!(prov.len(), out.len());
-
-        // .text bounds from truth.
-        let pe = crate::pe::parse::PeInfo::parse_lenient(&truth).unwrap();
-        let text = pe.sections.iter().find(|s| s.name == ".text").unwrap();
-        let (off, len) = (text.raw_offset as usize, text.raw_size as usize);
-        let end = (off + len).min(truth.len());
-
-        // Diffs in .text, split by marker.
-        let mut diff_marked = 0usize;
-        let mut diff_literal = 0usize;
-        for i in off..end {
-            if out[i] != truth[i] {
-                if prov[i] == 1 {
-                    diff_marked += 1;
-                } else {
-                    diff_literal += 1;
+        let report = |name: &str, old: &str, delta: &str, truth: &str| {
+            let o = std::fs::read(dir.join(old)).unwrap();
+            let d = std::fs::read(dir.join(delta)).unwrap();
+            let t = std::fs::read(dir.join(truth)).unwrap();
+            let out = apply(&o, &d).unwrap();
+            let pe = crate::pe::parse::PeInfo::parse_lenient(&t).unwrap();
+            let total: usize = (0..out.len().min(t.len())).filter(|&i| out[i] != t[i]).count();
+            eprintln!("{name}: total diff = {total}");
+            for s in &pe.sections {
+                let (a, len) = (s.raw_offset as usize, s.raw_size as usize);
+                let end = (a + len).min(t.len()).min(out.len());
+                let n = (a..end).filter(|&i| out[i] != t[i]).count();
+                if n > 0 {
+                    eprintln!("  {:<8} diff = {n}", s.name);
                 }
             }
-        }
-        eprintln!(
-            ".text diffs: total={}, marker=1(copied)={}, marker=0(literal)={}",
-            diff_marked + diff_literal,
-            diff_marked,
-            diff_literal
-        );
-
-        // E8/E9 sites whose TRUTH target lands within .text (real relative
-        // calls/jmps). For each, test the rift-remap formula
-        //   final_disp = our_disp + map(dest_rva) - map(site_rva)
-        // where map = preprocess_rift (source RVA -> target RVA offset).
-        let text_lo = text.virtual_address as i64;
-        let text_hi = text_lo + text.raw_size as i64;
-        let in_text = |rva: i64| rva >= text_lo && rva < text_hi;
-        let map = |rva: i64| pp.preprocess_rift.map(rva);
-        let rev = pp.preprocess_rift.reverse();
-        let revmap = |rva: i64| rev.map(rva);
-
-        let mut real = 0usize;
-        let mut changed = 0usize;
-        let mut formula_ok = 0usize;
-        let mut formula_bad = 0usize;
-        let mut examples = 0usize;
-        let mut i = off;
-        while i + 5 <= end {
-            let op = truth[i];
-            if op == 0xE8 || op == 0xE9 {
-                let site_rva = text.virtual_address as i64 + (i - off) as i64;
-                let our_disp = i32::from_le_bytes(out[i + 1..i + 5].try_into().unwrap()) as i64;
-                let truth_disp = i32::from_le_bytes(truth[i + 1..i + 5].try_into().unwrap()) as i64;
-                let truth_dest = site_rva + 5 + truth_disp;
-                if !in_text(truth_dest) {
-                    i += 1;
-                    continue;
-                }
-                real += 1;
-                // site_rva is the TARGET site rva R_t. Recover the SOURCE site
-                // rva R_s = R_t + rev.map(R_t); the copied displacement points to
-                // SOURCE dest D_s = R_s + 5 + our_disp.
-                let src_site = site_rva + revmap(site_rva);
-                let src_dest = src_site + 5 + our_disp;
-                // final_disp = our_disp + map(D_s) - map(R_s); map(R_s) = -rev(R_t).
-                let predicted = our_disp + map(src_dest) + revmap(site_rva);
-                if our_disp != truth_disp {
-                    changed += 1;
-                }
-                if predicted == truth_disp {
-                    formula_ok += 1;
-                } else {
-                    formula_bad += 1;
-                    if examples < 30 {
-                        eprintln!(
-                            "BAD fo={:#x} R_t={:#x} op={:#04x} our={:#x} truth={:#x} src_site={:#x} src_dest={:#x} map(D_s)={} rev(R_t)={} pred={:#x}",
-                            i, site_rva, op, our_disp, truth_disp, src_site, src_dest,
-                            map(src_dest), revmap(site_rva), predicted
-                        );
-                        examples += 1;
-                    }
-                }
-            }
-            i += 1;
-        }
-        eprintln!(
-            "real in-text E8/E9: total={real}, changed(our!=truth)={changed}, formula_ok={formula_ok}, formula_bad={formula_bad}"
-        );
+        };
+        report("comctl32 x86", "comctl32x86_old.dll", "comctl32x86.delta", "comctl32x86_new.dll");
+        report("comctl32 amd64", "comctl32_old.dll", "comctl32.delta", "comctl32_new.dll");
     }
 
     const DELTA_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/deltas");

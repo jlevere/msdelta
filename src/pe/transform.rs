@@ -19,6 +19,276 @@ pub const FILE_TYPE_CLI4_AMD64: i64 = 0x20;
 const RELOC_MARKER: u32 = 0x01010101;
 const RELOC_CHECK: u32 = 0x02020202;
 
+use crate::lzx::rift::RiftTable;
+
+/// `MapRva`: map a source RVA to its target RVA through the (coarse) rift.
+/// Piecewise: `rva + (target-source)` of the bracketing entry; identity when
+/// empty. Mirrors `TransformBase::MapRva` (dpx 0x180041998).
+#[inline]
+fn map_rva(rift: &RiftTable, rva: i64) -> i64 {
+    rva + rift.map(rva)
+}
+
+fn first_section_rva(pe: &PeInfo) -> i64 {
+    pe.sections
+        .iter()
+        .map(|s| s.virtual_address as i64)
+        .min()
+        .unwrap_or(0)
+}
+
+fn rva_to_file_off(pe: &PeInfo, rva: i64) -> Option<usize> {
+    pe.sections
+        .iter()
+        .find(|s| {
+            rva >= s.virtual_address as i64
+                && rva < (s.virtual_address + s.virtual_size.max(s.raw_size)) as i64
+        })
+        .map(|s| (s.raw_offset as i64 + (rva - s.virtual_address as i64)) as usize)
+}
+
+/// Build `T(source)`: the source image transformed exactly as genuine
+/// `ApplyDeltaB`'s `PreProcessPEForApply` transforms it before the LZX copy
+/// stage, so copies land bit-identical to genuine. `buf` is a clone of the
+/// reference with the optional-header CheckSum already zeroed; `pe` is parsed
+/// from it; `rift` is the delta's (coarse) preprocess rift; `flags` is the
+/// header transform-selection word. Transforms run in `g_transformsMap` order
+/// (relocations, then jmps, then calls), each consulting/updating a per-file-
+/// offset marker so a later transform never rewrites bytes an earlier one owns.
+pub(crate) fn build_transformed_source(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, flags: u64) {
+    if pe.is_64bit {
+        return; // i386 source transforms only (this path); x64 handled elsewhere
+    }
+    let mut marker = vec![0u8; buf.len()];
+    if flags & 0x20 != 0 {
+        transform_source_relocs_i386(buf, pe, rift, &mut marker);
+    }
+    if flags & 0x80 != 0 {
+        transform_source_jmps_i386(buf, pe, rift, &marker);
+    }
+    if flags & 0x100 != 0 {
+        transform_source_calls_i386(buf, pe, rift, &marker);
+    }
+}
+
+/// `TransformRelocations` apply pass on the source (dpx `ReadRelocationEntries`
+/// 0x18003f6a0): rewrite each relocation's pointed-to operand through the rift
+/// and mark its bytes so the instruction transforms skip them.
+fn transform_source_relocs_i386(
+    buf: &mut [u8],
+    pe: &PeInfo,
+    rift: &RiftTable,
+    marker: &mut [u8],
+) {
+    let image_base = pe.image_base as i64;
+    let (reloc_rva, reloc_size) = match pe.data_directories.get(5).copied() {
+        Some(v) if v.0 != 0 => v,
+        _ => return,
+    };
+    let Some(base) = rva_to_file_off(pe, reloc_rva as i64) else {
+        return;
+    };
+    let blocks_end = (base + reloc_size as usize).min(buf.len());
+    let mut bo = base;
+    while bo + 8 <= blocks_end {
+        let page = u32::from_le_bytes(buf[bo..bo + 4].try_into().unwrap()) as i64;
+        let blk = u32::from_le_bytes(buf[bo + 4..bo + 8].try_into().unwrap()) as usize;
+        if blk < 8 || bo + blk > blocks_end {
+            break;
+        }
+        let n = (blk - 8) / 2;
+        let mut j = 0;
+        while j < n {
+            let eo = bo + 8 + j * 2;
+            let e = u16::from_le_bytes(buf[eo..eo + 2].try_into().unwrap());
+            let typ = e >> 12;
+            let offset = (e & 0xfff) as i64;
+            let src_rva = page + offset;
+            if let Some(op_fo) = rva_to_file_off(pe, src_rva) {
+                match typ {
+                    3 => {
+                        // HIGHLOW: rewrite the 32-bit operand, mark 4 bytes.
+                        if op_fo + 4 <= buf.len() {
+                            let v = i32::from_le_bytes(buf[op_fo..op_fo + 4].try_into().unwrap())
+                                as i64;
+                            let nv = (v + rift.map(v - image_base)) as i32;
+                            buf[op_fo..op_fo + 4].copy_from_slice(&nv.to_le_bytes());
+                            for b in 0..4 {
+                                marker[op_fo + b] |= 1;
+                            }
+                        }
+                    }
+                    1 | 2 => {
+                        for b in 0..2 {
+                            if op_fo + b < marker.len() {
+                                marker[op_fo + b] |= 1;
+                            }
+                        }
+                    }
+                    4 => {
+                        // HIGHADJ consumes the following u16 entry.
+                        for b in 0..2 {
+                            if op_fo + b < marker.len() {
+                                marker[op_fo + b] |= 1;
+                            }
+                        }
+                        j += 1;
+                    }
+                    _ => {}
+                }
+            }
+            j += 1;
+        }
+        bo += blk;
+    }
+}
+
+/// Is `target` (a source RVA, UNSIGNED) a reachable relative-branch
+/// destination? Mirrors `RelativeCallsX86::Run`: nonzero, below `SizeOfImage`,
+/// and either below the first section or inside one. Unsigned throughout, so a
+/// wrapped (negative) displacement becomes a huge RVA and is rejected.
+fn branch_target_reachable(pe: &PeInfo, target: u32) -> bool {
+    target != 0
+        && target < pe.size_of_image
+        && ((target as i64) < first_section_rva(pe)
+            || pe.sections.iter().any(|s| {
+                target >= s.virtual_address
+                    && target < s.virtual_address + s.virtual_size.max(s.raw_size)
+            }))
+}
+
+/// Marker index for a branch target: rebased to a file offset when it lands in
+/// a section, else the RVA itself (matches the decompiled `uVar9`).
+fn target_marker_index(pe: &PeInfo, target: u32) -> i64 {
+    if (target as i64) < first_section_rva(pe) {
+        target as i64
+    } else {
+        rva_to_file_off(pe, target as i64)
+            .map(|f| f as i64)
+            .unwrap_or(target as i64)
+    }
+}
+
+fn marker_set(marker: &[u8], idx: i64) -> bool {
+    idx >= 0 && (idx as usize) < marker.len() && marker[idx as usize] & 1 != 0
+}
+
+/// `RelativeCallsX86::Run` apply pass (dpx 0x180040a00) on the source: rewrite
+/// 0xE8 rel32 displacements through the rift, skipping any whose instruction
+/// bytes or target are marker-owned.
+fn transform_source_calls_i386(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marker: &[u8]) {
+    for sec in &pe.sections {
+        if sec.characteristics & 0x2000_0000 == 0 {
+            continue;
+        }
+        let sraw = sec.raw_offset as usize;
+        let slen = sec.virtual_size.min(sec.raw_size) as usize;
+        let send = (sraw + slen).min(buf.len());
+        if send < 5 {
+            continue;
+        }
+        let mut i = sraw;
+        while i + 5 <= send {
+            if buf[i] != 0xE8 {
+                i += 1;
+                continue;
+            }
+            // All 5 instruction bytes must be marker-free.
+            if (0..5).any(|k| marker[i + k] & 1 != 0) {
+                i += 1;
+                continue;
+            }
+            let site_end = (sec.virtual_address + (i - sraw) as u32).wrapping_add(5);
+            let orig = i32::from_le_bytes(buf[i + 1..i + 5].try_into().unwrap());
+            let target = site_end.wrapping_add(orig as u32);
+            if !branch_target_reachable(pe, target) {
+                i += 1;
+                continue;
+            }
+            if marker_set(marker, target_marker_index(pe, target)) {
+                i += 1;
+                continue;
+            }
+            let new_disp =
+                (map_rva(rift, target as i64) - map_rva(rift, site_end as i64)) as i32;
+            if new_disp != orig {
+                buf[i + 1..i + 5].copy_from_slice(&new_disp.to_le_bytes());
+            }
+            i += 5;
+        }
+    }
+}
+
+/// `RelativeJmpsX86::Run` apply pass (dpx 0x180040f10) on the source: 0xE9 near
+/// jmp and 0F 8x near Jcc whose displacement does not already fit a signed byte.
+/// Remaps the displacement and collapses to the short form (`EB`/`7x`) when the
+/// new displacement fits a byte.
+fn transform_source_jmps_i386(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marker: &[u8]) {
+    for sec in &pe.sections {
+        if sec.characteristics & 0x2000_0000 == 0 {
+            continue;
+        }
+        let sraw = sec.raw_offset as usize;
+        let slen = sec.virtual_size.min(sec.raw_size) as usize;
+        let send = (sraw + slen).min(buf.len());
+        if send < 5 {
+            continue;
+        }
+        let mut i = sraw;
+        while i + 5 <= send {
+            // disp-opcode byte index `d` and whether short-collapse is allowed.
+            let (d, mut can_short) = if buf[i] == 0xE9 {
+                (i, true)
+            } else if buf[i] == 0x0F && (buf[i + 1] & 0xF0) == 0x80 {
+                (i + 1, true)
+            } else {
+                i += 1;
+                continue;
+            };
+            // For 0F 8x, the preceding 0F byte must be unmarked to back-patch it.
+            if buf[d] != 0xE9 && d >= 1 && marker[d - 1] & 1 != 0 {
+                can_short = false;
+            }
+            // The 5 bytes from the disp-opcode must be marker-free.
+            if d + 5 > buf.len() || (0..5).any(|k| marker[d + k] & 1 != 0) {
+                i += 1;
+                continue;
+            }
+            let orig = i32::from_le_bytes(buf[d + 1..d + 5].try_into().unwrap()) as i64;
+            // Only near forms whose disp does NOT already fit a signed byte.
+            if (orig + 0x80) as u64 <= 0xFF {
+                i += 1;
+                continue;
+            }
+            let site_end = (sec.virtual_address + (d - sraw) as u32).wrapping_add(5);
+            let target = site_end.wrapping_add(orig as u32);
+            if !branch_target_reachable(pe, target) {
+                i += 1;
+                continue;
+            }
+            if marker_set(marker, target_marker_index(pe, target)) {
+                i += 1;
+                continue;
+            }
+            let new_disp =
+                (map_rva(rift, target as i64) - map_rva(rift, site_end as i64)) as i32;
+            if can_short && ((new_disp as i64 + 0x80) as u64) < 0x100 {
+                // collapse to short form
+                if buf[d] == 0xE9 {
+                    buf[d] = 0xEB;
+                    buf[d + 1] = new_disp as u8;
+                } else {
+                    buf[d - 1] = (buf[d] & 0x0F) | 0x70;
+                    buf[d] = new_disp as u8;
+                }
+            } else if new_disp as i64 != orig {
+                buf[d + 1..d + 5].copy_from_slice(&new_disp.to_le_bytes());
+            }
+            i = d + 4 + 1;
+        }
+    }
+}
+
 /// Apply the inferred relocations transform for 32-bit (X86) PE binaries.
 ///
 /// Scans the buffer for 32-bit values that fall within the PE's image range.
