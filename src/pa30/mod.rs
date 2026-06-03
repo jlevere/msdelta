@@ -1416,14 +1416,25 @@ mod tests {
             }
         }
         let tpe = crate::pe::parse::PeInfo::parse_lenient(&truth).unwrap();
-        let Some(sec) = tpe.sections.iter().find(|s| s.name == sec_want) else {
-            eprintln!("section {sec_want} not found");
-            return;
+        // SEC=ALL scans the whole buffer (catches header/gap diffs); otherwise a
+        // named section's raw range.
+        let (a, e) = if sec_want == "ALL" {
+            (0usize, out.len().min(truth.len()))
+        } else {
+            let Some(sec) = tpe.sections.iter().find(|s| s.name == sec_want) else {
+                eprintln!("section {sec_want} not found");
+                return;
+            };
+            (
+                sec.raw_offset as usize,
+                (sec.raw_offset + sec.raw_size) as usize,
+            )
         };
-        let (a, e) = (
-            sec.raw_offset as usize,
-            (sec.raw_offset + sec.raw_size) as usize,
-        );
+        let sec = tpe
+            .sections
+            .iter()
+            .find(|s| s.name == sec_want)
+            .unwrap_or(&tpe.sections[0]);
         let n: usize = (a..e.min(out.len()).min(truth.len()))
             .filter(|&i| out[i] != truth[i])
             .count();
