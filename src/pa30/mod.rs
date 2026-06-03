@@ -25,113 +25,94 @@ use crate::{Error, Result};
 
 /// Build the decompressor's copy-placement rift in the TARGET FILE-OFFSET
 /// domain. The decompressor indexes the rift by `pos = ref_len +
-/// target_file_offset` and, for a source copy, reads `reference[pos -
-/// distance]`; with the rift offset folded in this resolves to the
-/// matching SOURCE file offset. So each entry must read
-///   { source: ref_len + new_file_offset, target: old_file_offset }
-/// at every section boundary where the new->old file-offset shift changes.
+/// target_file_offset` and, for a source copy, resolves it to the matching
+/// SOURCE file offset. Genuine `PreProcessor::PreProcessPEForApply` computes
+/// this as (native, non-.NET reduction; the CLI `Sum` is identity):
 ///
-/// `pp.pe_rift` carries the NEW image's `RVA -> file-offset` map (its
-/// entries are exactly the new section starts: source = new RVA, target =
-/// new file offset). Section RVAs are preserved across the delta, so we
-/// match each new section to the old one by RVA (parsed from the
-/// reference) and emit the new->old file-offset correspondence.
+///   final = Reverse( Multiply( Multiply(rift_B, io2rva), io2rva ) )
 ///
-/// On amd64 FileAlignment == SectionAlignment, so RVA == file offset and
-/// this reduces to the identity the old code happened to produce; on i386
-/// (FileAlignment 0x200) it is what actually relays the tail sections.
+/// where `rift_B` is the decoded preprocess rift (source RVA -> target RVA)
+/// and `io2rva` = `SectionHelper::ExtractImageOffsetToRva` maps file offset ->
+/// RVA. Semantically that conjugation is `io2rva^-1 . rift_B^-1 . io2rva`, i.e.
+/// for a target file offset:
+///   target_fo --io2rva--> rva --rift_B^-1--> source_rva --io2rva^-1--> source_fo
 ///
-/// The intra-section RVA changes carried by `pp.preprocess_rift` are ALSO
-/// copy-placement: where bytes moved *within* a section between source and
-/// target, the copy must follow that shift too. We fold those breakpoints
-/// into the same file-offset rift below. Field-level fixups that the copy
-/// cannot express (e.g. relocation rebasing) remain post-decompress passes.
+/// Genuine holds only the SOURCE image, so it uses the source `io2rva` on both
+/// sides; that is exact on amd64 (FileAlignment == SectionAlignment, so file
+/// offset == RVA). On i386 (FileAlignment 0x200 != SectionAlignment) the TARGET
+/// file offset of an RVA-preserved tail section differs from the SOURCE file
+/// offset, so the input side must use the TARGET file-offset <-> RVA map. We
+/// have it: `pp.pe_rift` is the target RVA -> target file-offset map, so its
+/// reverse is the target `io2rva`. Using the target map on the input side and
+/// the source map on the output side makes the relayout exact for both arches:
+///
+///   final(target_fo) = io2rva_src^-1( rift_B^-1( io2rva_tgt(target_fo) ) )
 fn build_pe_copy_rift(
     reference: &[u8],
     pp: &preprocess::PePreprocess,
 ) -> crate::lzx::rift::RiftTable {
     use crate::lzx::rift::RiftEntry;
     let ref_len = reference.len() as i64;
-    let mut combined = crate::lzx::rift::RiftTable {
-        entries: Vec::new(),
-    };
-    if let Ok(src_pe) = crate::pe::parse::PeInfo::parse_lenient(reference) {
-        // NEW section starts: pe_rift entry source = new RVA, target = new FO.
-        // Convert any TARGET RVA to a TARGET file offset by locating the
-        // bracketing new-section start (RVA -> FO is a constant shift inside a
-        // section).
-        let new_starts: Vec<(u32, u32)> = pp
-            .pe_rift
-            .entries
-            .iter()
-            .map(|e| (e.source as u32, e.target as u32))
-            .collect();
-        let tgt_rva_to_fo = |rva: u32| -> Option<u32> {
-            let mut best: Option<(u32, u32)> = None;
-            for &(srva, sfo) in &new_starts {
-                if srva <= rva && best.map(|(b, _)| srva >= b).unwrap_or(true) {
-                    best = Some((srva, sfo));
-                }
-            }
-            best.map(|(srva, sfo)| sfo + (rva - srva))
-        };
-        // SOURCE RVA -> SOURCE file offset via the reference section table.
-        let src_rva_to_fo = |rva: u32| -> Option<u32> {
-            src_pe
-                .sections
-                .iter()
-                .find(|s| {
-                    rva >= s.virtual_address
-                        && rva < s.virtual_address + s.virtual_size.max(s.raw_size)
-                })
-                .map(|s| s.raw_offset + (rva - s.virtual_address))
-        };
 
-        // Section-boundary entries (new FO -> old FO, matched by RVA).
-        for e in &pp.pe_rift.entries {
-            let new_rva = e.source as u32;
-            let new_fo = e.target as u32;
-            if let Some(s) = src_pe.sections.iter().find(|s| {
-                new_rva >= s.virtual_address
-                    && new_rva < s.virtual_address + s.virtual_size.max(s.raw_size)
-            }) {
-                let old_fo = s.raw_offset + (new_rva - s.virtual_address);
-                combined.entries.push(RiftEntry {
-                    source: ref_len + new_fo as i64,
-                    target: old_fo as i64,
-                });
-            } else {
-                combined.entries.push(RiftEntry {
-                    source: ref_len + new_fo as i64,
-                    target: new_fo as i64,
-                });
-            }
-        }
-
-        // Intra-section breakpoints from the preprocess rift: at each
-        // (source RVA -> target RVA) entry, the copy source shifts. Express
-        // it in the file-offset domain: break at the TARGET file offset, read
-        // the SOURCE file offset.
-        for e in &pp.preprocess_rift.entries {
-            let src_rva = e.source as u32;
-            let tgt_rva = e.target as u32;
-            if let (Some(tgt_fo), Some(src_fo)) = (tgt_rva_to_fo(tgt_rva), src_rva_to_fo(src_rva)) {
-                combined.entries.push(RiftEntry {
-                    source: ref_len + tgt_fo as i64,
-                    target: src_fo as i64,
-                });
-            }
-        }
-    } else {
-        // Reference is not a parseable PE: fall back to the previous
-        // behaviour (RVA-domain pe_rift + preprocess_rift concatenation).
-        combined = pp.pe_rift.clone();
+    let Ok(src_pe) = crate::pe::parse::PeInfo::parse_lenient(reference) else {
+        // Reference is not a parseable PE: fall back to the RVA-domain
+        // concatenation (pe_rift then preprocess_rift), sorted by source.
+        let mut combined = pp.pe_rift.clone();
         for e in &pp.preprocess_rift.entries {
             combined.entries.push(*e);
         }
+        combined.entries.sort_by_key(|e| e.source);
+        return combined;
+    };
+
+    // io2rva for the SOURCE image, exactly as ExtractImageOffsetToRva.
+    let io2rva_src = build_pe_io2rva(&src_pe);
+    // io2rva for the TARGET image: pe_rift is target RVA -> target file offset,
+    // so its reverse is target file offset -> target RVA. On amd64 this equals
+    // io2rva_src (file offset == RVA); on i386 it carries the tail-section
+    // FileAlignment relayout that the source map cannot express.
+    let io2rva_tgt = pp.pe_rift.reverse();
+
+    // final = io2rva_src^-1 . rift_B^-1 . io2rva_tgt  (our `a.multiply(b)` ==
+    // `b . a`, so the composition reads left-to-right as applied innermost-first).
+    let composed = io2rva_tgt
+        .multiply(&pp.preprocess_rift.reverse())
+        .multiply(&io2rva_src.reverse());
+
+    // composed maps target file offset -> source file offset. Fold into the
+    // decompressor's keying: entry source = ref_len + target_fo, target = src_fo.
+    let mut out = crate::lzx::rift::RiftTable {
+        entries: Vec::with_capacity(composed.entries.len()),
+    };
+    for e in &composed.entries {
+        out.entries.push(RiftEntry {
+            source: ref_len + e.source,
+            target: e.target,
+        });
     }
-    combined.entries.sort_by_key(|e| e.source);
-    combined
+    out.entries.sort_by_key(|e| e.source);
+    out
+}
+
+/// Build `io2rva` exactly as `SectionHelper::ExtractImageOffsetToRva`: an
+/// initial `Add(0, 0)` entry, then per section (skipping those whose
+/// VirtualAddress == 0 or PointerToRawData == 0) an `Add(PointerToRawData,
+/// VirtualAddress)` -- i.e. `{source = file offset, target = RVA}` -- sorted by
+/// source. Maps file offset -> RVA.
+fn build_pe_io2rva(pe: &crate::pe::parse::PeInfo) -> crate::lzx::rift::RiftTable {
+    use crate::lzx::rift::RiftEntry;
+    let mut entries = vec![RiftEntry { source: 0, target: 0 }];
+    for s in &pe.sections {
+        if s.virtual_address == 0 || s.raw_offset == 0 {
+            continue;
+        }
+        entries.push(RiftEntry {
+            source: s.raw_offset as i64,
+            target: s.virtual_address as i64,
+        });
+    }
+    entries.sort_by_key(|e| e.source);
+    crate::lzx::rift::RiftTable { entries }
 }
 
 /// Apply a delta to a reference buffer.
