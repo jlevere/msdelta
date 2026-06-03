@@ -115,14 +115,15 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
         apply_pe_timestamp_fixup(reference, pp, &mut output)?;
     }
 
-    // NOTE: the x86 0xE8 CALL un-translation (undo_x86_e8_translation) is
-    // intentionally NOT called here yet. The whole-buffer form regressed the
-    // full LCU population 361 -> 193/377: its guard (`-i <= v < target_size`)
-    // over-translates resource bytes in resource-only i386 PEs (comctl32.dll.mui
-    // across locales), corrupting ~184 deltas, while only fixing ~6 x86 code
-    // DLLs. Genuine RelativeCallsX86 is section/target-aware (it validates the
-    // call target lands in a real section); that must be reimplemented before
-    // this is re-enabled. See PA31-LCU-GAPS.md ("Regression: x86 E8 over-translation").
+    // The x86 0xE8/0xE9 CALL/JMP un-translation is gated by header flag bit 0:
+    // genuine ApplyDeltaB reads a transform-selection flag word from the header
+    // and only runs E8x86::PostProcess when bit 0 is set. The encoder sets it
+    // per-file (whether the transform helps), so resource-only PEs that should
+    // NOT be touched have it clear -- which is why applying it unconditionally
+    // regressed ~184 .mui. See notes/pa31-lcu-gaps/REGRESSION-AND-HANDOFF.md.
+    if parsed.header.flags & 1 != 0 {
+        crate::pe::transform::undo_x86_e8_translation(&mut output);
+    }
 
     if parsed.header.hash_alg_id != 0 && !parsed.header.target_hash.is_empty() {
         let computed = get_signature(&output, parsed.header.hash_alg_id as u32)?;

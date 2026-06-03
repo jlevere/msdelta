@@ -87,13 +87,11 @@ fn pa31_lcu_gap_corpus() {
         eprintln!("  ... and {} more", failures.len() - 40);
     }
 
-    // Gate. Plain null-base apply reconstructed 361/377 before any fixes; the
-    // LZMS rebuild-order + dispatch fixes lift that to 369 with no regression.
-    // FLOOR is the no-regression line: a fix that drops below it has broken
-    // previously-working deltas. Raise FLOOR toward TARGET (377) as fixes land
-    // without regressing -- the remaining 8 need a section/target-aware x86 0xE8
-    // transform (see PA31-LCU-GAPS.md), which must not regress resource-only PEs.
-    const FLOOR: usize = 369;
+    // Gate. Full population reconstructs bit-exactly: the LZMS rebuild-order +
+    // dispatch fixes plus the header-flag-gated x86 0xE8 transform. FLOOR is the
+    // no-regression line; any drop below it means a fix broke previously-working
+    // deltas (this corpus is the population oracle that catches that).
+    const FLOOR: usize = 377;
     const TARGET: usize = 377;
     assert!(
         reconstruct >= FLOOR,

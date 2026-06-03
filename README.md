@@ -80,24 +80,59 @@ msdelta = { version = "0.1", default-features = false }
 | **PseudoLzx** codec | yes | yes |
 | **BsDiff** codec | yes | yes |
 | **LZMS** codec | yes | yes |
-| **PE transforms** (rift tables, timestamps) | yes | yes |
+| **PE transforms** (offset/rift, timestamps) | yes | yes |
+| **PE transforms** (byte-rewriting: CALL/JMP/disasm/CLI) | partial | partial |
 
 PE delta encoding auto-detects x86/x86-64 binaries and generates rift tables from section layout, data directories, imports, exports, resources, and exception tables.
 
-**Decode is the production-ready direction.** It is verified MD5-identical to
-`msdelta.dll` across every bundled fixture.
+### PE transforms
 
-**Encoder ↔ `msdelta.dll` compatibility is partial and being closed.** A
-cross-check against genuine `msdelta.dll!ApplyDeltaB` (Windows build 26100)
-currently passes for **RAW PseudoLzx (PA30)** at any size, with an MD5
-integrity hash, and for the identical-input and empty-target edge cases
-(`msdelta.dll` re-applies these deltas to the exact target). Still failing:
-the **BsDiff** codec and **PE rift transforms** (rejected or mis-decoded —
-our framing does not yet match), and **PA31** / **SHA-256 hashes** (which this
-`msdelta.dll` build may not support via `ApplyDeltaB` at all; pending
-verification against `UpdateCompression.dll`). See
-[Known limitations](#known-limitations). Only feed RAW PseudoLzx/PA30 deltas
-to Windows tooling for now.
+MSDelta preprocesses PE targets through a pipeline of transforms (the decoder
+undoes them). **Which transforms run is selected by a flag word in the delta
+header** (set by the encoder), AND'd against a static transform table — it is
+*not* re-derived from the machine type at apply time. Two layers gate them:
+
+- `file_type == 1` (**RAW**) skips the PE pipeline entirely; only output
+  post-processes that are flag-gated (e.g. the `0xE8`/`0xE9` x86 filter on
+  header flag bit 0) apply.
+- `file_type != 1` (**PE/CLI**) runs the full pipeline below, each transform
+  enabled by its own header flag bit.
+
+| Transform | Kind | Status |
+|-----------|------|--------|
+| PseudoLzx / LZMS / BsDiff payload + LRU/rift offset remap | offset | implemented |
+| PE timestamp fixup (COFF / export / debug dirs) | offset | implemented |
+| `RelativeCallsX86` / `RelativeJmpsX86` — `0xE8`/`0xE9` displacements | content | **implemented, header-flag-gated** (`0xE8` done; `0xE9` not yet) |
+| `SmashLockPrefixesX86` — x86 lock-prefix IAT smash | content | not implemented |
+| `TransformImports` / `Exports` / `Resources` | content + offset | partial — rift remaps offsets; RVA-rewrite half missing |
+| `TransformRelocations` (HIGHLOW/DIR64 + inferred-x86) | content | partial — not wired into `apply()` |
+| Instruction disasm — X64 / ARM / ARM64 | content | not implemented |
+| CLI metadata / disasm (.NET) | content | not implemented |
+| `.pdata` — X64 / ARM / ARM64 | content | not implemented |
+
+**Decode status is honest by artifact class:**
+
+- **RAW deltas** (the entire express-LCU class): verified bit-exact — MD5-identical
+  to `msdelta.dll` across all bundled DCM/PE manifest fixtures, and **377/377**
+  against a full Win11 24H2 LCU express PSF (baseless PA31), including the
+  header-flag-gated `0xE8` x86 filter.
+- **PE/CLI deltas** (`file_type != 1`): the transform pipeline above is
+  **partial and largely unvalidated** — the express-LCU corpus contains no such
+  deltas, so the import/export/resource/reloc/disasm/CLI/pdata transforms have no
+  population oracle yet. This is the active frontier; each needs a per-transform
+  inverse validated in isolation and PE-type fixtures (fetched per-architecture
+  via the `uup` toolchain).
+
+**Encoder ↔ Windows compatibility is partial and being closed.** Note that
+`PA31` is **not** an `msdelta.dll` format at all — `msdelta.dll` (build 26100)
+implements only PA30/PA19 and rejects PA31 with `ERROR_INVALID_DATA`. PA31 lives
+in **`UpdateCompression.dll`** / **`dpx.dll`**, which expose the same
+`ApplyDeltaB` and are the correct oracle for PA31 / SHA-256 deltas. A
+differential cross-check passes for **RAW PseudoLzx** (PA30 against `msdelta.dll`,
+PA31 against `UpdateCompression.dll`) at any size, with the identical-input and
+empty-target edge cases. Still open: the **BsDiff** codec framing, and the
+**byte-rewriting PE transforms** above. See
+[Known limitations](#known-limitations).
 
 ## API surface
 
@@ -136,19 +171,22 @@ MSRV: 1.85
   - **PE rift transforms**: accepted structurally but decode to incorrect
     bytes; the rift/preprocess encoding does not match `msdelta.dll`'s
     interpretation. This is the largest open item.
-  - **PA31** and **SHA-256** hashes: rejected by this `msdelta.dll` build's
-    `ApplyDeltaB` (and `CreateDeltaB`), which may not support them at all —
-    pending verification against `UpdateCompression.dll`.
+  - **PA31** and **SHA-256**: `msdelta.dll` does not implement PA31 — it is a
+    `UpdateCompression.dll` / `dpx.dll` format. Validate PA31/SHA-256 deltas
+    against those, not `msdelta.dll`.
   - Genuine deltas stamp a creation FILETIME in the header (bytes 4-11) that
     this crate zeroes; not required for acceptance but a divergence.
 
   The in-crate round-trip tests pass because this crate's decoder mirrors its
   own encoder conventions; Windows is the only ground truth for the encoder.
+- Byte-rewriting PE transforms (CALL/JMP/lock-prefix/disasm/CLI metadata) are
+  incomplete — see the [PE transforms](#pe-transforms) table. The decoder
+  reconstructs 369/377 of a real LCU express PA31 population; the rest need these.
 - PA19 encoding not implemented (legacy format, the `lzxd` crate is decode-only). PA19 decode works.
 - LZX encoder does not use rift tables during match finding (rift is written for the decoder but compression doesn't exploit it).
 
-Decode is verified MD5-identical to `msdelta.dll` across all bundled fixtures,
-including the 3.2 MB multi-segment WOW64 proxystub manifest.
+Decode is verified MD5-identical to `msdelta.dll` across all bundled DCM/PE
+fixtures, including the multi-segment WOW64 proxystub manifest.
 
 ## License
 

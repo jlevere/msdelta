@@ -131,10 +131,9 @@ pub fn transform_inferred_relocations_amd64(
 /// `0x14C` too but must not be touched. No-op on everything else, so it is safe
 /// to call unconditionally on the reconstructed image. Returns the site count.
 ///
-/// NOT WIRED INTO `apply()` yet: the whole-buffer guard below over-translates
-/// resource-only i386 PEs and must be made section/target-aware first (see
-/// PA31-LCU-GAPS.md). Retained, with the fuzz target, as the rework starting point.
-#[cfg_attr(not(feature = "fuzzing"), allow(dead_code))]
+/// `apply()` calls this only when header flag bit 0 is set (genuine ApplyDeltaB's
+/// transform-selection flag for E8x86) -- that gate, not the i386-PE check here,
+/// is what keeps it off resource-only PEs the encoder did not transform.
 pub(crate) fn undo_x86_e8_translation(buf: &mut [u8]) -> u32 {
     // Gate with a manual header read rather than a full `goblin` parse: genuine
     // msdelta keys only on the machine type, and goblin's strict validation
