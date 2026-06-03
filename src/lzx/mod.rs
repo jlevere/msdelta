@@ -41,29 +41,30 @@ pub fn decompress_with_rift(
     Ok(output)
 }
 
-/// Decompress and also return the per-byte copy-vs-literal provenance bitmap.
+/// Decompress and also return the per-byte copy-source map.
 ///
-/// The second return value is exactly `target_size` bytes long, one per output
-/// byte: `1` where the byte was copied from `reference` (the transformed
-/// source), `0` where it was a literal supplied by the patch. The PE
-/// instruction transforms consult this to un-transform only copied bytes.
-pub fn decompress_with_provenance(
+/// The second return value is exactly `target_size` entries, one per output
+/// byte: the **reference offset** the byte was copied from, or `-1` for a
+/// literal. `>= 0` flags copied-from-reference bytes (the transform-marker
+/// gate); inverting against a known target reconstructs genuine's transformed
+/// source `T(source)` at every copied offset.
+pub fn decompress_with_copy_source(
     reference: &[u8],
     patch_data: &[u8],
     target_size: usize,
     caller_rift: Option<&RiftTable>,
-) -> Result<(Vec<u8>, Vec<u8>)> {
+) -> Result<(Vec<u8>, Vec<i64>)> {
     let mut output = Vec::with_capacity(target_size);
-    let mut provenance = Vec::with_capacity(target_size);
+    let mut copy_src = Vec::with_capacity(target_size);
     decode::decompress_into(
         reference,
         patch_data,
         target_size,
         caller_rift,
         &mut output,
-        Some(&mut provenance),
+        Some(&mut copy_src),
     )?;
-    Ok((output, provenance))
+    Ok((output, copy_src))
 }
 
 /// Like `decompress`, but returns partial output on error for debugging.

@@ -1095,6 +1095,94 @@ mod tests {
         report("comctl32 amd64", "comctl32_old.dll", "comctl32.delta", "comctl32_new.dll");
     }
 
+    /// T(source) oracle: reconstruct genuine's transformed source by inverting
+    /// the delta's copy ops against the known target (truth), then diff our
+    /// `build_transformed_source` against it BY SOURCE OFFSET + SECTION. This
+    /// isolates source-transform bugs from decode/copy/literal noise -- the
+    /// instrument for driving the remaining transforms to byte-exact. Ignored
+    /// (needs gitignored fixtures); run with `--ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn tsource_oracle() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures");
+        if !dir.join("comctl32x86.delta").exists() {
+            eprintln!("pe fixtures absent; skipping");
+            return;
+        }
+        let check = |label: &str, oldf: &str, deltaf: &str, truthf: &str| {
+            let old = std::fs::read(dir.join(oldf)).unwrap();
+            let delta_raw = std::fs::read(dir.join(deltaf)).unwrap();
+            let truth = std::fs::read(dir.join(truthf)).unwrap();
+            let parsed = parse(&delta_raw).unwrap();
+            let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
+            let combined = build_pe_copy_rift(&old, &pp);
+
+            // Copy-source map from a decode (offsets are content-independent).
+            let mut zsrc = old.clone();
+            crate::pe::transform::zero_pe_checksum(&mut zsrc);
+            let (_out, copy_src) = crate::lzx::decompress_with_copy_source(
+                &zsrc,
+                &parsed.patch_data,
+                parsed.header.target_size as usize,
+                Some(&combined),
+            )
+            .unwrap();
+
+            // observed_Tsrc[s] = truth[o] for every output byte o that copied
+            // reference offset s. This is genuine's T(source) at copied offsets.
+            let mut observed: Vec<Option<u8>> = vec![None; old.len()];
+            for (o, &s) in copy_src.iter().enumerate() {
+                if s >= 0 && (s as usize) < observed.len() && o < truth.len() {
+                    observed[s as usize] = Some(truth[o]);
+                }
+            }
+
+            // Our T(source).
+            let mut mine = old.clone();
+            crate::pe::transform::zero_pe_checksum(&mut mine);
+            let spe = crate::pe::parse::PeInfo::parse_lenient(&mine).unwrap();
+            crate::pe::transform::build_transformed_source(
+                &mut mine,
+                &spe,
+                &pp.preprocess_rift,
+                parsed.header.flags as u64,
+            );
+
+            let sec_of = |fo: usize| -> String {
+                spe.sections
+                    .iter()
+                    .find(|s| {
+                        fo >= s.raw_offset as usize
+                            && fo < (s.raw_offset + s.raw_size) as usize
+                    })
+                    .map(|s| s.name.clone())
+                    .unwrap_or_else(|| "<hdr/gap>".into())
+            };
+            let mut by_sec = std::collections::BTreeMap::<String, usize>::new();
+            let mut covered = 0usize;
+            let mut shown = 0usize;
+            for (s, obs) in observed.iter().enumerate() {
+                let Some(t) = obs else { continue };
+                covered += 1;
+                if mine[s] != *t {
+                    *by_sec.entry(sec_of(s)).or_default() += 1;
+                    if shown < 16 {
+                        eprintln!(
+                            "  TSDIFF fo={s:#x} sec={} mine={:02x} genuine={:02x} raw={:02x}",
+                            sec_of(s), mine[s], t, old[s]
+                        );
+                        shown += 1;
+                    }
+                }
+            }
+            let total: usize = by_sec.values().sum();
+            eprintln!(
+                "{label}: T(source) mismatches = {total} over {covered} copied bytes; by section: {by_sec:?}"
+            );
+        };
+        check("comctl32 x86", "comctl32x86_old.dll", "comctl32x86.delta", "comctl32x86_new.dll");
+    }
+
     const DELTA_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/deltas");
 
     fn delta_source(name: &str) -> Vec<u8> {

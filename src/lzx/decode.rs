@@ -136,21 +136,21 @@ pub(super) fn read_compression_lengths(
 
 /// Core decompression implementation shared by `decompress` and `decompress_partial`.
 ///
-/// When `provenance` is `Some`, it is filled in lockstep with `output`: one byte
-/// per output byte, `1` if the byte was copied from the `reference` buffer and
-/// `0` if it was a literal supplied by the patch. Bytes copied from the
-/// already-reconstructed `output` (LZ back-references) inherit the provenance of
-/// the region they copy. This is genuine msdelta's per-byte "transform marker"
-/// (`param_5 & 1` in mspatcha): the PE instruction transforms (relative
-/// call/jmp, x64 disasm) un-transform ONLY bytes copied from the (transformed)
-/// source, never literals the patch supplied in final form.
+/// When `copy_src` is `Some`, it is filled in lockstep with `output`: one
+/// `i64` per output byte giving the **reference offset** the byte was copied
+/// from, or `-1` for a literal supplied by the patch. Bytes copied from the
+/// already-reconstructed `output` (LZ back-references) inherit the copy-source
+/// of the region they copy, so the reference provenance propagates through
+/// back-references. This both flags copied-from-reference bytes (`>= 0`) -- the
+/// genuine "transform marker" gate -- and, by inverting against a known target,
+/// reconstructs genuine's transformed source `T(source)` at every copied offset.
 pub(super) fn decompress_into(
     reference: &[u8],
     patch_data: &[u8],
     target_size: usize,
     caller_rift: Option<&rift::RiftTable>,
     output: &mut Vec<u8>,
-    mut provenance: Option<&mut Vec<u8>>,
+    mut copy_src: Option<&mut Vec<i64>>,
 ) -> Result<()> {
     if patch_data.is_empty() {
         return if target_size == 0 {
@@ -192,7 +192,7 @@ pub(super) fn decompress_into(
 
     let mut seg_idx = 0;
     output.reserve(target_size);
-    if let Some(p) = provenance.as_deref_mut() {
+    if let Some(p) = copy_src.as_deref_mut() {
         p.reserve(target_size);
     }
     let mut lru: [i64; 3] = [0; 3];
@@ -218,8 +218,8 @@ pub(super) fn decompress_into(
 
         if match_len == 1 && raw_offset < 256 {
             output.push(raw_offset as u8);
-            if let Some(p) = provenance.as_deref_mut() {
-                p.push(0);
+            if let Some(p) = copy_src.as_deref_mut() {
+                p.push(-1);
             }
             pos += 1;
             continue;
@@ -260,10 +260,9 @@ pub(super) fn decompress_into(
                 return Err(Error::Malformed("source copy out of reference bounds"));
             }
             output.extend_from_slice(&reference[start..end]);
-            if let Some(p) = provenance.as_deref_mut() {
-                // Copied from the reference (transformed source): mark for the
-                // instruction transforms to un-transform.
-                p.resize(p.len() + copy_len as usize, 1);
+            if let Some(p) = copy_src.as_deref_mut() {
+                // Copied from the reference: record each byte's source offset.
+                p.extend((start..end).map(|s| s as i64));
             }
             pos += copy_len;
         } else if src_start >= ref_len as u64 {
@@ -279,7 +278,7 @@ pub(super) fn decompress_into(
                 let start = out_start;
                 let len = copy_len as usize;
                 output.extend_from_within(start..start + len);
-                if let Some(p) = provenance.as_deref_mut() {
+                if let Some(p) = copy_src.as_deref_mut() {
                     p.extend_from_within(start..start + len);
                 }
             } else {
@@ -288,7 +287,7 @@ pub(super) fn decompress_into(
                     let idx = ((pos as i64 - distance) as u64 - ref_len as u64) as usize;
                     let byte = output[idx];
                     output.push(byte);
-                    if let Some(p) = provenance.as_deref_mut() {
+                    if let Some(p) = copy_src.as_deref_mut() {
                         p.push(p[idx]);
                     }
                     pos += 1;
@@ -301,16 +300,16 @@ pub(super) fn decompress_into(
             let ref_bytes = (ref_len as u64 - src_start) as usize;
             let out_bytes = copy_len as usize - ref_bytes;
             output.extend_from_slice(&reference[src_start as usize..ref_len]);
-            if let Some(p) = provenance.as_deref_mut() {
+            if let Some(p) = copy_src.as_deref_mut() {
                 // The leading `ref_bytes` came from the reference.
-                p.resize(p.len() + ref_bytes, 1);
+                p.extend((src_start as usize..ref_len).map(|s| s as i64));
             }
             for i in 0..out_bytes {
                 if i >= output.len() {
                     return Err(Error::Malformed("back-reference out of output bounds"));
                 }
                 output.push(output[i]);
-                if let Some(p) = provenance.as_deref_mut() {
+                if let Some(p) = copy_src.as_deref_mut() {
                     p.push(p[i]);
                 }
             }
