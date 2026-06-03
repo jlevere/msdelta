@@ -23,6 +23,117 @@ use signature::hex_str;
 
 use crate::{Error, Result};
 
+/// Build the decompressor's copy-placement rift in the TARGET FILE-OFFSET
+/// domain. The decompressor indexes the rift by `pos = ref_len +
+/// target_file_offset` and, for a source copy, reads `reference[pos -
+/// distance]`; with the rift offset folded in this resolves to the
+/// matching SOURCE file offset. So each entry must read
+///   { source: ref_len + new_file_offset, target: old_file_offset }
+/// at every section boundary where the new->old file-offset shift changes.
+///
+/// `pp.pe_rift` carries the NEW image's `RVA -> file-offset` map (its
+/// entries are exactly the new section starts: source = new RVA, target =
+/// new file offset). Section RVAs are preserved across the delta, so we
+/// match each new section to the old one by RVA (parsed from the
+/// reference) and emit the new->old file-offset correspondence.
+///
+/// On amd64 FileAlignment == SectionAlignment, so RVA == file offset and
+/// this reduces to the identity the old code happened to produce; on i386
+/// (FileAlignment 0x200) it is what actually relays the tail sections.
+///
+/// The intra-section RVA changes carried by `pp.preprocess_rift` are ALSO
+/// copy-placement: where bytes moved *within* a section between source and
+/// target, the copy must follow that shift too. We fold those breakpoints
+/// into the same file-offset rift below. Field-level fixups that the copy
+/// cannot express (e.g. relocation rebasing) remain post-decompress passes.
+fn build_pe_copy_rift(
+    reference: &[u8],
+    pp: &preprocess::PePreprocess,
+) -> crate::lzx::rift::RiftTable {
+    use crate::lzx::rift::RiftEntry;
+    let ref_len = reference.len() as i64;
+    let mut combined = crate::lzx::rift::RiftTable {
+        entries: Vec::new(),
+    };
+    if let Ok(src_pe) = crate::pe::parse::PeInfo::parse_lenient(reference) {
+        // NEW section starts: pe_rift entry source = new RVA, target = new FO.
+        // Convert any TARGET RVA to a TARGET file offset by locating the
+        // bracketing new-section start (RVA -> FO is a constant shift inside a
+        // section).
+        let new_starts: Vec<(u32, u32)> = pp
+            .pe_rift
+            .entries
+            .iter()
+            .map(|e| (e.source as u32, e.target as u32))
+            .collect();
+        let tgt_rva_to_fo = |rva: u32| -> Option<u32> {
+            let mut best: Option<(u32, u32)> = None;
+            for &(srva, sfo) in &new_starts {
+                if srva <= rva && best.map(|(b, _)| srva >= b).unwrap_or(true) {
+                    best = Some((srva, sfo));
+                }
+            }
+            best.map(|(srva, sfo)| sfo + (rva - srva))
+        };
+        // SOURCE RVA -> SOURCE file offset via the reference section table.
+        let src_rva_to_fo = |rva: u32| -> Option<u32> {
+            src_pe
+                .sections
+                .iter()
+                .find(|s| {
+                    rva >= s.virtual_address
+                        && rva < s.virtual_address + s.virtual_size.max(s.raw_size)
+                })
+                .map(|s| s.raw_offset + (rva - s.virtual_address))
+        };
+
+        // Section-boundary entries (new FO -> old FO, matched by RVA).
+        for e in &pp.pe_rift.entries {
+            let new_rva = e.source as u32;
+            let new_fo = e.target as u32;
+            if let Some(s) = src_pe.sections.iter().find(|s| {
+                new_rva >= s.virtual_address
+                    && new_rva < s.virtual_address + s.virtual_size.max(s.raw_size)
+            }) {
+                let old_fo = s.raw_offset + (new_rva - s.virtual_address);
+                combined.entries.push(RiftEntry {
+                    source: ref_len + new_fo as i64,
+                    target: old_fo as i64,
+                });
+            } else {
+                combined.entries.push(RiftEntry {
+                    source: ref_len + new_fo as i64,
+                    target: new_fo as i64,
+                });
+            }
+        }
+
+        // Intra-section breakpoints from the preprocess rift: at each
+        // (source RVA -> target RVA) entry, the copy source shifts. Express
+        // it in the file-offset domain: break at the TARGET file offset, read
+        // the SOURCE file offset.
+        for e in &pp.preprocess_rift.entries {
+            let src_rva = e.source as u32;
+            let tgt_rva = e.target as u32;
+            if let (Some(tgt_fo), Some(src_fo)) = (tgt_rva_to_fo(tgt_rva), src_rva_to_fo(src_rva)) {
+                combined.entries.push(RiftEntry {
+                    source: ref_len + tgt_fo as i64,
+                    target: src_fo as i64,
+                });
+            }
+        }
+    } else {
+        // Reference is not a parseable PE: fall back to the previous
+        // behaviour (RVA-domain pe_rift + preprocess_rift concatenation).
+        combined = pp.pe_rift.clone();
+        for e in &pp.preprocess_rift.entries {
+            combined.entries.push(*e);
+        }
+    }
+    combined.entries.sort_by_key(|e| e.source);
+    combined
+}
+
 /// Apply a delta to a reference buffer.
 ///
 /// Supports PA30, PA31, and PA19 formats.
@@ -67,112 +178,7 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
                 "CLI metadata transform (managed/.NET image)",
             ));
         }
-        // Build the decompressor's copy-placement rift in the TARGET FILE-OFFSET
-        // domain. The decompressor indexes the rift by `pos = ref_len +
-        // target_file_offset` and, for a source copy, reads `reference[pos -
-        // distance]`; with the rift offset folded in this resolves to the
-        // matching SOURCE file offset. So each entry must read
-        //   { source: ref_len + new_file_offset, target: old_file_offset }
-        // at every section boundary where the new->old file-offset shift changes.
-        //
-        // `pp.pe_rift` carries the NEW image's `RVA -> file-offset` map (its
-        // entries are exactly the new section starts: source = new RVA, target =
-        // new file offset). Section RVAs are preserved across the delta, so we
-        // match each new section to the old one by RVA (parsed from the
-        // reference) and emit the new->old file-offset correspondence.
-        //
-        // On amd64 FileAlignment == SectionAlignment, so RVA == file offset and
-        // this reduces to the identity the old code happened to produce; on i386
-        // (FileAlignment 0x200) it is what actually relays the tail sections.
-        //
-        // The intra-section RVA changes carried by `pp.preprocess_rift` are ALSO
-        // copy-placement: where bytes moved *within* a section between source and
-        // target, the copy must follow that shift too. We fold those breakpoints
-        // into the same file-offset rift below. Field-level fixups that the copy
-        // cannot express (e.g. relocation rebasing) remain post-decompress passes.
-        use crate::lzx::rift::RiftEntry;
-        let ref_len = reference.len() as i64;
-        let mut combined = crate::lzx::rift::RiftTable {
-            entries: Vec::new(),
-        };
-        if let Ok(src_pe) = crate::pe::parse::PeInfo::parse_lenient(reference) {
-            // NEW section starts: pe_rift entry source = new RVA, target = new FO.
-            // Convert any TARGET RVA to a TARGET file offset by locating the
-            // bracketing new-section start (RVA -> FO is a constant shift inside a
-            // section).
-            let new_starts: Vec<(u32, u32)> = pp
-                .pe_rift
-                .entries
-                .iter()
-                .map(|e| (e.source as u32, e.target as u32))
-                .collect();
-            let tgt_rva_to_fo = |rva: u32| -> Option<u32> {
-                let mut best: Option<(u32, u32)> = None;
-                for &(srva, sfo) in &new_starts {
-                    if srva <= rva && best.map(|(b, _)| srva >= b).unwrap_or(true) {
-                        best = Some((srva, sfo));
-                    }
-                }
-                best.map(|(srva, sfo)| sfo + (rva - srva))
-            };
-            // SOURCE RVA -> SOURCE file offset via the reference section table.
-            let src_rva_to_fo = |rva: u32| -> Option<u32> {
-                src_pe
-                    .sections
-                    .iter()
-                    .find(|s| {
-                        rva >= s.virtual_address
-                            && rva < s.virtual_address + s.virtual_size.max(s.raw_size)
-                    })
-                    .map(|s| s.raw_offset + (rva - s.virtual_address))
-            };
-
-            // Section-boundary entries (new FO -> old FO, matched by RVA).
-            for e in &pp.pe_rift.entries {
-                let new_rva = e.source as u32;
-                let new_fo = e.target as u32;
-                if let Some(s) = src_pe.sections.iter().find(|s| {
-                    new_rva >= s.virtual_address
-                        && new_rva < s.virtual_address + s.virtual_size.max(s.raw_size)
-                }) {
-                    let old_fo = s.raw_offset + (new_rva - s.virtual_address);
-                    combined.entries.push(RiftEntry {
-                        source: ref_len + new_fo as i64,
-                        target: old_fo as i64,
-                    });
-                } else {
-                    combined.entries.push(RiftEntry {
-                        source: ref_len + new_fo as i64,
-                        target: new_fo as i64,
-                    });
-                }
-            }
-
-            // Intra-section breakpoints from the preprocess rift: at each
-            // (source RVA -> target RVA) entry, the copy source shifts. Express
-            // it in the file-offset domain: break at the TARGET file offset, read
-            // the SOURCE file offset.
-            for e in &pp.preprocess_rift.entries {
-                let src_rva = e.source as u32;
-                let tgt_rva = e.target as u32;
-                if let (Some(tgt_fo), Some(src_fo)) =
-                    (tgt_rva_to_fo(tgt_rva), src_rva_to_fo(src_rva))
-                {
-                    combined.entries.push(RiftEntry {
-                        source: ref_len + tgt_fo as i64,
-                        target: src_fo as i64,
-                    });
-                }
-            }
-        } else {
-            // Reference is not a parseable PE: fall back to the previous
-            // behaviour (RVA-domain pe_rift + preprocess_rift concatenation).
-            combined = pp.pe_rift.clone();
-            for e in &pp.preprocess_rift.entries {
-                combined.entries.push(*e);
-            }
-        }
-        combined.entries.sort_by_key(|e| e.source);
+        let combined = build_pe_copy_rift(reference, &pp);
         (Some(combined), Some(pp))
     } else {
         (None, None)
@@ -1034,6 +1040,125 @@ mod tests {
         assert!(
             section_diff(&x86_truth, &x86_out, ".reloc") <= 19453,
             "comctl32 x86 .reloc regressed (expected <= 19453, was 73198 pre-rift)"
+        );
+    }
+
+    /// Exploratory: decode comctl32 x86 with the copy-vs-literal provenance map
+    /// and correlate .text byte diffs (truth vs our untransformed output) with
+    /// the marker bitmap and E8/E9 relative call/jmp sites. Confirms genuine
+    /// msdelta's instruction transform applies ONLY to copied bytes. Ignored by
+    /// default (needs the gitignored fixtures); run with `--ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn analyze_x86_text_marker() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures");
+        if !dir.join("comctl32x86.delta").exists() {
+            eprintln!("comctl32x86 fixtures absent; skipping");
+            return;
+        }
+        let old = std::fs::read(dir.join("comctl32x86_old.dll")).unwrap();
+        let delta_raw = std::fs::read(dir.join("comctl32x86.delta")).unwrap();
+        let truth = std::fs::read(dir.join("comctl32x86_new.dll")).unwrap();
+
+        let parsed = parse(&delta_raw).unwrap();
+        let target_size = parsed.header.target_size as usize;
+        let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
+        let combined = build_pe_copy_rift(&old, &pp);
+
+        let mut pe_ref = old.clone();
+        crate::pe::transform::zero_pe_checksum(&mut pe_ref);
+        let (out, prov) = crate::lzx::decompress_with_provenance(
+            &pe_ref,
+            &parsed.patch_data,
+            target_size,
+            Some(&combined),
+        )
+        .unwrap();
+        assert_eq!(out.len(), truth.len());
+        assert_eq!(prov.len(), out.len());
+
+        // .text bounds from truth.
+        let pe = crate::pe::parse::PeInfo::parse_lenient(&truth).unwrap();
+        let text = pe.sections.iter().find(|s| s.name == ".text").unwrap();
+        let (off, len) = (text.raw_offset as usize, text.raw_size as usize);
+        let end = (off + len).min(truth.len());
+
+        // Diffs in .text, split by marker.
+        let mut diff_marked = 0usize;
+        let mut diff_literal = 0usize;
+        for i in off..end {
+            if out[i] != truth[i] {
+                if prov[i] == 1 {
+                    diff_marked += 1;
+                } else {
+                    diff_literal += 1;
+                }
+            }
+        }
+        eprintln!(
+            ".text diffs: total={}, marker=1(copied)={}, marker=0(literal)={}",
+            diff_marked + diff_literal,
+            diff_marked,
+            diff_literal
+        );
+
+        // E8/E9 sites whose TRUTH target lands within .text (real relative
+        // calls/jmps). For each, test the rift-remap formula
+        //   final_disp = our_disp + map(dest_rva) - map(site_rva)
+        // where map = preprocess_rift (source RVA -> target RVA offset).
+        let text_lo = text.virtual_address as i64;
+        let text_hi = text_lo + text.raw_size as i64;
+        let in_text = |rva: i64| rva >= text_lo && rva < text_hi;
+        let map = |rva: i64| pp.preprocess_rift.map(rva);
+        let rev = pp.preprocess_rift.reverse();
+        let revmap = |rva: i64| rev.map(rva);
+
+        let mut real = 0usize;
+        let mut changed = 0usize;
+        let mut formula_ok = 0usize;
+        let mut formula_bad = 0usize;
+        let mut examples = 0usize;
+        let mut i = off;
+        while i + 5 <= end {
+            let op = truth[i];
+            if op == 0xE8 || op == 0xE9 {
+                let site_rva = text.virtual_address as i64 + (i - off) as i64;
+                let our_disp = i32::from_le_bytes(out[i + 1..i + 5].try_into().unwrap()) as i64;
+                let truth_disp = i32::from_le_bytes(truth[i + 1..i + 5].try_into().unwrap()) as i64;
+                let truth_dest = site_rva + 5 + truth_disp;
+                if !in_text(truth_dest) {
+                    i += 1;
+                    continue;
+                }
+                real += 1;
+                // site_rva is the TARGET site rva R_t. Recover the SOURCE site
+                // rva R_s = R_t + rev.map(R_t); the copied displacement points to
+                // SOURCE dest D_s = R_s + 5 + our_disp.
+                let src_site = site_rva + revmap(site_rva);
+                let src_dest = src_site + 5 + our_disp;
+                // final_disp = our_disp + map(D_s) - map(R_s); map(R_s) = -rev(R_t).
+                let predicted = our_disp + map(src_dest) + revmap(site_rva);
+                if our_disp != truth_disp {
+                    changed += 1;
+                }
+                if predicted == truth_disp {
+                    formula_ok += 1;
+                } else {
+                    formula_bad += 1;
+                    if examples < 30 {
+                        eprintln!(
+                            "BAD fo={:#x} R_t={:#x} op={:#04x} our={:#x} truth={:#x} src_site={:#x} src_dest={:#x} map(D_s)={} rev(R_t)={} pred={:#x}",
+                            i, site_rva, op, our_disp, truth_disp, src_site, src_dest,
+                            map(src_dest), revmap(site_rva), predicted
+                        );
+                        examples += 1;
+                    }
+                }
+            }
+            i += 1;
+        }
+        eprintln!(
+            "real in-text E8/E9: total={real}, changed(our!=truth)={changed}, formula_ok={formula_ok}, formula_bad={formula_bad}"
         );
     }
 
