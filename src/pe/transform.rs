@@ -63,6 +63,9 @@ pub(crate) fn build_transformed_source(buf: &mut [u8], pe: &PeInfo, rift: &RiftT
     if flags & 0x2 != 0 {
         mark_non_executable(buf, pe, &mut marker);
     }
+    if flags & 0x8 != 0 {
+        transform_source_exports(buf, pe, rift, &mut marker);
+    }
     if flags & 0x20 != 0 {
         transform_source_relocs_i386(buf, pe, rift, &mut marker);
     }
@@ -72,6 +75,66 @@ pub(crate) fn build_transformed_source(buf: &mut [u8], pe: &PeInfo, rift: &RiftT
     if flags & 0x100 != 0 {
         transform_source_calls_i386(buf, pe, rift, &marker);
     }
+}
+
+/// `TransformExports` (dpx, g_transformsMap mask 0x8): map the export
+/// directory's RVA fields and its AddressOfFunctions / AddressOfNames RVA
+/// arrays through the rift, marking the bytes. comctl32's export table lives in
+/// `.text`, so these are the residual `.text` RVAs after calls/jmps.
+fn transform_source_exports(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marker: &mut [u8]) {
+    let (exp_rva, _exp_size) = match pe.data_directories.first().copied() {
+        Some(v) if v.0 != 0 => v,
+        _ => return,
+    };
+    let Some(dir) = rva_to_file_off(pe, exp_rva as i64) else {
+        return;
+    };
+    if dir + 0x28 > buf.len() {
+        return;
+    }
+    let rd = |b: &[u8], o: usize| u32::from_le_bytes(b[o..o + 4].try_into().unwrap());
+    // Map the RVA stored at file offset `fo` in place, and mark its 4 bytes.
+    let map_field = |buf: &mut [u8], marker: &mut [u8], fo: usize| {
+        if fo + 4 > buf.len() {
+            return;
+        }
+        let v = rd(buf, fo) as i64;
+        if v != 0 {
+            let nv = (v + rift.map(v)) as u32;
+            buf[fo..fo + 4].copy_from_slice(&nv.to_le_bytes());
+        }
+        for b in 0..4 {
+            marker[fo + b] |= 1;
+        }
+    };
+
+    let n_funcs = rd(buf, dir + 0x14);
+    let n_names = rd(buf, dir + 0x18);
+    let aof = rd(buf, dir + 0x1c);
+    let aon = rd(buf, dir + 0x20);
+
+    // AddressOfFunctions[]: NumberOfFunctions RVAs.
+    if aof != 0 {
+        if let Some(base) = rva_to_file_off(pe, aof as i64) {
+            for i in 0..n_funcs as usize {
+                map_field(buf, marker, base + i * 4);
+            }
+        }
+    }
+    // AddressOfNames[]: NumberOfNames name-string RVAs.
+    if aon != 0 {
+        if let Some(base) = rva_to_file_off(pe, aon as i64) {
+            for i in 0..n_names as usize {
+                map_field(buf, marker, base + i * 4);
+            }
+        }
+    }
+    // The directory's own RVA fields: Name, AddressOfFunctions, AddressOfNames,
+    // AddressOfNameOrdinals. (Base/counts and the ordinal array are not RVAs.)
+    map_field(buf, marker, dir + 0x0c);
+    map_field(buf, marker, dir + 0x1c);
+    map_field(buf, marker, dir + 0x20);
+    map_field(buf, marker, dir + 0x24);
 }
 
 /// `MarkNonExe` (dpx, g_transformsMap mask 0x2, runs first): mark every byte

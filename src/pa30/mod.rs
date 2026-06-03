@@ -1044,23 +1044,11 @@ mod tests {
             section_diff(&x86_truth, &x86_out, ".data") <= 5,
             "comctl32 x86 .data regressed (was 5, pre-rift 764)"
         );
-        // .text: the T(source) architecture (i386 relative calls/jmps +
-        // relocation operands transformed on the source before the LZX copy)
-        // drops this from 338983 (pre-rift) / 16690 (pre-T(source)) to ~587.
-        // The residual is RVA-table fields a structural transform still maps.
-        let x86_text = section_diff(&x86_truth, &x86_out, ".text");
-        eprintln!("comctl32 x86 .text diff = {x86_text}");
-        assert!(
-            x86_text <= 600,
-            "comctl32 x86 .text regressed (expected <= 600; 16690 pre-T(source))"
-        );
-        // .reloc: the block REBUILD (regroup by rift-mapped page) reconstructs
-        // the table byte-exactly -- 73198 pre-rift / 19453 pre-rebuild -> 0.
-        assert_eq!(
-            section_diff(&x86_truth, &x86_out, ".reloc"),
-            0,
-            "comctl32 x86 .reloc regressed (was 19453 pre-rebuild)"
-        );
+        // The full i386 transform family (T(source): relative calls/jmps,
+        // relocation operand rewrite + .reloc block rebuild, MarkNonExe gate,
+        // export-table RVA mapping) reconstructs comctl32 x86 BYTE-EXACTLY --
+        // 644585 total diffs pre-campaign -> 0.
+        assert_eq!(x86_out, x86_truth, "comctl32 x86 not byte-exact");
     }
 
     /// Per-section diff report for the genuine PE fixtures via the full
