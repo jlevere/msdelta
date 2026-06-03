@@ -139,6 +139,13 @@ fn build_pe_copy_rift(
 /// Supports PA30, PA31, and PA19 formats.
 /// Equivalent to `ApplyDeltaB(0, reference, delta, &out)` on Windows.
 pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
+    apply_impl(reference, delta, true)
+}
+
+/// Apply core with an optional target-hash check. `verify = false` returns the
+/// reconstructed bytes even when they fail the embedded hash -- used by the
+/// coverage harness to inspect *where* a decode diverges.
+pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result<Vec<u8>> {
     if delta.len() >= 4 && &delta[..4] == PA19_MAGIC {
         return crate::pa19::apply(reference, delta);
     }
@@ -155,7 +162,7 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
     // target the delta was diffed against). target_size is the source length.
     if parsed.header.file_type_set & 0x100 != 0 {
         let output = reverse::apply_reversal(reference, &parsed.patch_data, target_size)?;
-        if parsed.header.hash_alg_id != 0 && !parsed.header.target_hash.is_empty() {
+        if verify && parsed.header.hash_alg_id != 0 && !parsed.header.target_hash.is_empty() {
             let computed = get_signature(&output, parsed.header.hash_alg_id as u32)?;
             if computed.hash != parsed.header.target_hash {
                 return Err(Error::HashMismatch {
@@ -286,7 +293,7 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
         crate::pe::transform::undo_x86_e8_translation(&mut output);
     }
 
-    if parsed.header.hash_alg_id != 0 && !parsed.header.target_hash.is_empty() {
+    if verify && parsed.header.hash_alg_id != 0 && !parsed.header.target_hash.is_empty() {
         let computed = get_signature(&output, parsed.header.hash_alg_id as u32)?;
         if computed.hash != parsed.header.target_hash {
             return Err(Error::HashMismatch {
@@ -1257,6 +1264,96 @@ mod tests {
                 break;
             }
         }
+    }
+
+    /// Coverage matrix: apply every minted (base, delta, truth) triple in
+    /// notes/pe-fixtures-matrix and report per-fixture pass/diff + per-section
+    /// breakdown. The systematic breadth check across diverse DLLs/arches.
+    /// Ignored (needs the gitignored fixtures); `--ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn pe_coverage_matrix() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures-matrix");
+        if !root.exists() {
+            eprintln!("matrix fixtures absent; skipping");
+            return;
+        }
+        let mut dirs: Vec<_> = std::fs::read_dir(&root)
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.is_dir())
+            .collect();
+        dirs.sort();
+        let mut exact = 0;
+        let mut nonzero = 0;
+        let mut errored = 0;
+        let mut rows: Vec<(String, String)> = Vec::new();
+        for d in &dirs {
+            let name = d.file_name().unwrap().to_string_lossy().to_string();
+            let (base, delta, truth) = (
+                std::fs::read(d.join("base.bin")),
+                std::fs::read(d.join("forward.delta")),
+                std::fs::read(d.join("truth.bin")),
+            );
+            let (Ok(base), Ok(delta), Ok(truth)) = (base, delta, truth) else {
+                continue;
+            };
+            let (ft, fl) = parse(&delta)
+                .map(|p| (p.header.file_type, p.header.flags))
+                .unwrap_or((-1, 0));
+            match apply_impl(&base, &delta, false) {
+                Ok(out) => {
+                    let total: usize =
+                        (0..out.len().min(truth.len())).filter(|&i| out[i] != truth[i]).count()
+                            + (out.len() as i64 - truth.len() as i64).unsigned_abs() as usize;
+                    if total == 0 {
+                        exact += 1;
+                    } else {
+                        nonzero += 1;
+                        // per-section breakdown of the worst offenders
+                        let secs = crate::pe::parse::PeInfo::parse_lenient(&truth)
+                            .map(|pe| {
+                                let mut v: Vec<(String, usize)> = pe
+                                    .sections
+                                    .iter()
+                                    .map(|s| {
+                                        let a = s.raw_offset as usize;
+                                        let e = (a + s.raw_size as usize)
+                                            .min(truth.len())
+                                            .min(out.len());
+                                        let n = (a..e).filter(|&i| out[i] != truth[i]).count();
+                                        (s.name.clone(), n)
+                                    })
+                                    .filter(|(_, n)| *n > 0)
+                                    .collect();
+                                v.sort_by_key(|(_, n)| std::cmp::Reverse(*n));
+                                v.iter()
+                                    .take(4)
+                                    .map(|(s, n)| format!("{s}:{n}"))
+                                    .collect::<Vec<_>>()
+                                    .join(" ")
+                            })
+                            .unwrap_or_default();
+                        rows.push((
+                            name.clone(),
+                            format!("ft={ft} fl={fl:#x} DIFF={total} [{secs}]"),
+                        ));
+                    }
+                }
+                Err(e) => {
+                    errored += 1;
+                    rows.push((name.clone(), format!("ft={ft} fl={fl:#x} ERR={e}")));
+                }
+            }
+        }
+        eprintln!("\n=== PE COVERAGE MATRIX ({} fixtures) ===", dirs.len());
+        for (n, info) in &rows {
+            eprintln!("  {n:<60} {info}");
+        }
+        eprintln!(
+            "\nSUMMARY: byte-exact={exact}  diff={nonzero}  errored={errored}  total={}",
+            dirs.len()
+        );
     }
 
     const DELTA_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/deltas");
