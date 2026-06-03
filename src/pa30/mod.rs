@@ -1133,6 +1133,19 @@ mod tests {
             let parsed = parse(&delta_raw).unwrap();
             let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
             let combined = build_pe_copy_rift(&old, &pp);
+            if std::env::var("RIFTDUMP").is_ok() {
+                let spe0 = crate::pe::parse::PeInfo::parse_lenient(&old).unwrap();
+                eprintln!(
+                    "{label}: src_base={:#x} tgt_base={:#x} rift_entries={} pe_rift={}",
+                    spe0.image_base,
+                    pp.target_image_base,
+                    pp.preprocess_rift.entries.len(),
+                    pp.pe_rift.entries.len()
+                );
+                for e in pp.preprocess_rift.entries.iter().take(12) {
+                    eprintln!("  rift src={:#x} -> tgt={:#x} (off {})", e.source, e.target, e.target - e.source);
+                }
+            }
 
             // Copy-source map from a decode (offsets are content-independent).
             let mut zsrc = old.clone();
