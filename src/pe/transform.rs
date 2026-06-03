@@ -63,6 +63,9 @@ pub(crate) fn build_transformed_source(buf: &mut [u8], pe: &PeInfo, rift: &RiftT
     if flags & 0x2 != 0 {
         mark_non_executable(buf, pe, &mut marker);
     }
+    if flags & 0x4 != 0 {
+        transform_source_imports(buf, pe, rift, &mut marker);
+    }
     if flags & 0x8 != 0 {
         transform_source_exports(buf, pe, rift, &mut marker);
     }
@@ -74,6 +77,108 @@ pub(crate) fn build_transformed_source(buf: &mut [u8], pe: &PeInfo, rift: &RiftT
     }
     if flags & 0x100 != 0 {
         transform_source_calls_i386(buf, pe, rift, &marker);
+    }
+}
+
+/// `TransformImports` (dpx, g_transformsMap mask 0x4): map the import
+/// directory's RVA fields and thunk-array entries through the rift. Per
+/// descriptor: walk the ILT (OriginalFirstThunk) and IAT (FirstThunk) -- each
+/// by-name thunk holds an IMAGE_IMPORT_BY_NAME RVA to map (by-ordinal entries,
+/// high bit set, are skipped); a BOUND IAT (TimeDateStamp != 0) holds absolute
+/// VAs mapped like relocations. Then map the descriptor's
+/// OriginalFirstThunk/Name/FirstThunk fields. i386 (PE32, 4-byte thunks).
+fn transform_source_imports(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marker: &mut [u8]) {
+    if pe.is_64bit {
+        return; // PE32+ (8-byte thunks) handled separately
+    }
+    let image_base = pe.image_base as i64;
+    let (imp_rva, _imp_size) = match pe.data_directories.get(1).copied() {
+        Some(v) if v.0 != 0 => v,
+        _ => return,
+    };
+    let Some(desc0) = rva_to_file_off(pe, imp_rva as i64) else {
+        return;
+    };
+    let rd = |b: &[u8], o: usize| -> u32 {
+        b.get(o..o + 4)
+            .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
+            .unwrap_or(0)
+    };
+    // Map the RVA stored at file offset `fo` in place, mark 4 bytes.
+    let map_rva_field = |buf: &mut [u8], marker: &mut [u8], fo: usize| {
+        if fo + 4 > buf.len() {
+            return;
+        }
+        let v = rd(buf, fo) as i64;
+        if v != 0 {
+            let nv = (v + rift.map(v)) as u32;
+            buf[fo..fo + 4].copy_from_slice(&nv.to_le_bytes());
+        }
+        for b in 0..4 {
+            marker[fo + b] |= 1;
+        }
+    };
+
+    let mut di = 0usize;
+    loop {
+        let dfo = desc0 + di * 0x14;
+        if dfo + 0x14 > buf.len() {
+            break;
+        }
+        let oft = rd(buf, dfo);
+        let tds = rd(buf, dfo + 4);
+        let name = rd(buf, dfo + 0xc);
+        let ft = rd(buf, dfo + 0x10);
+        if oft == 0 && name == 0 && ft == 0 {
+            break; // null terminator descriptor
+        }
+        // Walk a thunk array at `arr_rva`. `bound` => bound IAT (VAs).
+        let walk = |buf: &mut [u8], marker: &mut [u8], arr_rva: u32, bound: bool| {
+            if arr_rva == 0 {
+                return;
+            }
+            let Some(base) = rva_to_file_off(pe, arr_rva as i64) else {
+                return;
+            };
+            let mut k = 0usize;
+            loop {
+                let fo = base + k * 4;
+                if fo + 4 > buf.len() {
+                    break;
+                }
+                let v = rd(buf, fo);
+                if v == 0 {
+                    break;
+                }
+                if bound && tds != 0 {
+                    // bound: absolute VA -> map (VA - imageBase) as RVA.
+                    let nv = (v as i64 + rift.map(v as i64 - image_base)) as u32;
+                    buf[fo..fo + 4].copy_from_slice(&nv.to_le_bytes());
+                    for b in 0..4 {
+                        marker[fo + b] |= 1;
+                    }
+                } else if v & 0x8000_0000 == 0 {
+                    // by-name: the entry is an IMAGE_IMPORT_BY_NAME RVA.
+                    map_rva_field(buf, marker, fo);
+                } else {
+                    // by-ordinal: not an RVA, but still claim the slot.
+                    for b in 0..4 {
+                        marker[fo + b] |= 1;
+                    }
+                }
+                k += 1;
+            }
+        };
+        walk(buf, marker, oft, false);
+        walk(buf, marker, ft, tds != 0);
+        // The descriptor's own RVA fields.
+        map_rva_field(buf, marker, dfo + 0x0c);
+        map_rva_field(buf, marker, dfo);
+        map_rva_field(buf, marker, dfo + 0x10);
+        di += 1;
+        if di > 4096 {
+            break;
+        }
     }
 }
 
