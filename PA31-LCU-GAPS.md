@@ -1,9 +1,59 @@
 # PA31 decoder gaps — real Win11 24H2 LCU express deltas
 
 Tracking 16 real-world PA31 deltas pulled from a full OS cumulative update that
-`pa30::apply` could not reconstruct. **All 16 now reconstruct bit-exactly**
-against their embedded SHA256. This documents the four bugs that were fixed and
-the differential-oracle method used to find them.
+`pa30::apply` could not reconstruct. The four bugs that fixed them, and the
+differential-oracle method, are documented below.
+
+## ⚠ POPULATION REGRESSION — read this first (2026-06-02)
+
+The four fixes pass all 16 hard cases **but regressed the wider population.**
+The original corpus held only the 16 known failures, so it couldn't see this.
+Re-validated against **all 377** baseless PA31 deltas in the LCU (via `msu`):
+
+| engine | reconstruct / 377 |
+|---|---|
+| before the PA31 fixes | **361 / 377** |
+| after the PA31 fixes (HEAD `3e17126`) | **193 / 377** |
+
+So the fixes fixed 16 and **broke ~184 deltas that previously worked.** All
+regressions are:
+- **`target hash mismatch`** (silent wrong output — decode completes, embedded
+  hash rejects it), never a parse error;
+- predominantly **`comctl32.dll.mui`** (and similar resource `.mui`) across
+  *every locale*, small (~3.7–4 KB delta, ~12 KB target);
+- **arch-independent** — the amd64 and x86 `.mui` for a locale are byte-identical
+  and both regress.
+
+Arch-independence **rules out** the x86-E8 filter fix (`x86_filter.rs`) and the
+i386-only `undo_relative_calls_x86` PE transform as the cause — those touch
+x86/amd64 *code*, and these are resource-only files with no code, equally broken
+on both arches. That points the bisect at the two **arch-independent** changes:
+1. the LZMS Huffman **rebuild-order** change (`adaptive.rs`, `build-then-dilute`)
+   — fires on any stream long enough to trigger a rebuild (a ~12 KB `.mui`
+   output does), or
+2. the **LZMS-vs-bsdiff dispatch** change in `pa30/mod.rs` (use decompressed
+   bytes directly when `uncompressed_total == target_size`).
+
+Bisect by reverting each in isolation against the full corpus (below).
+
+### Corpus + harness (the fix for the blind spot)
+
+- **`tests/pa31_lcu_gaps.rs`** now applies the **full 377-delta population** (not
+  just the 16) and gates `reconstruct >= 361` (no-regression floor; target 377).
+  Each delta carries its embedded target SHA256, so `apply` returning `Ok` =
+  bit-exact — no external hashing needed. HEAD currently fails it at 193/377.
+- Corpus blobs: **`notes/pa31-lcu-gaps/*.bin`** (git-ignored MS payload) +
+  `manifest.tsv` (blob → name, size, target SHA256, baseline ok/fail).
+- Regenerate from the `.msu`:
+  `cd ~/projects/msu && cargo run --release -- gaps <KB5089549.msu> --all -o ~/projects/msdelta/notes/pa31-lcu-gaps`
+- Run: `cargo test --release --test pa31_lcu_gaps` (skips if the corpus is absent).
+
+---
+
+## Original 16 hard cases (now passing)
+
+This section documents the four bugs that were fixed and the
+differential-oracle method used to find them.
 
 ## Where these came from
 

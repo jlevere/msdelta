@@ -1,65 +1,101 @@
-//! Regression corpus for the PA31 deltas `pa30::apply` cannot yet reconstruct,
-//! pulled from a real Win11 24H2 LCU (KB5089549) express PSF. See
-//! `PA31-LCU-GAPS.md` for the analysis.
+//! PA31 regression corpus: the FULL set of baseless PA31 deltas from a real
+//! Win11 24H2 LCU (KB5089549) express PSF -- 377 deltas, not just the hard
+//! ones. See `PA31-LCU-GAPS.md`.
+//!
+//! Why the full population: an earlier corpus held only the 16 known failures.
+//! A fix can pass all 16 yet silently regress deltas that previously worked --
+//! exactly what happened (a fix took the population from 361/377 to 193/377
+//! while the 16-blob corpus stayed green). This harness applies every delta so
+//! such regressions are caught.
 //!
 //! The blobs are non-redistributable Microsoft payload, so they live in
-//! `notes/pa31-lcu-gaps/` (git-ignored) and this test SKIPS when absent.
-//! Regenerate them with the `msu` crate:
+//! `notes/pa31-lcu-gaps/` (git-ignored); this test SKIPS when absent.
+//! Regenerate with the `msu` crate (dumps all 377 with `--all`):
 //!
-//!   cargo run --release -- gaps <KB5089549.msu> -o <msdelta>/notes/pa31-lcu-gaps
+//!   cargo run --release -- gaps <KB5089549.msu> --all \
+//!     -o <msdelta>/notes/pa31-lcu-gaps
 //!
-//! As msdelta's PA31 support improves, `reconstruct` rises toward 16/16; at
-//! that point `msu` extracts the LCU to 100%.
+//! Each delta carries its own embedded target SHA256, so `pa30::apply`
+//! returning `Ok` already means bit-exact reconstruction (it errors on the
+//! embedded-hash mismatch); this test needs no external hashing.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 fn corpus() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pa31-lcu-gaps")
 }
 
+/// blob filename -> target file name, parsed leniently from manifest.tsv
+/// (column order independent: the blob is the `*.bin` token, name is last).
+fn names(dir: &PathBuf) -> BTreeMap<String, String> {
+    let mut map = BTreeMap::new();
+    if let Ok(text) = std::fs::read_to_string(dir.join("manifest.tsv")) {
+        for line in text.lines().skip(1).filter(|l| !l.is_empty()) {
+            let cols: Vec<&str> = line.split('\t').collect();
+            if let Some(blob) = cols.iter().find(|c| c.ends_with(".bin")) {
+                map.insert(blob.to_string(), cols.last().unwrap_or(&"").to_string());
+            }
+        }
+    }
+    map
+}
+
 #[test]
 fn pa31_lcu_gap_corpus() {
     let dir = corpus();
-    let manifest = dir.join("manifest.tsv");
-    if !manifest.exists() {
+    if !dir.exists() {
         eprintln!("pa31-lcu-gaps corpus absent ({dir:?}); skipping (see PA31-LCU-GAPS.md)");
         return;
     }
 
-    let text = std::fs::read_to_string(&manifest).expect("read manifest.tsv");
-    let mut total = 0usize;
-    let mut reconstruct = 0usize;
-    for line in text.lines().skip(1).filter(|l| !l.is_empty()) {
-        let cols: Vec<&str> = line.split('\t').collect();
-        // idx, magic, psf_offset, psf_len, target_len, target_sha256, blob, reason, name
-        let blob = cols[6];
-        let name = cols.last().copied().unwrap_or("");
-        let delta = std::fs::read(dir.join(blob)).expect("read delta blob");
+    let names = names(&dir);
+    let mut blobs: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .expect("read corpus dir")
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x == "bin"))
+        .collect();
+    blobs.sort();
+    if blobs.is_empty() {
+        eprintln!("no delta blobs in {dir:?}; skipping");
+        return;
+    }
 
-        // Corpus sanity: every blob is a baseless PA31 delta.
-        assert_eq!(&delta[..4], b"PA31", "{blob} is not PA31");
+    let (mut total, mut reconstruct) = (0usize, 0usize);
+    let mut failures: Vec<String> = Vec::new();
+    for blob in &blobs {
+        let bytes = std::fs::read(blob).expect("read delta blob");
+        assert_eq!(&bytes[..4], b"PA31", "{blob:?} is not PA31");
         total += 1;
-
+        let fname = blob.file_name().unwrap().to_string_lossy().into_owned();
         // Null base: these are baseless (no <Basis> in the CIX).
-        match msdelta::pa30::apply(&[], &delta) {
-            Ok(out) => {
-                reconstruct += 1;
-                eprintln!("OK   {blob} -> {} bytes  {name}", out.len());
-            }
-            Err(e) => eprintln!("FAIL {blob}: {e}"),
+        match msdelta::pa30::apply(&[], &bytes) {
+            Ok(_) => reconstruct += 1,
+            Err(e) => failures.push(format!(
+                "  FAIL {fname} [{}B] {} :: {e}",
+                bytes.len(),
+                names.get(&fname).map(String::as_str).unwrap_or("")
+            )),
         }
     }
 
-    eprintln!("\nPA31 LCU gaps: {reconstruct}/{total} reconstruct (null base)");
-    assert!(total > 0, "manifest had no entries");
+    eprintln!("\nPA31 LCU corpus: {reconstruct}/{total} reconstruct (null base)");
+    for f in failures.iter().take(40) {
+        eprintln!("{f}");
+    }
+    if failures.len() > 40 {
+        eprintln!("  ... and {} more", failures.len() - 40);
+    }
 
-    // Regression gate. All 16 reconstruct bit-exactly against their embedded
-    // SHA256 after: the LZMS Huffman rebuild-order fix, the LZMS x86-filter
-    // lock-prefix fix, the LZMS-vs-raw container dispatch, and the x86 0xE8
-    // call un-translation on i386 PE targets. See PA31-LCU-GAPS.md.
-    const KNOWN_GOOD: usize = 16;
+    // Gate. Plain null-base apply already reconstructs 361/377; the 16 hard
+    // cases need the LZMS/PE fixes. FLOOR is the no-regression line: a fix that
+    // drops below it has broken previously-working deltas. Raise FLOOR toward
+    // TARGET (377) as fixes land without regressing.
+    const FLOOR: usize = 361;
+    const TARGET: usize = 377;
     assert!(
-        reconstruct >= KNOWN_GOOD,
-        "regression: only {reconstruct}/{total} reconstruct, expected >= {KNOWN_GOOD}"
+        reconstruct >= FLOOR,
+        "regression: only {reconstruct}/{total} reconstruct, expected >= {FLOOR} \
+         (target {TARGET}); a fix broke previously-passing deltas"
     );
 }
