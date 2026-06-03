@@ -115,12 +115,14 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
         apply_pe_timestamp_fixup(reference, pp, &mut output)?;
     }
 
-    // Undo MSDelta's x86 relative-CALL preprocessing. Genuine ApplyDeltaB runs
-    // this on the reconstructed image whenever it is a 32-bit (i386) PE,
-    // independent of the msdelta file_type (these LCU express deltas are RAW yet
-    // still carry the transform). It is a no-op on non-PE output and on
-    // amd64/msil images, so it is safe to call unconditionally here.
-    crate::pe::transform::undo_x86_e8_translation(&mut output);
+    // NOTE: the x86 0xE8 CALL un-translation (undo_x86_e8_translation) is
+    // intentionally NOT called here yet. The whole-buffer form regressed the
+    // full LCU population 361 -> 193/377: its guard (`-i <= v < target_size`)
+    // over-translates resource bytes in resource-only i386 PEs (comctl32.dll.mui
+    // across locales), corrupting ~184 deltas, while only fixing ~6 x86 code
+    // DLLs. Genuine RelativeCallsX86 is section/target-aware (it validates the
+    // call target lands in a real section); that must be reimplemented before
+    // this is re-enabled. See PA31-LCU-GAPS.md ("Regression: x86 E8 over-translation").
 
     if parsed.header.hash_alg_id != 0 && !parsed.header.target_hash.is_empty() {
         let computed = get_signature(&output, parsed.header.hash_alg_id as u32)?;

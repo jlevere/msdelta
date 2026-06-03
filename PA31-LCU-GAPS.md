@@ -4,44 +4,72 @@ Tracking 16 real-world PA31 deltas pulled from a full OS cumulative update that
 `pa30::apply` could not reconstruct. The four bugs that fixed them, and the
 differential-oracle method, are documented below.
 
-## ⚠ POPULATION REGRESSION — read this first (2026-06-02)
+## POPULATION REGRESSION — diagnosed and contained (2026-06-02)
 
-The four fixes pass all 16 hard cases **but regressed the wider population.**
-The original corpus held only the 16 known failures, so it couldn't see this.
-Re-validated against **all 377** baseless PA31 deltas in the LCU (via `msu`):
+The four "16/16" fixes were validated only against the 16 known failures, and one
+of them **regressed the wider population.** Re-validated against **all 377**
+baseless PA31 deltas in the LCU (via `msu`), bisected by toggling the x86 0xE8
+transform:
 
 | engine | reconstruct / 377 |
 |---|---|
-| before the PA31 fixes | **361 / 377** |
-| after the PA31 fixes (HEAD `3e17126`) | **193 / 377** |
+| before the PA31 fixes | 361 / 377 |
+| after the PA31 fixes, x86 E8 transform ON (HEAD `3e17126`) | **193 / 377** |
+| after the PA31 fixes, x86 E8 transform OFF (current) | **369 / 377** |
 
-So the fixes fixed 16 and **broke ~184 deltas that previously worked.** All
-regressions are:
-- **`target hash mismatch`** (silent wrong output — decode completes, embedded
-  hash rejects it), never a parse error;
-- predominantly **`comctl32.dll.mui`** (and similar resource `.mui`) across
-  *every locale*, small (~3.7–4 KB delta, ~12 KB target);
-- **arch-independent** — the amd64 and x86 `.mui` for a locale are byte-identical
-  and both regress.
+**Root cause (confirmed by bisect): the x86 `0xE8` CALL transform
+(`undo_x86_e8_translation`), not the LZMS changes.** Toggling only that call
+flips 193 ↔ 369. The LZMS rebuild-order + dispatch fixes are sound and account
+for 361 → 369. Current `main` **disables the E8 transform** (`pa30/mod.rs`), so
+the population is back to a clean **369/377** with zero regression.
 
-Arch-independence **rules out** the x86-E8 filter fix (`x86_filter.rs`) and the
-i386-only `undo_relative_calls_x86` PE transform as the cause — those touch
-x86/amd64 *code*, and these are resource-only files with no code, equally broken
-on both arches. That points the bisect at the two **arch-independent** changes:
-1. the LZMS Huffman **rebuild-order** change (`adaptive.rs`, `build-then-dilute`)
-   — fires on any stream long enough to trigger a rebuild (a ~12 KB `.mui`
-   output does), or
-2. the **LZMS-vs-bsdiff dispatch** change in `pa30/mod.rs` (use decompressed
-   bytes directly when `uncompressed_total == target_size`).
+Why the earlier "arch-independent rules out x86" reasoning was wrong: a
+`comctl32.dll.mui` is a **resource-only i386 PE** (machine `0x14C`) whether it
+ships beside the amd64 or x86 DLL — the two `.mui` are byte-identical i386-PE
+bytes. So the i386-gated E8 transform fires on *both*, identically. The bug is
+the transform's **guard**: the whole-buffer form translates any `0xE8` whose
+operand satisfies `-i <= v < target_size`, which matches resource bytes that are
+not calls and corrupts them. Genuine `RelativeCallsX86` is **section/target-aware**
+(it only translates when the computed call target lands in a real section), so it
+leaves those resource bytes alone.
 
-Bisect by reverting each in isolation against the full corpus (below).
+Decisive evidence it is a per-site *guard* problem, not a file-type one: both
+`ug-cn` and `de-de` `comctl32.dll.mui` (same component, same version
+`6.0.26100.8117`, resource-only) — **`ug-cn` NEEDS the E8 translation** (fails
+without it) while **`de-de` must NOT get it** (the transform corrupts it). The
+only difference is locale resource content, i.e. which `0xE8` operands form valid
+call targets.
 
-### Corpus + harness (the fix for the blind spot)
+### The 8 still failing at 369/377 (need a correct E8 transform)
 
-- **`tests/pa31_lcu_gaps.rs`** now applies the **full 377-delta population** (not
-  just the 16) and gates `reconstruct >= 361` (no-regression floor; target 377).
-  Each delta carries its embedded target SHA256, so `apply` returning `Ok` =
-  bit-exact — no external hashing needed. HEAD currently fails it at 193/377.
+`delta_001` `sxsoa.dll` x86, `delta_005` `sxsoaps.dll` x86, `delta_342`/`343`
+`comctl32.dll.mui` ug-cn, `delta_369`/`371` `gdiplus.dll` x86, `delta_373`/`374`
+`comctl32.dll` x86. Six are x86 *code* DLLs; two are the ug-cn `.mui`. All need
+the 0xE8 transform — with a guard that does **not** touch the ~184 resource `.mui`
+the whole-buffer form broke.
+
+### Handoff to the next msdelta pass
+
+- **Reference**: genuine `RelativeCallsX86::Run` is decompiled at
+  `~/projects/msu/reference/ghidra/decompiled_dpx/Run__180040a00.c` — it walks PE
+  sections and validates the call target against `SizeOfImage`/section bounds.
+  Reimplement that guard (clean-room) in place of the loose
+  `-i <= v < target_size` in `undo_x86_e8_translation`.
+- **Oracle**: `msdelta.dll` has no PA31; `UpdateCompression.dll` /`dpx.dll` do.
+  `DllImport` `reference/UpdateCompression.dll` on the lab VM and apply baseless
+  (empty source) for genuine truth bytes; byte-diff vs our decode to see exactly
+  which `0xE8` sites genuine translates (it showed `our_value - genuine ==
+  e8_file_offset` at every translated site). Pull large files with `scp -O`
+  (SFTP truncates at 200 KiB).
+- **Test**: `tests/pa31_lcu_gaps.rs` applies the **full 377-delta population** and
+  gates `reconstruct >= 369` (no-regression floor; target 377). Validate any new
+  E8 transform against the full corpus, NOT just the 8 — the whole point is to not
+  re-break the resource `.mui`.
+- **Re-enable**: the transform fn + its `fuzz_x86_e8` target are retained (marked
+  not-wired); re-add the `pa30::apply` call once the guard is section/target-aware.
+
+### Corpus + harness
+
 - Corpus blobs: **`notes/pa31-lcu-gaps/*.bin`** (git-ignored MS payload) +
   `manifest.tsv` (blob → name, size, target SHA256, baseline ok/fail).
 - Regenerate from the `.msu`:
@@ -50,7 +78,11 @@ Bisect by reverting each in isolation against the full corpus (below).
 
 ---
 
-## Original 16 hard cases (now passing)
+## Original 16 hard cases (diagnosis + history)
+
+> Historical: this section describes the original 16-blob analysis. The LZMS
+> fixes here stand; the x86 0xE8 transform described below is currently DISABLED
+> pending the section/target-aware rework (see the regression section above).
 
 This section documents the four bugs that were fixed and the
 differential-oracle method used to find them.
@@ -88,7 +120,7 @@ For every LZMS-container blob the container's `uncompressed_total` **equals
 target_size** — i.e. the LZMS payload IS the target image; there is no bsdiff
 layer (a null-base bsdiff stream would be larger than the target).
 
-## What was fixed (16/16, all verified against the embedded SHA256)
+## What was fixed (the original 16; see regression note for current state)
 
 ### Bug 1 — LZMS adaptive-Huffman rebuild order (`crates/lzms/src/adaptive.rs`)
 
@@ -152,9 +184,10 @@ Gating uses a hand-rolled header read (machine `0x14C`, PE32, CLR/ILONLY check),
 not a full `goblin` parse -- goblin over-validates and rejected some valid system
 images (e.g. comctl32), which had left delta_13 untransformed.
 
-This fixed the lone x86 LZMS blob (delta_03) and all seven LZX blobs, taking the
-corpus to **16/16**. amd64/arm64 and managed (.NET) targets correctly skip the
-transform.
+This passed the original 16-blob corpus 16/16 — but the whole-buffer guard was
+later found to over-translate resource-only i386 PEs, regressing the full 377
+population (see the regression section at the top). The transform is now
+disabled pending a section/target-aware rewrite.
 
 ## Reproduction
 

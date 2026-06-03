@@ -20,7 +20,7 @@
 //! embedded-hash mismatch); this test needs no external hashing.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn corpus() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pa31-lcu-gaps")
@@ -28,7 +28,7 @@ fn corpus() -> PathBuf {
 
 /// blob filename -> target file name, parsed leniently from manifest.tsv
 /// (column order independent: the blob is the `*.bin` token, name is last).
-fn names(dir: &PathBuf) -> BTreeMap<String, String> {
+fn names(dir: &Path) -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
     if let Ok(text) = std::fs::read_to_string(dir.join("manifest.tsv")) {
         for line in text.lines().skip(1).filter(|l| !l.is_empty()) {
@@ -87,11 +87,13 @@ fn pa31_lcu_gap_corpus() {
         eprintln!("  ... and {} more", failures.len() - 40);
     }
 
-    // Gate. Plain null-base apply already reconstructs 361/377; the 16 hard
-    // cases need the LZMS/PE fixes. FLOOR is the no-regression line: a fix that
-    // drops below it has broken previously-working deltas. Raise FLOOR toward
-    // TARGET (377) as fixes land without regressing.
-    const FLOOR: usize = 361;
+    // Gate. Plain null-base apply reconstructed 361/377 before any fixes; the
+    // LZMS rebuild-order + dispatch fixes lift that to 369 with no regression.
+    // FLOOR is the no-regression line: a fix that drops below it has broken
+    // previously-working deltas. Raise FLOOR toward TARGET (377) as fixes land
+    // without regressing -- the remaining 8 need a section/target-aware x86 0xE8
+    // transform (see PA31-LCU-GAPS.md), which must not regress resource-only PEs.
+    const FLOOR: usize = 369;
     const TARGET: usize = 377;
     assert!(
         reconstruct >= FLOOR,
