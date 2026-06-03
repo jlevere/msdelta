@@ -101,6 +101,7 @@ pub(crate) fn build_transformed_source(
                 }
             }
         }
+        set_header_image_base(buf, target_base, true);
         return;
     }
     let mut marker = vec![0u8; buf.len()];
@@ -124,6 +125,35 @@ pub(crate) fn build_transformed_source(
     }
     if flags & 0x100 != 0 {
         transform_source_calls_i386(buf, pe, rift, &marker);
+    }
+    set_header_image_base(buf, target_base, false);
+}
+
+/// Write the TARGET image base into the source header's `ImageBase` field, the
+/// way genuine `PreProcessPEForApply` does after running the transform executor
+/// (`SectionHelper::SetImageBase64`/`SetImageBase32`). The LZX copy/literal split
+/// was defined against this T(source), so when source and target image bases
+/// differ (e.g. a rebased binary), the field must already hold the target value
+/// here -- otherwise a copy that reads it lands the stale source base.
+/// PE32+ stores an 8-byte ImageBase at optional-header offset 0x18; PE32 a
+/// 4-byte ImageBase at offset 0x1c.
+fn set_header_image_base(buf: &mut [u8], target_base: u64, is_64bit: bool) {
+    let Some(e) = buf
+        .get(0x3c..0x40)
+        .map(|b| u32::from_le_bytes(b.try_into().unwrap()) as usize)
+    else {
+        return;
+    };
+    if buf.get(e..e + 4) != Some(b"PE\0\0") {
+        return;
+    }
+    let opt = e + 24;
+    if is_64bit {
+        if opt + 0x20 <= buf.len() {
+            buf[opt + 0x18..opt + 0x20].copy_from_slice(&target_base.to_le_bytes());
+        }
+    } else if opt + 0x20 <= buf.len() {
+        buf[opt + 0x1c..opt + 0x20].copy_from_slice(&(target_base as u32).to_le_bytes());
     }
 }
 
