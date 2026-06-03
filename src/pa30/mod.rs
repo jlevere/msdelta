@@ -1185,7 +1185,8 @@ mod tests {
                 if mine[s] != *t {
                     let sec = sec_of(s);
                     *by_sec.entry(sec.clone()).or_default() += 1;
-                    if shown < 14 && sec == ".text" {
+                    let want = std::env::var("SECFILTER").unwrap_or_else(|_| ".text".into());
+                    if shown < 14 && sec == want {
                         let w = |buf: &[u8]| -> String {
                             (s.saturating_sub(6)..(s + 6).min(buf.len()))
                                 .map(|k| format!("{:02x}", buf[k]))
@@ -1195,7 +1196,7 @@ mod tests {
                         let g: Vec<u8> = (s.saturating_sub(6)..(s + 6).min(old.len()))
                             .map(|k| observed[k].unwrap_or(old[k]))
                             .collect();
-                        eprintln!("  TSDIFF fo={s:#x} [.text]");
+                        eprintln!("  TSDIFF fo={s:#x} [{sec}]");
                         eprintln!("    raw    : {}", w(&old));
                         eprintln!("    genuine: {}", g.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" "));
                         eprintln!("    mine   : {}", w(&mine));

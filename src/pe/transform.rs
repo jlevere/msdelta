@@ -75,6 +75,9 @@ pub(crate) fn build_transformed_source(
     if flags & 0x8 != 0 {
         transform_source_exports(buf, pe, rift, &mut marker);
     }
+    if flags & 0x10 != 0 {
+        transform_source_resources(buf, pe, rift, &mut marker);
+    }
     if flags & 0x20 != 0 {
         transform_source_relocs_i386(buf, pe, rift, &mut marker, target_base);
     }
@@ -254,6 +257,102 @@ fn transform_source_exports(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marke
     map_field(buf, marker, dir + 0x1c);
     map_field(buf, marker, dir + 0x20);
     map_field(buf, marker, dir + 0x24);
+}
+
+/// `TransformResources` (dpx, g_transformsMap mask 0x10): recursively walk the
+/// resource-directory tree and re-base every offset that points within the
+/// resource block. All subdirectory/data offsets and string-name offsets are
+/// expressed RELATIVE to the resource directory base (`dirbase`), so each is
+/// mapped as `new = MapRva(dirbase + off) - MapRva(dirbase)` -- the dirbase
+/// component cancels, leaving the segment movement of the pointed-to byte.
+/// Mirrors `TransformResources::Run` (0x1800a8190) + `TransformRecursive`
+/// (0x18004170c) on the apply path, where `MapRva` ignores the site argument and
+/// returns `rva + rift.map(rva)`. `IMAGE_RESOURCE_DATA_ENTRY.OffsetToData` is
+/// treated as dirbase-relative here, matching genuine `GetEntryData`.
+fn transform_source_resources(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marker: &mut [u8]) {
+    let (rsrc_rva, rsrc_size) = match pe.data_directories.get(2).copied() {
+        Some(v) if v.0 != 0 => v,
+        _ => return,
+    };
+    let Some(base_fo) = rva_to_file_off(pe, rsrc_rva as i64) else {
+        return;
+    };
+    let dirbase = rsrc_rva as i64;
+    let base_map = map_rva(rift, dirbase); // MapRva(dirbase): the uVar3 subtractor.
+    let end = (base_fo + rsrc_size as usize).min(buf.len());
+
+    let rd = |b: &[u8], o: usize| -> u32 {
+        b.get(o..o + 4)
+            .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
+            .unwrap_or(0)
+    };
+    // Map a dirbase-relative offset `off` through the rift, returning the new
+    // dirbase-relative offset: MapRva(dirbase+off) - MapRva(dirbase).
+    let remap = |off: i64| -> u32 { (map_rva(rift, dirbase + off) - base_map) as u32 };
+
+    // Iterative tree walk over an explicit stack of directory file offsets, with
+    // a visited set guarding against cyclic/malformed offsets.
+    let mut stack: Vec<usize> = vec![base_fo];
+    let mut visited = std::collections::HashSet::new();
+    while let Some(dir_fo) = stack.pop() {
+        if !visited.insert(dir_fo) {
+            continue;
+        }
+        // Need the 16-byte IMAGE_RESOURCE_DIRECTORY header in range.
+        if dir_fo < base_fo || dir_fo + 0x10 > end {
+            continue;
+        }
+        let named = u16::from_le_bytes(buf[dir_fo + 0xc..dir_fo + 0xe].try_into().unwrap()) as usize;
+        let ids = u16::from_le_bytes(buf[dir_fo + 0xe..dir_fo + 0x10].try_into().unwrap()) as usize;
+        let mut count = named + ids;
+        // Clamp to the entries that actually fit before `end`.
+        let max_entries = end.saturating_sub(dir_fo + 0x10) / 8;
+        if count > max_entries {
+            count = max_entries;
+        }
+        for i in 0..count {
+            let efo = dir_fo + 0x10 + i * 8;
+            let off_field = rd(buf, efo + 4);
+            if off_field & 0x8000_0000 != 0 {
+                // Subdirectory: recurse, then map the offset field (low 31 bits).
+                let child_rel = (off_field & 0x7fff_ffff) as usize;
+                let child_fo = base_fo + child_rel;
+                // GetEntryDirectoryRecord guards: child must lie within
+                // [base, end] and strictly after this entry.
+                if child_fo + 0x10 <= end && child_fo > efo {
+                    stack.push(child_fo);
+                }
+                let nv = remap(child_rel as i64) & 0x7fff_ffff;
+                let merged = (off_field & 0x8000_0000) | nv;
+                buf[efo + 4..efo + 8].copy_from_slice(&merged.to_le_bytes());
+                for b in 4..8 {
+                    marker[efo + b] |= 1;
+                }
+            } else {
+                // Leaf: locate the IMAGE_RESOURCE_DATA_ENTRY (dirbase-relative)
+                // and re-base its OffsetToData field.
+                let data_fo = base_fo + (off_field & 0x7fff_ffff) as usize;
+                if data_fo >= base_fo && data_fo + 0x10 <= end {
+                    let otd = rd(buf, data_fo) as i64;
+                    let nv = remap(otd);
+                    buf[data_fo..data_fo + 4].copy_from_slice(&nv.to_le_bytes());
+                    for b in 0..4 {
+                        marker[data_fo + b] |= 1;
+                    }
+                }
+            }
+            // Name field: a string-offset name (high bit set) is dirbase-relative.
+            let name_field = rd(buf, efo);
+            if name_field & 0x8000_0000 != 0 {
+                let nv = remap((name_field & 0x7fff_ffff) as i64) & 0x7fff_ffff;
+                let merged = (name_field & 0x8000_0000) | nv;
+                buf[efo..efo + 4].copy_from_slice(&merged.to_le_bytes());
+                for b in 0..4 {
+                    marker[efo + b] |= 1;
+                }
+            }
+        }
+    }
 }
 
 /// `MarkNonExe` (dpx, g_transformsMap mask 0x2, runs first): mark every byte
