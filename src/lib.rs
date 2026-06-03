@@ -98,9 +98,9 @@ pub mod fuzzing {
         crate::lzx::decompress_partial(reference, patch_data, target_size)
     }
 
-    /// Apply the x86 relative-CALL un-translation in place (differential debug).
-    pub fn undo_relative_calls_x86(buf: &mut [u8]) -> u32 {
-        crate::pe::transform::undo_relative_calls_x86(buf)
+    /// Apply the x86 `0xE8` un-translation in place (differential debug).
+    pub fn undo_x86_e8_translation(buf: &mut [u8]) -> u32 {
+        crate::pe::transform::undo_x86_e8_translation(buf)
     }
 
     /// Fuzz the reverse-delta (`ReversePatchFormat`) apply against a reference.

@@ -115,111 +115,112 @@ pub fn transform_inferred_relocations_amd64(
     Ok(count)
 }
 
-/// Undo MSDelta's `RelativeCallsX86` preprocessing on a reconstructed image.
+/// Undo MSDelta's x86 `0xE8` (near CALL) preprocessing on a reconstructed image.
 ///
-/// Genuine `ApplyDeltaB` (PA31, in UpdateCompression.dll / dpx.dll) converts the
-/// 4-byte displacement after every `0xE8` (x86 near CALL) in an executable
-/// section from the encoder's absolute form back to a PC-relative one. It runs
-/// ONLY on i386 PEs (`IMAGE_FILE_MACHINE_I386`, machine `0x14C`); amd64/arm/msil
-/// images are left untouched -- which is exactly why amd64/msil targets decode
-/// correctly without this and 32-bit ones did not.
+/// Genuine `ApplyDeltaB` (PA31, in UpdateCompression.dll / dpx.dll -- msdelta.dll
+/// has no PA31) preprocesses 32-bit x86 targets with the classic LZX E8 filter:
+/// the 4-byte displacement after each `0xE8` is converted to an absolute form
+/// for better compression, then converted back on apply. It is a whole-buffer
+/// scan (headers, code, even `.rsrc` -- NOT section-bounded), with the output
+/// length as the translation size: a site is converted iff `-i <= v < len`,
+/// where `i` is the byte offset and `v` the stored displacement (verified
+/// byte-for-byte against genuine output -- `translation_size == target_size`).
 ///
-/// For a baseless delta the rift is identity, so the net per-site transform is
-/// `displacement -= file_offset_of_the_E8` (verified byte-for-byte against
-/// genuine output). A candidate is translated only when the implied absolute
-/// target lands inside the image, which keeps incidental `0xE8` data bytes from
-/// being rewritten. Returns the number of sites translated.
-pub(crate) fn undo_relative_calls_x86(buf: &mut [u8]) -> u32 {
-    // i386 only. goblin parses the headers; bail (no-op) on anything else.
-    let Ok(pe) = goblin::pe::PE::parse(buf) else {
-        return 0;
-    };
-    if pe.header.coff_header.machine != goblin::pe::header::COFF_MACHINE_X86 {
+/// Runs ONLY on i386 PEs (`IMAGE_FILE_MACHINE_I386`, machine `0x14C`) and skips
+/// pure-managed (.NET, `COMIMAGE_FLAGS_ILONLY`) images, which carry machine
+/// `0x14C` too but must not be touched. No-op on everything else, so it is safe
+/// to call unconditionally on the reconstructed image. Returns the site count.
+pub(crate) fn undo_x86_e8_translation(buf: &mut [u8]) -> u32 {
+    // Gate with a manual header read rather than a full `goblin` parse: genuine
+    // msdelta keys only on the machine type, and goblin's strict validation
+    // rejects some otherwise-valid system images (e.g. comctl32). i386 only,
+    // and skip pure-managed (.NET) images.
+    if !is_i386_native_pe(buf) {
         return 0;
     }
-    let Some(opt) = pe.header.optional_header else {
-        return 0;
-    };
-    let size_of_image = opt.windows_fields.size_of_image;
 
-    // Skip pure-managed (.NET) images. They carry machine `0x14C` too, but their
-    // "executable" section is CIL, not x86 -- genuine RelativeCallsX86 leaves
-    // them alone. Detected via the CLR runtime header's COMIMAGE_FLAGS_ILONLY.
-    const IMAGE_SCN_MEM_EXECUTE: u32 = 0x2000_0000;
-    if is_il_only(buf, &pe.sections, &opt) {
+    let len = buf.len();
+    if len < 10 {
         return 0;
     }
+    let ts = len as i32;
     let mut count = 0u32;
-
-    for s in &pe.sections {
-        if s.characteristics & IMAGE_SCN_MEM_EXECUTE == 0 {
+    let mut i = 0usize;
+    // Classic LZX leaves the last 10 bytes untouched (a CALL displacement never
+    // starts there). Every 0xE8 advances the cursor past its 4 operand bytes
+    // whether or not it is translated, matching the encoder's own scan.
+    while i < len - 10 {
+        if buf[i] != 0xE8 {
+            i += 1;
             continue;
         }
-        let ro = s.pointer_to_raw_data as usize;
-        let va = s.virtual_address;
-        let span = s.virtual_size.min(s.size_of_raw_data) as usize;
-        let raw_end = (ro + span).min(buf.len());
-        if ro >= raw_end || raw_end < 5 {
-            continue;
+        let v = i32::from_le_bytes(buf[i + 1..i + 5].try_into().unwrap());
+        if v >= -(i as i32) && v < ts {
+            let new = if v >= 0 { v - i as i32 } else { v + ts };
+            buf[i + 1..i + 5].copy_from_slice(&new.to_le_bytes());
+            count += 1;
         }
-
-        let mut fo = ro;
-        while fo + 5 <= raw_end {
-            if buf[fo] != 0xE8 {
-                fo += 1;
-                continue;
-            }
-            let v = u32::from_le_bytes(buf[fo + 1..fo + 5].try_into().unwrap());
-            // Implied absolute target RVA = stored value + RVA of the next
-            // instruction. Genuine code only translates when this lands inside
-            // the image; otherwise the 0xE8 is data, not a call.
-            let next_insn_rva = va.wrapping_add((fo - ro) as u32).wrapping_add(5);
-            let target = v.wrapping_add(next_insn_rva);
-            if target < size_of_image {
-                let new = v.wrapping_sub(fo as u32);
-                buf[fo + 1..fo + 5].copy_from_slice(&new.to_le_bytes());
-                count += 1;
-                fo += 5;
-                continue;
-            }
-            fo += 1;
-        }
+        i += 5;
     }
     count
 }
 
-/// Is `buf` a pure-IL (.NET managed) PE? Reads the CLR runtime header
-/// (data directory 14) flags and tests `COMIMAGE_FLAGS_ILONLY` (bit 0).
-fn is_il_only(
-    buf: &[u8],
-    sections: &[goblin::pe::section_table::SectionTable],
-    opt: &goblin::pe::optional_header::OptionalHeader,
-) -> bool {
-    let Some(dd) = opt.data_directories.get_clr_runtime_header() else {
-        return false;
+/// Is `buf` a native 32-bit (i386) PE that is NOT a pure-managed (.NET) image?
+///
+/// Parses only the few header fields needed, by hand (no full `goblin` parse,
+/// which over-validates and rejects some valid system images). Requires machine
+/// `IMAGE_FILE_MACHINE_I386` (0x14C) and a PE32 optional header, and rejects
+/// images whose CLR runtime header (data directory 14) has `COMIMAGE_FLAGS_ILONLY`.
+fn is_i386_native_pe(buf: &[u8]) -> bool {
+    let rd_u16 = |o: usize| -> Option<u16> {
+        buf.get(o..o + 2).map(|b| u16::from_le_bytes(b.try_into().unwrap()))
     };
-    if dd.virtual_address == 0 {
+    let rd_u32 = |o: usize| -> Option<u32> {
+        buf.get(o..o + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+    };
+
+    let e_lfanew = match rd_u32(0x3c) {
+        Some(v) => v as usize,
+        None => return false,
+    };
+    if buf.get(e_lfanew..e_lfanew + 4) != Some(b"PE\0\0") {
         return false;
     }
-    let rva_to_off = |rva: u32| -> Option<usize> {
-        for s in sections {
-            if s.size_of_raw_data == 0 {
-                continue;
-            }
-            if rva >= s.virtual_address && rva < s.virtual_address + s.virtual_size {
-                return Some((s.pointer_to_raw_data + (rva - s.virtual_address)) as usize);
-            }
-        }
-        None
-    };
-    // COR20 header: Flags is a u32 at offset 16.
-    match rva_to_off(dd.virtual_address) {
-        Some(off) if off + 20 <= buf.len() => {
-            let flags = u32::from_le_bytes(buf[off + 16..off + 20].try_into().unwrap());
-            flags & 0x1 != 0 // COMIMAGE_FLAGS_ILONLY
-        }
-        _ => false,
+    if rd_u16(e_lfanew + 4) != Some(0x014C) {
+        return false; // not i386
     }
+    let num_sections = rd_u16(e_lfanew + 6).unwrap_or(0) as usize;
+    let size_of_opt = rd_u16(e_lfanew + 20).unwrap_or(0) as usize;
+    let opt = e_lfanew + 24;
+    // i386 images are PE32 (magic 0x10B); data directories start at opt+96.
+    if rd_u16(opt) != Some(0x010B) {
+        return false;
+    }
+    let num_rva = rd_u32(opt + 92).unwrap_or(0) as usize;
+    const CLR_DIR: usize = 14;
+    if num_rva <= CLR_DIR {
+        return true; // no CLR header -> native
+    }
+    let clr_rva = rd_u32(opt + 96 + CLR_DIR * 8).unwrap_or(0);
+    if clr_rva == 0 {
+        return true; // native
+    }
+    // Map the CLR header RVA to a file offset via the section table and read
+    // its COR20 Flags (u32 at +16); ILONLY (bit 0) => managed, skip.
+    let sec_base = opt + size_of_opt;
+    for i in 0..num_sections {
+        let s = sec_base + i * 40;
+        let vs = rd_u32(s + 8).unwrap_or(0);
+        let va = rd_u32(s + 12).unwrap_or(0);
+        let ro = rd_u32(s + 20).unwrap_or(0);
+        if clr_rva >= va && clr_rva < va.wrapping_add(vs) {
+            let off = (ro + (clr_rva - va)) as usize;
+            if let Some(flags) = rd_u32(off + 16) {
+                return flags & 0x1 == 0; // ILONLY clear => native
+            }
+        }
+    }
+    true
 }
 
 /// File offset of the PE optional-header CheckSum field (4 bytes), if `data`

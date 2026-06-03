@@ -53,15 +53,11 @@ fn pa31_lcu_gap_corpus() {
     eprintln!("\nPA31 LCU gaps: {reconstruct}/{total} reconstruct (null base)");
     assert!(total > 0, "manifest had no entries");
 
-    // Regression gate. As of the LZMS rebuild-order + x86-filter fixes, all
-    // nine LZMS-container blobs reconstruct bit-exactly against their embedded
-    // SHA256 EXCEPT delta_03 (a residual LZMS delta-match divergence): that is
-    // eight passes. The remaining failures are the seven PseudoLzx/LZX-path
-    // blobs (a separate codec bug) plus delta_03. See PA31-LCU-GAPS.md.
-    //
-    // This asserts we do not regress below the known-good count; raise it as the
-    // LZX path and delta_03 are fixed (target: 16/16).
-    const KNOWN_GOOD: usize = 9;
+    // Regression gate. All 16 reconstruct bit-exactly against their embedded
+    // SHA256 after: the LZMS Huffman rebuild-order fix, the LZMS x86-filter
+    // lock-prefix fix, the LZMS-vs-raw container dispatch, and the x86 0xE8
+    // call un-translation on i386 PE targets. See PA31-LCU-GAPS.md.
+    const KNOWN_GOOD: usize = 16;
     assert!(
         reconstruct >= KNOWN_GOOD,
         "regression: only {reconstruct}/{total} reconstruct, expected >= {KNOWN_GOOD}"

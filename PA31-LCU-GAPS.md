@@ -1,8 +1,9 @@
 # PA31 decoder gaps — real Win11 24H2 LCU express deltas
 
 Tracking 16 real-world PA31 deltas pulled from a full OS cumulative update that
-`pa30::apply` could not reconstruct. **9 of 16 are now fixed**; the rest are
-characterized below, with the root cause of all remaining failures identified.
+`pa30::apply` could not reconstruct. **All 16 now reconstruct bit-exactly**
+against their embedded SHA256. This documents the four bugs that were fixed and
+the differential-oracle method used to find them.
 
 ## Where these came from
 
@@ -37,7 +38,7 @@ For every LZMS-container blob the container's `uncompressed_total` **equals
 target_size** — i.e. the LZMS payload IS the target image; there is no bsdiff
 layer (a null-base bsdiff stream would be larger than the target).
 
-## What was fixed (8/16, all verified against the embedded SHA256)
+## What was fixed (16/16, all verified against the embedded SHA256)
 
 ### Bug 1 — LZMS adaptive-Huffman rebuild order (`crates/lzms/src/adaptive.rs`)
 
@@ -92,20 +93,28 @@ applying baseless (empty source) yields the genuine target for all 16 (hashes
 match the embedded SHA256). Truth bytes -> `notes/pa31-lcu-gaps/truth_*.bin`
 (harness `/tmp/apply_uc.ps1`).
 
-## What remains (7/16, all the same class)
+The exact translation was pinned with the oracle: dumping every `0xE8` site's
+stored value and comparing translated-vs-not against the genuine output showed
+`max(abs_translated) < target_size <= min(abs_untranslated)` for every blob, so
+`translation_size == target_size` and the guard is `-i <= v < target_size`.
+Gating uses a hand-rolled header read (machine `0x14C`, PE32, CLR/ILONLY check),
+not a full `goblin` parse -- goblin over-validates and rejected some valid system
+images (e.g. comctl32), which had left delta_13 untransformed.
 
-### Residual E8 coverage (01, 08, 12)
+This fixed the lone x86 LZMS blob (delta_03) and all seven LZX blobs, taking the
+corpus to **16/16**. amd64/arm64 and managed (.NET) targets correctly skip the
+transform.
 
-Mostly fixed; a handful of `0xE8` sites are still mistranslated or skipped
-(24/60/295 bytes) — the section/target-range guard does not yet match genuine
-exactly. Diff against the truth files to close the gap.
+## The oracle (key unblock)
 
-### Separate LZX divergence (05, 06, 13)
-
-These are **not** (only) E8: the transform doesn't move them, and delta_13's
-first diff is at offset 232 — inside the PE headers, not an executable section.
-There is a distinct PseudoLzx decode divergence here, independent of the x86
-transform, to be localized against the truth bytes.
+`msdelta.dll` does **not** implement PA31 (zero `PA31` refs even at 26100.32370);
+its `ApplyDeltaB` returns `ERROR_INVALID_DATA`. PA31 lives in
+**`UpdateCompression.dll`** / **`dpx.dll`**, which export the same `ApplyDeltaB`.
+`DllImport`ing `reference/UpdateCompression.dll` by full path on the lab VM and
+applying baseless (empty source) yields the genuine target for all 16 (hashes
+match the embedded SHA256). Truth bytes -> `notes/pa31-lcu-gaps/truth_*.bin`
+(harness `/tmp/apply_uc.ps1`; pull large files with `scp -O`, the SFTP path
+truncates at 200 KiB).
 
 ## Reproduction
 
@@ -117,14 +126,13 @@ cargo run --release -- gaps /path/to/windows11.0-kb5089549-x64_*.msu \
 
 # run the gated regression test (skips when the corpus is absent)
 cd ~/projects/msdelta
-cargo nextest run --test pa31_lcu_gaps    # asserts >= 8/16 reconstruct
+cargo nextest run --test pa31_lcu_gaps    # asserts 16/16 reconstruct
 ```
 
-## Next steps
+## Follow-ups
 
-1. **Close residual E8 coverage** for 01/08/12: byte-diff against the truth files
-   and align the section/target-range guard in `undo_relative_calls_x86` with
-   genuine `RelativeCallsX86` (consider `RelativeJmpsX86`/`SmashLockPrefixesX86`).
-2. **Localize the separate LZX divergence** for 05/06/13 against the truth bytes
-   (delta_13's first diff is at offset 232, in the PE headers).
-3. Raise `KNOWN_GOOD` in `tests/pa31_lcu_gaps.rs` toward 16/16 as each lands.
+- `RelativeJmpsX86` (0xE9) and `SmashLockPrefixesX86` were not needed by this
+  corpus (no residual diffs), but exist in genuine msdelta; add them if a future
+  artifact needs them.
+- Non-baseless (source-relative) deltas exercise the rift-driven form of these
+  transforms, not the identity case handled here.
