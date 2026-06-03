@@ -115,6 +115,54 @@ pub fn transform_inferred_relocations_amd64(
     Ok(count)
 }
 
+/// Remap the RVA fields of every `.pdata` `RUNTIME_FUNCTION` through a rift.
+///
+/// AMD64 `.pdata` is an array of 12-byte `RUNTIME_FUNCTION`s
+/// (`BeginAddress`, `EndAddress`, `UnwindData` — all RVAs). When the patch
+/// relays out the image, the addresses these point at move; genuine
+/// `ApplyDeltaB`'s `RiftTransformPdataAmd64` apply pass rewrites each field in
+/// place by mapping its RVA through the composed rift (the same `source-RVA ->
+/// target-RVA` map carried by the preprocess rift; an offset of `target -
+/// source` per segment, `GetNewRvaFromRiftTable`-style).
+///
+/// The rift maps SOURCE RVAs to TARGET RVAs. `rift.map(rva)` returns the
+/// segment offset; the new value is `rva + offset`. Returns the count of
+/// fields changed. No-op when the rift is empty.
+pub(crate) fn remap_pdata_rvas(
+    output: &mut [u8],
+    pdata_file_off: u32,
+    pdata_size: u32,
+    rift: &crate::lzx::rift::RiftTable,
+) -> u32 {
+    if rift.entries.is_empty() || pdata_file_off == 0 || pdata_size == 0 {
+        return 0;
+    }
+    // `pdata_file_off` is the on-disk file offset of `.pdata` in `output`
+    // (the caller translates the exception-directory RVA through the section
+    // table). The field *values* are RVAs and are mapped through `rift`.
+    let start = pdata_file_off as usize;
+    let end = start.saturating_add(pdata_size as usize).min(output.len());
+    let mut changed = 0u32;
+    let mut off = start;
+    while off + 12 <= end {
+        for field in 0..3 {
+            let p = off + field * 4;
+            let rva = u32::from_le_bytes(output[p..p + 4].try_into().unwrap());
+            if rva == 0 {
+                continue;
+            }
+            let delta = rift.map(rva as i64);
+            if delta != 0 {
+                let new = (rva as i64 + delta) as u32;
+                output[p..p + 4].copy_from_slice(&new.to_le_bytes());
+                changed += 1;
+            }
+        }
+        off += 12;
+    }
+    changed
+}
+
 /// Undo MSDelta's x86 `0xE8` (near CALL) preprocessing on a reconstructed image.
 ///
 /// Genuine `ApplyDeltaB` (PA31, in UpdateCompression.dll / dpx.dll -- msdelta.dll

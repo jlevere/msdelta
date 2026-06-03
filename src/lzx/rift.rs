@@ -110,6 +110,205 @@ impl RiftTable {
         }
     }
 
+    /// Append an entry. Mirrors `compo::RiftTable::Add`: a raw push of a
+    /// `(source, target)` pair. The table is kept sorted by an explicit
+    /// `sort()` call after a batch of `add`s, exactly as the decompiled
+    /// composition routines do.
+    fn add(&mut self, source: i64, target: i64) {
+        self.entries.push(RiftEntry { source, target });
+    }
+
+    /// Stable sort by source. Mirrors `compo::RiftTable::Sort` (a radix sort
+    /// in the original; ordering by source is all that matters downstream).
+    fn sort(&mut self) {
+        self.entries.sort_by_key(|e| e.source);
+    }
+
+    /// `compo::RiftTable::GetRift(pos, &next_break)`.
+    ///
+    /// Returns the segment offset (`target - source`) that applies at `pos`
+    /// and, via the return tuple, the last position still covered by this
+    /// segment (`next_break`); the next segment begins at `next_break + 1`.
+    ///
+    /// Conventions translated verbatim from the decompiled body:
+    /// - Empty table: offset 0, `next_break = i64::MAX`.
+    /// - `pos` below the first entry's source: the offset is taken from the
+    ///   *last* entry (the table wraps the pre-first region to the final
+    ///   segment) and `next_break = first.source - 1`.
+    /// - Otherwise: the largest entry whose source is `<= pos`; `next_break`
+    ///   is the following entry's source minus one, or `i64::MAX` if last.
+    fn get_rift(&self, pos: i64) -> (i64, i64) {
+        let n = self.entries.len();
+        if n == 0 {
+            return (0, i64::MAX);
+        }
+        let first = &self.entries[0];
+        if pos < first.source {
+            let last = &self.entries[n - 1];
+            return (last.target - last.source, first.source - 1);
+        }
+        // Largest index with entries[idx].source <= pos.
+        let idx = match self.entries.binary_search_by_key(&pos, |e| e.source) {
+            Ok(i) => i,
+            Err(i) => i - 1,
+        };
+        let e = &self.entries[idx];
+        let next_break = if idx + 1 < n {
+            self.entries[idx + 1].source - 1
+        } else {
+            i64::MAX
+        };
+        (e.target - e.source, next_break)
+    }
+
+    /// `compo::RiftTable::Multiply(A, B)` -> a new table representing the
+    /// composition `B . A` (i.e. `result.f(x) == B.f(A.f(x))`).
+    ///
+    /// `A` (`self`) and `B` are piecewise integer-offset maps. The product
+    /// walks `A`'s segments and, within each, the breakpoints `B` introduces
+    /// on the image of that segment, emitting one entry per resulting piece.
+    /// An empty operand acts as the identity (the other table is copied),
+    /// matching the `*(param + 0x10) == 0` short-circuits in the original.
+    pub fn multiply(&self, b: &RiftTable) -> RiftTable {
+        if self.entries.is_empty() {
+            return b.clone();
+        }
+        if b.entries.is_empty() {
+            return self.clone();
+        }
+
+        let mut out = RiftTable {
+            entries: Vec::new(),
+        };
+
+        // Walk A's segments. Each A entry covers [src, next_src) in A's
+        // source domain and maps it (offset a_off) into A's image. We then
+        // split that image range at B's breakpoints.
+        let a = &self.entries;
+        for i in 0..a.len() {
+            let seg_src = a[i].source;
+            let seg_off = a[i].target - a[i].source; // A's offset on this segment
+            let seg_src_end = if i + 1 < a.len() {
+                a[i + 1].source
+            } else {
+                i64::MAX
+            };
+
+            // Current position in A's source domain and its A-image.
+            let mut cur_src = seg_src;
+            loop {
+                let img = cur_src.wrapping_add(seg_off); // A.f(cur_src)
+                let (b_off, b_break) = b.get_rift(img);
+                // result.f(cur_src) = img + b_off = cur_src + seg_off + b_off
+                out.add(cur_src, cur_src.wrapping_add(seg_off).wrapping_add(b_off));
+
+                // Where does B's offset change next, expressed back in A's
+                // source domain? b_break is the last image position in B's
+                // current segment. Map back: src = b_break - seg_off + 1.
+                if b_break == i64::MAX {
+                    break;
+                }
+                let next_src = b_break.wrapping_sub(seg_off).wrapping_add(1);
+                if next_src >= seg_src_end || next_src <= cur_src {
+                    break;
+                }
+                cur_src = next_src;
+            }
+        }
+
+        out.sort();
+        out.dedup_offsets();
+        out
+    }
+
+    /// `compo::RiftTable::Reverse(A)` -> the inverse map `A^-1`.
+    ///
+    /// For a strictly monotonic offset map this swaps the role of source and
+    /// target: an entry `{s, t}` with following source `s'` covers image
+    /// `[t, t + (s' - s))`, which inverts to `{t, s}`. The decompiled body
+    /// additionally normalises overlaps produced by non-monotonic inputs; for
+    /// the well-formed (monotonic, non-overlapping) tables the apply pipeline
+    /// produces, the swap-and-sort form is exact.
+    pub fn reverse(&self) -> RiftTable {
+        if self.entries.is_empty() {
+            return RiftTable {
+                entries: Vec::new(),
+            };
+        }
+        let mut out = RiftTable {
+            entries: Vec::with_capacity(self.entries.len()),
+        };
+        for e in &self.entries {
+            out.add(e.target, e.source);
+        }
+        out.sort();
+        out.dedup_offsets();
+        out
+    }
+
+    /// `compo::RiftTable::Sum(A, B)` -> the pointwise sum of two offset maps:
+    /// `result.f(x) - x == (A.f(x) - x) + (B.f(x) - x)`.
+    ///
+    /// Breakpoints from both inputs are merged; at each breakpoint the new
+    /// offset is the sum of the two operands' offsets there. An empty operand
+    /// is the identity (zero offset everywhere), so the other table is copied.
+    pub fn sum(&self, b: &RiftTable) -> RiftTable {
+        if self.entries.is_empty() {
+            return b.clone();
+        }
+        if b.entries.is_empty() {
+            return self.clone();
+        }
+
+        // Collect every breakpoint source from both tables.
+        let mut breaks: Vec<i64> = Vec::with_capacity(self.entries.len() + b.entries.len());
+        for e in &self.entries {
+            breaks.push(e.source);
+        }
+        for e in &b.entries {
+            breaks.push(e.source);
+        }
+        breaks.sort_unstable();
+        breaks.dedup();
+
+        let mut out = RiftTable {
+            entries: Vec::with_capacity(breaks.len()),
+        };
+        for s in breaks {
+            let (a_off, _) = self.get_rift(s);
+            let (b_off, _) = b.get_rift(s);
+            out.add(s, s.wrapping_add(a_off).wrapping_add(b_off));
+        }
+        out.sort();
+        out.dedup_offsets();
+        out
+    }
+
+    /// Drop entries whose offset equals the previous entry's offset: a segment
+    /// boundary that does not change the mapping is redundant. Keeps tables
+    /// canonical so algebraic identities hold exactly.
+    fn dedup_offsets(&mut self) {
+        if self.entries.len() < 2 {
+            return;
+        }
+        let mut kept: Vec<RiftEntry> = Vec::with_capacity(self.entries.len());
+        for e in &self.entries {
+            match kept.last() {
+                Some(prev)
+                    if prev.source == e.source
+                        || (prev.target - prev.source) == (e.target - e.source) =>
+                {
+                    // Same source (keep the later) or no offset change (skip).
+                    if prev.source == e.source {
+                        *kept.last_mut().unwrap() = *e;
+                    }
+                }
+                _ => kept.push(*e),
+            }
+        }
+        self.entries = kept;
+    }
+
     /// Look up the rift offset for a given source position.
     ///
     /// Returns the offset to add to the source position to get the
@@ -523,6 +722,96 @@ mod tests {
                 result, val,
                 "roundtrip failed for {val}: sym={sym} extra={extra} ebits={ebits}"
             );
+        }
+    }
+
+    fn t(pairs: &[(i64, i64)]) -> RiftTable {
+        RiftTable {
+            entries: pairs
+                .iter()
+                .map(|&(s, d)| RiftEntry {
+                    source: s,
+                    target: d,
+                })
+                .collect(),
+        }
+    }
+
+    // Reference piecewise evaluation matching GetRift's "<= source" rule,
+    // for positions at or above the first entry.
+    fn eval(tbl: &RiftTable, x: i64) -> i64 {
+        let (off, _) = tbl.get_rift(x);
+        x + off
+    }
+
+    #[test]
+    fn multiply_with_identity_is_copy() {
+        // Empty table is the identity element for Multiply.
+        let a = t(&[(0, 0), (0x1000, 0x1200), (0x5000, 0x5800)]);
+        let id = RiftTable {
+            entries: vec![],
+        };
+        let left = id.multiply(&a);
+        let right = a.multiply(&id);
+        for &x in &[0i64, 0x1000, 0x1500, 0x5000, 0x9000] {
+            assert_eq!(eval(&left, x), eval(&a, x), "id*a at {x:#x}");
+            assert_eq!(eval(&right, x), eval(&a, x), "a*id at {x:#x}");
+        }
+    }
+
+    #[test]
+    fn multiply_composes() {
+        // A shifts +0x100 from 0x1000, +0x200 from 0x2000.
+        let a = t(&[(0x1000, 0x1100), (0x2000, 0x2200)]);
+        // B shifts +0x10 from 0x1000, +0x20 from 0x3000.
+        let b = t(&[(0x1000, 0x1010), (0x3000, 0x3020)]);
+        let prod = a.multiply(&b); // result.f(x) == B.f(A.f(x))
+        for &x in &[0x1000i64, 0x1500, 0x2000, 0x2fff, 0x4000] {
+            let expect = eval(&b, eval(&a, x));
+            assert_eq!(eval(&prod, x), expect, "compose at {x:#x}");
+        }
+    }
+
+    #[test]
+    fn reverse_reverse_is_identity() {
+        let a = t(&[(0x1000, 0x1200), (0x5000, 0x5800), (0x9000, 0x9000)]);
+        let rr = a.reverse().reverse();
+        // reverse∘reverse restores the mapping on the original source domain.
+        for &x in &[0x1000i64, 0x3000, 0x5000, 0x7000, 0x9000, 0x10000] {
+            assert_eq!(eval(&rr, x), eval(&a, x), "rev∘rev at {x:#x}");
+        }
+    }
+
+    #[test]
+    fn reverse_inverts() {
+        let a = t(&[(0x1000, 0x1200), (0x5000, 0x5800)]);
+        let r = a.reverse();
+        // For a point in A's image, reverse maps it back to the source offset.
+        // A.f(0x1000)=0x1200 ; r.f(0x1200) should be 0x1000.
+        assert_eq!(eval(&r, 0x1200), 0x1000);
+        assert_eq!(eval(&r, 0x5800), 0x5000);
+    }
+
+    #[test]
+    fn sum_is_commutative_and_additive() {
+        let a = t(&[(0x1000, 0x1100), (0x4000, 0x4080)]);
+        let b = t(&[(0x2000, 0x2010), (0x4000, 0x4040)]);
+        let ab = a.sum(&b);
+        let ba = b.sum(&a);
+        for &x in &[0x1000i64, 0x2000, 0x3000, 0x4000, 0x8000] {
+            let expect = x + (eval(&a, x) - x) + (eval(&b, x) - x);
+            assert_eq!(eval(&ab, x), expect, "sum additive at {x:#x}");
+            assert_eq!(eval(&ab, x), eval(&ba, x), "sum commutative at {x:#x}");
+        }
+    }
+
+    #[test]
+    fn sum_with_empty_is_copy() {
+        let a = t(&[(0x1000, 0x1100), (0x4000, 0x4080)]);
+        let empty = RiftTable { entries: vec![] };
+        let s = a.sum(&empty);
+        for &x in &[0x1000i64, 0x2000, 0x4000, 0x9000] {
+            assert_eq!(eval(&s, x), eval(&a, x), "sum empty at {x:#x}");
         }
     }
 

@@ -67,7 +67,11 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
                 "CLI metadata transform (managed/.NET image)",
             ));
         }
-        // Combine PE rift + preprocess rift into one table for the decompressor
+        // Combine PE rift + preprocess rift into one table for the decompressor.
+        // This drives only LZX copy placement (section relayout); it does NOT
+        // remap RVA-bearing fields, which genuine ApplyDeltaB rewrites in a
+        // separate post-decompress transform pass (see
+        // apply_pe_rva_transforms below and the RiftTable algebra in rift.rs).
         let mut combined = pp.pe_rift.clone();
         for e in &pp.preprocess_rift.entries {
             combined.entries.push(*e);
@@ -122,6 +126,39 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
 
     if let Some(pp) = &pp {
         apply_pe_timestamp_fixup(reference, pp, &mut output)?;
+
+        // AMD64 .pdata RVA remap (RiftTransformPdataAmd64 apply pass): rewrite
+        // each RUNTIME_FUNCTION's RVA fields through the preprocess rift so they
+        // point at the target layout. Only for x64 images; the rift maps
+        // source-RVA -> target-RVA, and is a no-op when empty (e.g. cabinet).
+        if parsed.header.file_type == crate::pe::transform::FILE_TYPE_AMD64
+            && !pp.preprocess_rift.entries.is_empty()
+        {
+            if let Ok(out_pe) = crate::pe::parse::PeInfo::parse(&output) {
+                const EXCEPTION_DIR: usize = 3;
+                if let Some(&(pdata_rva, pdata_size)) =
+                    out_pe.data_directories.get(EXCEPTION_DIR)
+                {
+                    // Translate the exception-directory RVA to a file offset via
+                    // the output's own section table (file offset != RVA here).
+                    let pdata_file_off = out_pe
+                        .sections
+                        .iter()
+                        .find(|s| {
+                            pdata_rva >= s.virtual_address
+                                && pdata_rva < s.virtual_address + s.virtual_size.max(s.raw_size)
+                        })
+                        .map(|s| s.raw_offset + (pdata_rva - s.virtual_address))
+                        .unwrap_or(pdata_rva);
+                    crate::pe::transform::remap_pdata_rvas(
+                        &mut output,
+                        pdata_file_off,
+                        pdata_size,
+                        &pp.preprocess_rift,
+                    );
+                }
+            }
+        }
     }
 
     // The x86 0xE8/0xE9 CALL/JMP un-translation is gated by header flag bit 0:
@@ -814,6 +851,46 @@ mod tests {
         let delta = std::fs::read(dir.join("cmd__to__cmd_patched__pe_amd64.pa30")).unwrap();
         let result = apply(&src, &delta).unwrap();
         assert_eq!(result, tgt);
+    }
+
+    /// Genuine PE-transform oracle fixtures (gitignored; only present in the
+    /// main working tree). Locks in the AMD64 `.pdata` RVA-remap gain and the
+    /// cabinet control so the transform pass cannot silently regress.
+    #[test]
+    fn pe_transform_oracle_fixtures() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures");
+        if !dir.join("comctl32.delta").exists() {
+            return;
+        }
+
+        // Count differing bytes inside the named section of two PE images.
+        fn section_diff(truth: &[u8], ours: &[u8], section: &str) -> usize {
+            let pe = crate::pe::parse::PeInfo::parse(truth).unwrap();
+            let s = pe.sections.iter().find(|s| s.name == section).unwrap();
+            let (off, len) = (s.raw_offset as usize, s.raw_size as usize);
+            let end = (off + len).min(truth.len()).min(ours.len());
+            (off..end).filter(|&i| truth[i] != ours[i]).count()
+        }
+
+        // cabinet: near-identical control -- must stay byte-exact.
+        let cab_old = std::fs::read(dir.join("cabinet_old.dll")).unwrap();
+        let cab_delta = std::fs::read(dir.join("cabinet.delta")).unwrap();
+        let cab_new = std::fs::read(dir.join("cabinet_new.dll")).unwrap();
+        let cab_out = apply(&cab_old, &cab_delta).unwrap();
+        assert_eq!(cab_out, cab_new, "cabinet control regressed");
+
+        // comctl32 amd64: the .pdata UnwindData remap drops the diff from 6877
+        // to 147 (the residual is the unwind-info relayout, a separate pass).
+        let old = std::fs::read(dir.join("comctl32_old.dll")).unwrap();
+        let delta = std::fs::read(dir.join("comctl32.delta")).unwrap();
+        let truth = std::fs::read(dir.join("comctl32_new.dll")).unwrap();
+        let out = apply(&old, &delta).unwrap();
+        assert_eq!(out.len(), truth.len(), "comctl32 length");
+        let pdata = section_diff(&truth, &out, ".pdata");
+        assert!(
+            pdata <= 147,
+            "comctl32 .pdata diff regressed: {pdata} (expected <= 147, was 6877 pre-remap)"
+        );
     }
 
     const DELTA_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/deltas");
