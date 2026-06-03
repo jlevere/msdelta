@@ -63,7 +63,31 @@ pub(crate) fn build_transformed_source(
     target_base: u64,
 ) {
     if pe.is_64bit {
-        return; // i386 source transforms only (this path); x64 handled elsewhere
+        // amd64 source transforms, in g_transformsMap order: DisasmX64 (0x200)
+        // then PdataX64 (0x400). Running them on the SOURCE (producing T(source))
+        // is the only correct architecture: the LZX copy/literal split was
+        // defined against genuine's T(source), so a copy reads the transformed
+        // byte and a literal already carries the target byte -- a post-decode
+        // remap could not distinguish the two and double-applied the rift on
+        // literal-provided fields (e.g. comctl32 amd64 .pdata UnwindData).
+        // DisasmX64 must precede PdataX64: its driver reads the (still source-
+        // domain) .pdata Begin/End RVAs to locate functions.
+        // DIR64 relocations / PE32+ imports / resources for amd64 are not yet
+        // implemented on this path.
+        if flags & 0x200 != 0 {
+            transform_disasm_x64(buf, pe, rift);
+        }
+        if flags & 0x400 != 0 {
+            const EXCEPTION_DIR: usize = 3;
+            if let Some(&(pdata_rva, pdata_size)) = pe.data_directories.get(EXCEPTION_DIR) {
+                if pdata_rva != 0 {
+                    if let Some(pdata_fo) = rva_to_file_off(pe, pdata_rva as i64) {
+                        remap_pdata_rvas(buf, pdata_fo as u32, pdata_size, rift);
+                    }
+                }
+            }
+        }
+        return;
     }
     let mut marker = vec![0u8; buf.len()];
     if flags & 0x2 != 0 {

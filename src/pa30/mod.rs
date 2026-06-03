@@ -249,49 +249,9 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
 
     if let Some(pp) = &pp {
         apply_pe_timestamp_fixup(reference, pp, &mut output)?;
-
-        // AMD64 .pdata RVA remap (RiftTransformPdataAmd64 apply pass): rewrite
-        // each RUNTIME_FUNCTION's RVA fields through the preprocess rift so they
-        // point at the target layout. Only for x64 images; the rift maps
-        // source-RVA -> target-RVA, and is a no-op when empty (e.g. cabinet).
-        if parsed.header.file_type == crate::pe::transform::FILE_TYPE_AMD64
-            && !pp.preprocess_rift.entries.is_empty()
-        {
-            if let Ok(out_pe) = crate::pe::parse::PeInfo::parse(&output) {
-                // DisasmX64 (g_transformsMap mask 0x200): remap RIP-relative
-                // disp32 / rel32 displacements in executable ranges before the
-                // .pdata RVA fields themselves are rewritten. The pass reads
-                // .pdata's (still source-domain) Begin/End RVAs to locate
-                // functions, so it must run ahead of remap_pdata_rvas.
-                crate::pe::transform::transform_disasm_x64(
-                    &mut output,
-                    &out_pe,
-                    &pp.preprocess_rift,
-                );
-                const EXCEPTION_DIR: usize = 3;
-                if let Some(&(pdata_rva, pdata_size)) =
-                    out_pe.data_directories.get(EXCEPTION_DIR)
-                {
-                    // Translate the exception-directory RVA to a file offset via
-                    // the output's own section table (file offset != RVA here).
-                    let pdata_file_off = out_pe
-                        .sections
-                        .iter()
-                        .find(|s| {
-                            pdata_rva >= s.virtual_address
-                                && pdata_rva < s.virtual_address + s.virtual_size.max(s.raw_size)
-                        })
-                        .map(|s| s.raw_offset + (pdata_rva - s.virtual_address))
-                        .unwrap_or(pdata_rva);
-                    crate::pe::transform::remap_pdata_rvas(
-                        &mut output,
-                        pdata_file_off,
-                        pdata_size,
-                        &pp.preprocess_rift,
-                    );
-                }
-            }
-        }
+        // AMD64 DisasmX64 + PdataX64 now run as SOURCE transforms in
+        // build_transformed_source (decode_ref = T(source)), mirroring genuine
+        // PreProcessPEForApply -- so they are no longer post-decode passes here.
     }
 
     // The x86 0xE8/0xE9 CALL/JMP un-translation is gated by header flag bit 0:
@@ -1014,19 +974,17 @@ mod tests {
         let cab_out = apply(&cab_old, &cab_delta).unwrap();
         assert_eq!(cab_out, cab_new, "cabinet control regressed");
 
-        // comctl32 amd64: the .pdata UnwindData remap plus the file-offset rift
-        // composition drop the diff to 144 (the residual is the unwind-info
-        // relayout, a separate pass).
+        // comctl32 amd64: BYTE-EXACT. The amd64 T(source) architecture --
+        // DisasmX64 (RIP-relative disp32 / rel32) and PdataX64 (RUNTIME_FUNCTION
+        // RVA fields) run as SOURCE transforms before the LZX copy stage, exactly
+        // as genuine PreProcessPEForApply does -- so both copied and literal-
+        // provided bytes land the transformed value. 644585 -> 0.
         let old = std::fs::read(dir.join("comctl32_old.dll")).unwrap();
         let delta = std::fs::read(dir.join("comctl32.delta")).unwrap();
         let truth = std::fs::read(dir.join("comctl32_new.dll")).unwrap();
         let out = apply(&old, &delta).unwrap();
         assert_eq!(out.len(), truth.len(), "comctl32 length");
-        let pdata = section_diff(&truth, &out, ".pdata");
-        assert!(
-            pdata <= 147,
-            "comctl32 .pdata diff regressed: {pdata} (expected <= 147, was 6877 pre-remap)"
-        );
+        assert_eq!(out, truth, "comctl32 amd64 not byte-exact");
 
         // comctl32 i386 (file_type 2): the target-file-offset rift composition
         // (section boundaries + intra-section preprocess breakpoints) relays the
@@ -1400,6 +1358,102 @@ mod tests {
             "\nSUMMARY: byte-exact={exact}  diff={nonzero}  errored={errored}  total={}",
             dirs.len()
         );
+    }
+
+    /// amd64 ground-truth probe: apply a matrix fixture and dump the final
+    /// output-vs-truth byte diffs for one section, with context. Unlike the
+    /// tsource_oracle this is NON-circular -- it compares our real apply output
+    /// to genuine truth directly, the right instrument for the post-decode amd64
+    /// transforms (.pdata/.reloc/RIP-rel). `FIX=<dir> SEC=<.pdata> [N=<count>]`.
+    /// Ignored; `cargo test --release --lib amd64_probe -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn amd64_probe() {
+        let fix = match std::env::var("FIX") {
+            Ok(f) => f,
+            Err(_) => {
+                eprintln!("set FIX=<matrix dir>");
+                return;
+            }
+        };
+        let sec_want = std::env::var("SEC").unwrap_or_else(|_| ".pdata".into());
+        let limit: usize = std::env::var("N").ok().and_then(|s| s.parse().ok()).unwrap_or(16);
+        // Special case: the comctl32 amd64 fixture lives in notes/pe-fixtures
+        // (the cleanest amd64 .pdata-only signal), not the matrix dir.
+        let (base, delta, truth) = if fix == "comctl32-amd64" {
+            let d = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures");
+            (
+                std::fs::read(d.join("comctl32_old.dll")).unwrap(),
+                std::fs::read(d.join("comctl32.delta")).unwrap(),
+                std::fs::read(d.join("comctl32_new.dll")).unwrap(),
+            )
+        } else {
+            let fd = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("notes/pe-fixtures-matrix")
+                .join(&fix);
+            if !fd.exists() {
+                eprintln!("fixture absent");
+                return;
+            }
+            (
+                std::fs::read(fd.join("base.bin")).unwrap(),
+                std::fs::read(fd.join("forward.delta")).unwrap(),
+                std::fs::read(fd.join("truth.bin")).unwrap(),
+            )
+        };
+        let out = apply_impl(&base, &delta, false).unwrap();
+        if std::env::var("RIFTDUMP").is_ok() {
+            let parsed = parse(&delta).unwrap();
+            let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
+            eprintln!("preprocess_rift ({} entries):", pp.preprocess_rift.entries.len());
+            for e in &pp.preprocess_rift.entries {
+                eprintln!(
+                    "  src={:#x} -> tgt={:#x} (off {})",
+                    e.source,
+                    e.target,
+                    e.target - e.source
+                );
+            }
+        }
+        let tpe = crate::pe::parse::PeInfo::parse_lenient(&truth).unwrap();
+        let Some(sec) = tpe.sections.iter().find(|s| s.name == sec_want) else {
+            eprintln!("section {sec_want} not found");
+            return;
+        };
+        let (a, e) = (
+            sec.raw_offset as usize,
+            (sec.raw_offset + sec.raw_size) as usize,
+        );
+        let n: usize = (a..e.min(out.len()).min(truth.len()))
+            .filter(|&i| out[i] != truth[i])
+            .count();
+        eprintln!(
+            "{fix} [{sec_want}] rva={:#x} fo={:#x} size={:#x}: {n} diffs",
+            sec.virtual_address, sec.raw_offset, sec.raw_size
+        );
+        let mut shown = 0usize;
+        let mut i = a;
+        while i < e.min(out.len()).min(truth.len()) && shown < limit {
+            if out[i] != truth[i] {
+                let rva = sec.virtual_address as usize + (i - sec.raw_offset as usize);
+                let w = |b: &[u8]| {
+                    (i.saturating_sub(4)..(i + 12).min(b.len()))
+                        .map(|k| format!("{:02x}", b[k]))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                };
+                eprintln!("  fo={i:#x} rva={rva:#x}");
+                eprintln!("    out  : {}", w(&out));
+                eprintln!("    truth: {}", w(&truth));
+                shown += 1;
+                // skip to the next run of equal bytes to avoid spamming one field
+                while i < e && out[i] != truth[i] {
+                    i += 1;
+                }
+                continue;
+            }
+            i += 1;
+        }
     }
 
     const DELTA_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/deltas");
