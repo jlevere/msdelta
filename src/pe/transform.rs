@@ -72,8 +72,12 @@ pub(crate) fn build_transformed_source(
         // literal-provided fields (e.g. comctl32 amd64 .pdata UnwindData).
         // DisasmX64 must precede PdataX64: its driver reads the (still source-
         // domain) .pdata Begin/End RVAs to locate functions.
-        // DIR64 relocations / PE32+ imports / resources for amd64 are not yet
-        // implemented on this path.
+        // PE32+ imports / resources for amd64 are not yet implemented on this
+        // path. Relocations (0x20) precede DisasmX64 (0x200) in g_transformsMap.
+        if flags & 0x20 != 0 {
+            let mut marker = vec![0u8; buf.len()];
+            transform_source_relocs(buf, pe, rift, &mut marker, target_base);
+        }
         if flags & 0x200 != 0 {
             transform_disasm_x64(buf, pe, rift);
         }
@@ -103,7 +107,7 @@ pub(crate) fn build_transformed_source(
         transform_source_resources(buf, pe, rift, &mut marker);
     }
     if flags & 0x20 != 0 {
-        transform_source_relocs_i386(buf, pe, rift, &mut marker, target_base);
+        transform_source_relocs(buf, pe, rift, &mut marker, target_base);
     }
     if flags & 0x80 != 0 {
         transform_source_jmps_i386(buf, pe, rift, &marker);
@@ -402,8 +406,10 @@ fn mark_non_executable(buf: &[u8], pe: &PeInfo, marker: &mut [u8]) {
 
 /// `TransformRelocations` apply pass on the source (dpx `ReadRelocationEntries`
 /// 0x18003f6a0): rewrite each relocation's pointed-to operand through the rift
-/// and mark its bytes so the instruction transforms skip them.
-fn transform_source_relocs_i386(
+/// and mark its bytes so the instruction transforms skip them. Handles both
+/// type 3 (HIGHLOW, 32-bit -- i386) and type 10 (DIR64, 64-bit -- amd64); a PE
+/// carries one or the other. The block rebuild is type-agnostic.
+fn transform_source_relocs(
     buf: &mut [u8],
     pe: &PeInfo,
     rift: &RiftTable,
@@ -458,6 +464,23 @@ fn transform_source_relocs_i386(
                             buf[op_fo..op_fo + 4].copy_from_slice(&nv.to_le_bytes());
                             for b in 0..4 {
                                 marker[op_fo + b] |= 1;
+                            }
+                        }
+                    }
+                    10 => {
+                        // DIR64: rewrite the 64-bit operand, mark 8 bytes.
+                        if op_fo + 8 <= buf.len() {
+                            let v = i64::from_le_bytes(buf[op_fo..op_fo + 8].try_into().unwrap());
+                            let r = v - image_base;
+                            let nv = (target_base as i64)
+                                .wrapping_add(r)
+                                .wrapping_add(rift.map(r))
+                                as u64;
+                            buf[op_fo..op_fo + 8].copy_from_slice(&nv.to_le_bytes());
+                            for b in 0..8 {
+                                if op_fo + b < marker.len() {
+                                    marker[op_fo + b] |= 1;
+                                }
                             }
                         }
                     }
