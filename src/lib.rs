@@ -46,6 +46,11 @@ pub enum Error {
     HashTooLarge { size: usize, max: usize },
     #[error("malformed stream: {0}")]
     Malformed(&'static str),
+    /// The delta requires a PE transform this crate does not yet faithfully
+    /// implement. Returned up front instead of silently producing wrong bytes
+    /// (which would only surface as a late hash mismatch). See TODO.md.
+    #[error("unsupported transform: {0}")]
+    Unsupported(&'static str),
     #[error("target hash mismatch (expected {expected}, got {got})")]
     HashMismatch { expected: String, got: String },
     #[error("PA19: {0}")]

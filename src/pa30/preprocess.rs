@@ -13,6 +13,11 @@ pub(crate) struct PePreprocess {
     pub(crate) pe_rift: crate::lzx::rift::RiftTable,
     // Second rift table (from PreProcessPEForApply, separate from PE info rift)
     pub(crate) preprocess_rift: crate::lzx::rift::RiftTable,
+    /// Bytes of CLI metadata / CLI map present in the preprocess buffer. Nonzero
+    /// means the target is a managed (.NET) image whose CLI transforms
+    /// (TransformCli[4]Metadata / Disasm) we do not implement -- the caller must
+    /// reject rather than decode to silently-wrong bytes.
+    pub(crate) cli_bytes: usize,
 }
 
 pub(crate) fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
@@ -37,9 +42,11 @@ pub(crate) fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
 
     let pe_rift = crate::lzx::rift::RiftTable::from_reader(&mut reader)?;
 
+    let mut cli_bytes = 0usize;
+
     let cli_flag = reader.read_bits(1)?;
     if cli_flag != 0 {
-        let _cli_metadata = reader.read_buffer()?;
+        cli_bytes += reader.read_buffer()?.len();
     }
 
     // Second rift table from PreProcessPEForApply
@@ -48,7 +55,7 @@ pub(crate) fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
     if reader.remaining() > 0 {
         let climap_flag = reader.read_bits(1)?;
         if climap_flag != 0 {
-            let _cli_map = reader.read_buffer()?;
+            cli_bytes += reader.read_buffer()?.len();
         }
     }
 
@@ -58,6 +65,7 @@ pub(crate) fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
         target_timestamp,
         pe_rift,
         preprocess_rift,
+        cli_bytes,
     })
 }
 

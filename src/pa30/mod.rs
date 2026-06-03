@@ -58,6 +58,15 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
 
     let (caller_rift, pp) = if parsed.header.file_type != 1 && !parsed.preprocess.is_empty() {
         let pp = parse_pe_preprocess(&parsed.preprocess)?;
+        // Managed (.NET) target: the CLI metadata/map transforms are not yet
+        // implemented (we parse and discard those buffers). Decoding anyway
+        // produces silently-wrong bytes that only surface as a late hash
+        // mismatch, so refuse up front. See TODO.md (PE transform pipeline).
+        if pp.cli_bytes > 0 {
+            return Err(Error::Unsupported(
+                "CLI metadata transform (managed/.NET image)",
+            ));
+        }
         // Combine PE rift + preprocess rift into one table for the decompressor
         let mut combined = pp.pe_rift.clone();
         for e in &pp.preprocess_rift.entries {
