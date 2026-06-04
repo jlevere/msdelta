@@ -724,8 +724,12 @@ fn rebuild_reloc_blocks(
 ) {
     entries.sort_by_key(|e| e.0);
 
-    // Budget = bytes of `.reloc` from the dir start to the section end
-    // (VirtualSize, even), clamped to at least the data-directory size.
+    // Budget = the RAW file bytes of `.reloc` from the dir start to the section's
+    // raw end (even), clamped to at least the data-directory size. The RAW extent
+    // (not VirtualSize) is what genuine writes into: rift remapping can regroup
+    // entries across a page boundary, adding a block header and expanding the
+    // table past VirtualSize into the section's raw padding (e.g. appserverai,
+    // VirtualSize 0x11b0 but rebuilt blocks reach 0x11c8 within raw 0x1200).
     let extent = pe
         .sections
         .iter()
@@ -733,7 +737,7 @@ fn rebuild_reloc_blocks(
             reloc_rva >= s.virtual_address
                 && reloc_rva < s.virtual_address + s.virtual_size.max(s.raw_size)
         })
-        .map(|s| s.virtual_address + s.virtual_size - reloc_rva)
+        .map(|s| s.raw_size.saturating_sub(reloc_rva - s.virtual_address))
         .unwrap_or(reloc_size)
         .max(reloc_size);
     let limit = (base + (extent & !1) as usize).min(buf.len());
