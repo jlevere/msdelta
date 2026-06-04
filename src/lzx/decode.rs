@@ -349,7 +349,7 @@ pub(super) fn decompress_into(
         }
 
         copy_one(
-                    &mut *output,
+            &mut *output,
             copy_src.as_deref_mut(),
             reference,
             ref_len as u64,

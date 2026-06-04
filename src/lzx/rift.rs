@@ -346,7 +346,7 @@ impl RiftTable {
                 }
                 if span != 0 {
                     let hi = lo + span; // image end (exclusive bound value)
-                    // First buffer index whose key (f1) is >= lo or a sentinel.
+                                        // First buffer index whose key (f1) is >= lo or a sentinel.
                     let mut start: u64 = 0;
                     if live != 0 {
                         let mut k = 0u64;
@@ -421,9 +421,7 @@ impl RiftTable {
                             }
                             let last_key = f1[(stop - 1) as usize];
                             val = last_key;
-                            if last_key != i64::MIN
-                                && (hi == i64::MIN || last_key < hi)
-                            {
+                            if last_key != i64::MIN && (hi == i64::MIN || last_key < hi) {
                                 out.add(last_key, last_key - seg_off);
                                 val = hi;
                             }
@@ -1033,9 +1031,7 @@ mod tests {
     fn multiply_with_identity_is_copy() {
         // Empty table is the identity element for Multiply.
         let a = t(&[(0, 0), (0x1000, 0x1200), (0x5000, 0x5800)]);
-        let id = RiftTable {
-            entries: vec![],
-        };
+        let id = RiftTable { entries: vec![] };
         let left = id.multiply(&a);
         let right = a.multiply(&id);
         for &x in &[0i64, 0x1000, 0x1500, 0x5000, 0x9000] {

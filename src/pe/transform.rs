@@ -61,7 +61,19 @@ pub(crate) fn build_transformed_source(
     rift: &RiftTable,
     flags: u64,
     target_base: u64,
+    target_timestamp: u32,
 ) {
+    // PeUnbinder (flag bit 13, runs first in PreProcessPEForApply before the
+    // transform executor): reset bound imports and mark .idata writable.
+    if flags & 0x2000 != 0 {
+        unbind_pe(buf, pe);
+    }
+    // PreProcessPEForApply writes the TARGET COFF TimeDateStamp into the source
+    // FileHeader (offset e_lfanew+8) so copies of it land the target value
+    // (post-decode patching only covers known timestamp sites, not arbitrary
+    // copies into other sections). The transforms never touch this field, so
+    // the write order does not matter.
+    set_header_timestamp(buf, target_timestamp);
     if pe.is_64bit {
         // amd64 source transforms, in g_transformsMap order: DisasmX64 (0x200)
         // then PdataX64 (0x400). Running them on the SOURCE (producing T(source))
@@ -154,6 +166,120 @@ fn set_header_image_base(buf: &mut [u8], target_base: u64, is_64bit: bool) {
         }
     } else if opt + 0x20 <= buf.len() {
         buf[opt + 0x1c..opt + 0x20].copy_from_slice(&(target_base as u32).to_le_bytes());
+    }
+}
+
+/// Write the target COFF `TimeDateStamp` into the PE `FileHeader` (at
+/// `e_lfanew + 8`), as `PreProcessPEForApply` does.
+fn set_header_timestamp(buf: &mut [u8], ts: u32) {
+    let Some(e) = buf
+        .get(0x3c..0x40)
+        .map(|b| u32::from_le_bytes(b.try_into().unwrap()) as usize)
+    else {
+        return;
+    };
+    if buf.get(e..e + 4) != Some(b"PE\0\0") {
+        return;
+    }
+    if e + 12 <= buf.len() {
+        buf[e + 8..e + 12].copy_from_slice(&ts.to_le_bytes());
+    }
+}
+
+/// `PeUnbinder::Unbind` (dpx 0x18003d8d8), run by `PreProcessPEForApply` before
+/// the transform executor when header flag bit 13 is set. Resets bound imports
+/// so a delta diffed against an unbound image applies cleanly: for each import
+/// descriptor with a non-zero `TimeDateStamp`, zero the stamp + `ForwarderChain`
+/// and copy the ILT (`OriginalFirstThunk`) over the IAT (`FirstThunk`); then mark
+/// the `.idata` section writable (Characteristics |= MEM_WRITE|MEM_READ). (The
+/// bound-import *directory* clear is omitted; none of our fixtures carry one.)
+fn unbind_pe(buf: &mut [u8], pe: &PeInfo) {
+    let ptr = if pe.is_64bit { 8usize } else { 4 };
+    let rd = |b: &[u8], o: usize| -> u32 {
+        b.get(o..o + 4)
+            .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
+            .unwrap_or(0)
+    };
+
+    // Unbind each bound import descriptor (TimeDateStamp != 0).
+    if let Some((imp_rva, _)) = pe.data_directories.get(1).copied() {
+        if imp_rva != 0 {
+            if let Some(desc0) = rva_to_file_off(pe, imp_rva as i64) {
+                let mut di = 0usize;
+                loop {
+                    let dfo = desc0 + di * 0x14;
+                    if dfo + 0x14 > buf.len() {
+                        break;
+                    }
+                    let oft = rd(buf, dfo);
+                    let name = rd(buf, dfo + 0xc);
+                    let ft = rd(buf, dfo + 0x10);
+                    if oft == 0 && name == 0 && ft == 0 {
+                        break;
+                    }
+                    if rd(buf, dfo + 4) != 0 {
+                        buf[dfo + 4..dfo + 8].fill(0); // TimeDateStamp
+                        buf[dfo + 8..dfo + 0xc].fill(0); // ForwarderChain
+                        if let (Some(ilt), Some(iat)) = (
+                            rva_to_file_off(pe, oft as i64),
+                            rva_to_file_off(pe, ft as i64),
+                        ) {
+                            let mut k = 0usize;
+                            loop {
+                                let (s, d) = (ilt + k * ptr, iat + k * ptr);
+                                if s + ptr > buf.len() || d + ptr > buf.len() {
+                                    break;
+                                }
+                                let v: u64 = if ptr == 8 {
+                                    u64::from_le_bytes(buf[s..s + 8].try_into().unwrap())
+                                } else {
+                                    rd(buf, s) as u64
+                                };
+                                if v == 0 {
+                                    break;
+                                }
+                                buf.copy_within(s..s + ptr, d);
+                                k += 1;
+                            }
+                        }
+                    }
+                    di += 1;
+                    if di > 4096 {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Mark the .idata section writable (Characteristics |= 0xC0000000).
+    let Some(e) = buf
+        .get(0x3c..0x40)
+        .map(|b| u32::from_le_bytes(b.try_into().unwrap()) as usize)
+    else {
+        return;
+    };
+    if buf.get(e..e + 4) != Some(b"PE\0\0") {
+        return;
+    }
+    let nsec = u16::from_le_bytes(buf[e + 6..e + 8].try_into().unwrap()) as usize;
+    let optsz = u16::from_le_bytes(buf[e + 20..e + 22].try_into().unwrap()) as usize;
+    let sb = e + 24 + optsz;
+    for i in 0..nsec {
+        let sh = sb + i * 40;
+        if sh + 40 > buf.len() {
+            break;
+        }
+        let lname: Vec<u8> = buf[sh..sh + 8]
+            .iter()
+            .take_while(|&&c| c != 0)
+            .map(u8::to_ascii_lowercase)
+            .collect();
+        if lname == b".idata" {
+            let cf = sh + 0x24;
+            let v = u32::from_le_bytes(buf[cf..cf + 4].try_into().unwrap()) | 0xC000_0000;
+            buf[cf..cf + 4].copy_from_slice(&v.to_le_bytes());
+        }
     }
 }
 
@@ -395,7 +521,8 @@ fn transform_source_resources(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, mar
         if dir_fo < base_fo || dir_fo + 0x10 > end {
             continue;
         }
-        let named = u16::from_le_bytes(buf[dir_fo + 0xc..dir_fo + 0xe].try_into().unwrap()) as usize;
+        let named =
+            u16::from_le_bytes(buf[dir_fo + 0xc..dir_fo + 0xe].try_into().unwrap()) as usize;
         let ids = u16::from_le_bytes(buf[dir_fo + 0xe..dir_fo + 0x10].try_into().unwrap()) as usize;
         let mut count = named + ids;
         // Clamp to the entries that actually fit before `end`.
@@ -705,8 +832,7 @@ fn transform_source_calls_i386(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, ma
                 i += 1;
                 continue;
             }
-            let new_disp =
-                (map_rva(rift, target as i64) - map_rva(rift, site_end as i64)) as i32;
+            let new_disp = (map_rva(rift, target as i64) - map_rva(rift, site_end as i64)) as i32;
             if new_disp != orig {
                 buf[i + 1..i + 5].copy_from_slice(&new_disp.to_le_bytes());
             }
@@ -766,8 +892,7 @@ fn transform_source_jmps_i386(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, mar
                 i += 1;
                 continue;
             }
-            let new_disp =
-                (map_rva(rift, target as i64) - map_rva(rift, site_end as i64)) as i32;
+            let new_disp = (map_rva(rift, target as i64) - map_rva(rift, site_end as i64)) as i32;
             if can_short && ((new_disp as i64 + 0x80) as u64) < 0x100 {
                 // collapse to short form
                 if buf[d] == 0xE9 {
@@ -964,42 +1089,26 @@ struct DisasmInsn {
 /// 0 = no ModRM, 1 = invalid, 2 = ModRM, 3 = moffs (disp32/disp64 by addr-size),
 /// 4 = rel8 (1 trailing byte, no ModRM), 5 = rel32 (4 trailing bytes, REMAP).
 const MODRM_1B: [u8; 256] = [
-    2, 2, 2, 2, 0, 0, 1, 1, 2, 2, 2, 2, 0, 0, 1, 1,
-    2, 2, 2, 2, 0, 0, 1, 1, 2, 2, 2, 2, 0, 0, 1, 1,
-    2, 2, 2, 2, 0, 0, 1, 1, 2, 2, 2, 2, 0, 0, 1, 1,
-    2, 2, 2, 2, 0, 0, 1, 1, 2, 2, 2, 2, 0, 0, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 1, 1, 2, 1, 1, 1, 1, 0, 2, 0, 2, 0, 0, 0, 0,
-    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-    2, 2, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1,
-    3, 3, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    2, 2, 0, 0, 1, 1, 2, 2, 0, 0, 0, 0, 0, 0, 1, 0,
-    2, 2, 2, 2, 1, 1, 1, 0, 2, 2, 2, 2, 2, 2, 2, 2,
-    4, 4, 4, 4, 0, 0, 0, 0, 5, 5, 1, 4, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 0, 2, 2,
+    2, 2, 2, 2, 0, 0, 1, 1, 2, 2, 2, 2, 0, 0, 1, 1, 2, 2, 2, 2, 0, 0, 1, 1, 2, 2, 2, 2, 0, 0, 1, 1,
+    2, 2, 2, 2, 0, 0, 1, 1, 2, 2, 2, 2, 0, 0, 1, 1, 2, 2, 2, 2, 0, 0, 1, 1, 2, 2, 2, 2, 0, 0, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 1, 1, 2, 1, 1, 1, 1, 0, 2, 0, 2, 0, 0, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    2, 2, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1,
+    3, 3, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    2, 2, 0, 0, 1, 1, 2, 2, 0, 0, 0, 0, 0, 0, 1, 0, 2, 2, 2, 2, 1, 1, 1, 0, 2, 2, 2, 2, 2, 2, 2, 2,
+    4, 4, 4, 4, 0, 0, 0, 0, 5, 5, 1, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 0, 2, 2,
 ];
 
 /// 0F-escaped ModRM/operand kinds (`iVar12` table at base 0x100).
 const MODRM_0F: [u8; 256] = [
-    2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 1, 0, 1, 2, 0, 2,
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1,
-    2, 2, 2, 2, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2,
-    0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    2, 2, 2, 2, 2, 2, 2, 0, 1, 1, 1, 1, 1, 1, 2, 2,
-    5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    0, 0, 0, 2, 2, 2, 1, 1, 0, 0, 0, 2, 2, 2, 2, 2,
-    2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2,
-    2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1,
+    2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 1, 0, 1, 2, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1,
+    2, 2, 2, 2, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 1, 1, 1, 1, 1, 1, 2, 2,
+    5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    0, 0, 0, 2, 2, 2, 1, 1, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2,
+    2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1,
 ];
 
 /// Immediate-size kind per 1-byte opcode (`iVar17` table at base 0x200).
@@ -1007,42 +1116,26 @@ const MODRM_0F: [u8; 256] = [
 /// 4 = imm16/32/64 (MOV imm, REX.W => imm64), 5 = imm16/32 + reljmp marker,
 /// 6/7 = group F6/F7 (imm present only for /0 /1 = TEST).
 const IMM_1B: [u8; 256] = [
-    0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0,
-    0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0,
-    0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0,
-    0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 1, 1, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 5, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0,
-    1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4,
-    1, 1, 2, 0, 0, 0, 1, 5, 3, 0, 2, 0, 0, 1, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0,
+    0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 5, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 5, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4,
+    1, 1, 2, 0, 0, 0, 1, 5, 3, 0, 2, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
 /// Immediate-size kind per 0F-escaped opcode (`iVar17` table at base 0x300).
 const IMM_0F: [u8; 256] = [
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-    0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+    0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
 /// Length-disassemble one amd64 instruction at `code[0..]`.
@@ -1057,7 +1150,11 @@ const IMM_0F: [u8; 256] = [
 fn disasm_amd64(code: &[u8]) -> DisasmInsn {
     let avail = code.len().min(15);
     if avail == 0 {
-        return DisasmInsn { len: 0, field_off: 0xff, remap: false };
+        return DisasmInsn {
+            len: 0,
+            field_off: 0xff,
+            remap: false,
+        };
     }
     // Genuine `Disassemble` never returns length 0 on a non-empty buffer: on any
     // truncation / unknown-opcode (`break`), it returns the bytes consumed so
@@ -1066,7 +1163,11 @@ fn disasm_amd64(code: &[u8]) -> DisasmInsn {
     // no remappable field.
     macro_rules! stop {
         ($pos:expr) => {
-            return DisasmInsn { len: $pos as u8, field_off: 0xff, remap: false }
+            return DisasmInsn {
+                len: $pos as u8,
+                field_off: 0xff,
+                remap: false,
+            }
         };
     }
     // Legacy prefixes.
@@ -1274,7 +1375,11 @@ fn disasm_amd64(code: &[u8]) -> DisasmInsn {
         _ => {}
     }
 
-    DisasmInsn { len: pos as u8, field_off, remap }
+    DisasmInsn {
+        len: pos as u8,
+        field_off,
+        remap,
+    }
 }
 
 /// `TransformDisasmX64` apply pass (dpx, g_transformsMap mask 0x200, machine
@@ -1285,11 +1390,7 @@ fn disasm_amd64(code: &[u8]) -> DisasmInsn {
 /// `rift` so it still resolves to the right target byte. No-op when the rift is
 /// empty (no relayout) or there is no `.pdata`. Returns the count of fields
 /// rewritten.
-pub(crate) fn transform_disasm_x64(
-    output: &mut [u8],
-    pe: &PeInfo,
-    rift: &RiftTable,
-) -> u32 {
+pub(crate) fn transform_disasm_x64(output: &mut [u8], pe: &PeInfo, rift: &RiftTable) -> u32 {
     if rift.entries.is_empty() {
         return 0;
     }
@@ -1342,8 +1443,7 @@ pub(crate) fn transform_disasm_x64(
                     let mapped = map_rva(rift, next_rva + old_disp);
                     let new_disp = mapped - base;
                     if new_disp != old_disp {
-                        output[fpos..fpos + 4]
-                            .copy_from_slice(&(new_disp as i32).to_le_bytes());
+                        output[fpos..fpos + 4].copy_from_slice(&(new_disp as i32).to_le_bytes());
                         changed += 1;
                     }
                 }
