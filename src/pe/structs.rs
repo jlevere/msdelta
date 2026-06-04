@@ -187,3 +187,11 @@ pub fn write_u64(buf: &mut [u8], off: usize, val: u64) {
         v.set(val);
     }
 }
+
+/// Write a little-endian `u16` at file offset `off` (no-op if out of bounds).
+#[inline]
+pub fn write_u16(buf: &mut [u8], off: usize, val: u16) {
+    if let Some(v) = view_mut::<U16>(buf, off) {
+        v.set(val);
+    }
+}

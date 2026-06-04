@@ -467,11 +467,16 @@ fn transform_source_resources(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, mar
     let base_map = map_rva(rift, dirbase); // MapRva(dirbase): the uVar3 subtractor.
     let end = (base_fo + rsrc_size as usize).min(buf.len());
 
-    let rd = |b: &[u8], o: usize| -> u32 {
-        b.get(o..o + 4)
-            .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
-            .unwrap_or(0)
-    };
+    use crate::pe::structs::{self, ImageResourceDirectoryEntry as ResEntry};
+    use std::mem::offset_of;
+    // IMAGE_RESOURCE_DIRECTORY: 16-byte header, then entries. The high bit of an
+    // entry's name / offset_to_data marks a string name / subdirectory; the low
+    // 31 bits are an offset relative to the resource directory base.
+    const RES_DIR_HEADER: usize = 0x10;
+    const HIGH_BIT: u32 = 0x8000_0000;
+    const OFFSET_MASK: u32 = 0x7fff_ffff;
+    let entry_size = size_of::<ResEntry>();
+
     // Map a dirbase-relative offset `off` through the rift, returning the new
     // dirbase-relative offset: MapRva(dirbase+off) - MapRva(dirbase).
     let remap = |off: i64| -> u32 { (map_rva(rift, dirbase + off) - base_map) as u32 };
@@ -484,59 +489,47 @@ fn transform_source_resources(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, mar
         if !visited.insert(dir_fo) {
             continue;
         }
-        // Need the 16-byte IMAGE_RESOURCE_DIRECTORY header in range.
-        if dir_fo < base_fo || dir_fo + 0x10 > end {
+        if dir_fo < base_fo || dir_fo + RES_DIR_HEADER > end {
             continue;
         }
-        let named =
-            u16::from_le_bytes(buf[dir_fo + 0xc..dir_fo + 0xe].try_into().unwrap()) as usize;
-        let ids = u16::from_le_bytes(buf[dir_fo + 0xe..dir_fo + 0x10].try_into().unwrap()) as usize;
-        let mut count = named + ids;
+        // NumberOfNamedEntries (+0xc) + NumberOfIdEntries (+0xe).
+        let count = structs::read_u16(buf, dir_fo + 0xc) as usize
+            + structs::read_u16(buf, dir_fo + 0xe) as usize;
         // Clamp to the entries that actually fit before `end`.
-        let max_entries = end.saturating_sub(dir_fo + 0x10) / 8;
-        if count > max_entries {
-            count = max_entries;
-        }
+        let count = count.min(end.saturating_sub(dir_fo + RES_DIR_HEADER) / entry_size);
         for i in 0..count {
-            let efo = dir_fo + 0x10 + i * 8;
-            let off_field = rd(buf, efo + 4);
-            if off_field & 0x8000_0000 != 0 {
+            let efo = dir_fo + RES_DIR_HEADER + i * entry_size;
+            let Some(e) = structs::read::<ResEntry>(buf, efo) else {
+                break;
+            };
+            let off_field = e.offset_to_data.get();
+            if off_field & HIGH_BIT != 0 {
                 // Subdirectory: recurse, then map the offset field (low 31 bits).
-                let child_rel = (off_field & 0x7fff_ffff) as usize;
-                let child_fo = base_fo + child_rel;
-                // GetEntryDirectoryRecord guards: child must lie within
-                // [base, end] and strictly after this entry.
-                if child_fo + 0x10 <= end && child_fo > efo {
+                let child_fo = base_fo + (off_field & OFFSET_MASK) as usize;
+                // GetEntryDirectoryRecord guards: child within [base, end] and
+                // strictly after this entry.
+                if child_fo + RES_DIR_HEADER <= end && child_fo > efo {
                     stack.push(child_fo);
                 }
-                let nv = remap(child_rel as i64) & 0x7fff_ffff;
-                let merged = (off_field & 0x8000_0000) | nv;
-                buf[efo + 4..efo + 8].copy_from_slice(&merged.to_le_bytes());
-                for b in 4..8 {
-                    marker[efo + b] |= 1;
-                }
+                let nv = HIGH_BIT | (remap((off_field & OFFSET_MASK) as i64) & OFFSET_MASK);
+                structs::write_u32(buf, efo + offset_of!(ResEntry, offset_to_data), nv);
+                mark_bytes(marker, efo + offset_of!(ResEntry, offset_to_data), 4);
             } else {
                 // Leaf: locate the IMAGE_RESOURCE_DATA_ENTRY (dirbase-relative)
-                // and re-base its OffsetToData field.
-                let data_fo = base_fo + (off_field & 0x7fff_ffff) as usize;
+                // and re-base its OffsetToData field (a full RVA).
+                let data_fo = base_fo + (off_field & OFFSET_MASK) as usize;
                 if data_fo >= base_fo && data_fo + 0x10 <= end {
-                    let otd = rd(buf, data_fo) as i64;
-                    let nv = remap(otd);
-                    buf[data_fo..data_fo + 4].copy_from_slice(&nv.to_le_bytes());
-                    for b in 0..4 {
-                        marker[data_fo + b] |= 1;
-                    }
+                    let otd = structs::read_u32(buf, data_fo) as i64;
+                    structs::write_u32(buf, data_fo, remap(otd));
+                    mark_bytes(marker, data_fo, 4);
                 }
             }
             // Name field: a string-offset name (high bit set) is dirbase-relative.
-            let name_field = rd(buf, efo);
-            if name_field & 0x8000_0000 != 0 {
-                let nv = remap((name_field & 0x7fff_ffff) as i64) & 0x7fff_ffff;
-                let merged = (name_field & 0x8000_0000) | nv;
-                buf[efo..efo + 4].copy_from_slice(&merged.to_le_bytes());
-                for b in 0..4 {
-                    marker[efo + b] |= 1;
-                }
+            let name_field = e.name.get();
+            if name_field & HIGH_BIT != 0 {
+                let nv = HIGH_BIT | (remap((name_field & OFFSET_MASK) as i64) & OFFSET_MASK);
+                structs::write_u32(buf, efo + offset_of!(ResEntry, name), nv);
+                mark_bytes(marker, efo + offset_of!(ResEntry, name), 4);
             }
         }
     }
@@ -592,24 +585,28 @@ fn transform_source_relocs(
     // Collected entries for the block rebuild: (mapped location RVA, type, extra).
     let mut entries: Vec<(u32, u16, u16)> = Vec::new();
 
+    use crate::pe::structs::{self, ImageBaseRelocation};
     let mut bo = base;
-    while bo + 8 <= blocks_end {
-        let page = u32::from_le_bytes(buf[bo..bo + 4].try_into().unwrap()) as i64;
-        let blk = u32::from_le_bytes(buf[bo + 4..bo + 8].try_into().unwrap()) as usize;
+    while let Some(block) = structs::read::<ImageBaseRelocation>(buf, bo) {
+        if bo + size_of::<ImageBaseRelocation>() > blocks_end {
+            break;
+        }
+        let page = block.page_rva.get() as i64;
+        let blk = block.size_of_block.get() as usize;
         if blk < 8 || bo + blk > blocks_end {
             break;
         }
+        // Each entry is a u16: type<<12 | (offset within the 4 KiB page).
         let n = (blk - 8) / 2;
         let mut j = 0;
         while j < n {
             let eo = bo + 8 + j * 2;
-            let e = u16::from_le_bytes(buf[eo..eo + 2].try_into().unwrap());
+            let e = structs::read_u16(buf, eo);
             let typ = e >> 12;
             if typ == 0 {
                 break; // type-0 padding terminates the block (not a real entry)
             }
-            let offset = (e & 0xfff) as i64;
-            let loc_rva = page + offset;
+            let loc_rva = page + (e & 0xfff) as i64;
             // The rebuilt block entry stores the MAPPED location RVA.
             let mapped_loc = (loc_rva + rift.map(loc_rva)) as u32;
             let mut extra = 0u16;
@@ -617,53 +614,28 @@ fn transform_source_relocs(
             if let Some(op_fo) = rva_to_file_off(pe, loc_rva) {
                 match typ {
                     3 => {
-                        // HIGHLOW: rewrite the 32-bit operand, mark 4 bytes.
-                        if op_fo + 4 <= buf.len() {
-                            let v = i32::from_le_bytes(buf[op_fo..op_fo + 4].try_into().unwrap())
-                                as i64;
-                            // Map the pointed-to RVA, relinearize on TARGET base.
-                            let r = v - image_base;
-                            let nv = (target_base as i64 + r + rift.map(r)) as i32;
-                            buf[op_fo..op_fo + 4].copy_from_slice(&nv.to_le_bytes());
-                            for b in 0..4 {
-                                marker[op_fo + b] |= 1;
-                            }
-                        }
+                        // HIGHLOW: rewrite the pointed-to 32-bit operand. Map its
+                        // RVA and relinearize against the TARGET image base.
+                        let r = structs::read_u32(buf, op_fo) as i32 as i64 - image_base;
+                        let nv = (target_base as i64 + r + rift.map(r)) as u32;
+                        structs::write_u32(buf, op_fo, nv);
+                        mark_bytes(marker, op_fo, 4);
                     }
                     10 => {
-                        // DIR64: rewrite the 64-bit operand, mark 8 bytes.
-                        if op_fo + 8 <= buf.len() {
-                            let v = i64::from_le_bytes(buf[op_fo..op_fo + 8].try_into().unwrap());
-                            let r = v - image_base;
-                            let nv = (target_base as i64)
-                                .wrapping_add(r)
-                                .wrapping_add(rift.map(r))
-                                as u64;
-                            buf[op_fo..op_fo + 8].copy_from_slice(&nv.to_le_bytes());
-                            for b in 0..8 {
-                                if op_fo + b < marker.len() {
-                                    marker[op_fo + b] |= 1;
-                                }
-                            }
-                        }
+                        // DIR64: rewrite the pointed-to 64-bit operand.
+                        let r = structs::read_u64(buf, op_fo) as i64 - image_base;
+                        let nv = (target_base as i64)
+                            .wrapping_add(r)
+                            .wrapping_add(rift.map(r)) as u64;
+                        structs::write_u64(buf, op_fo, nv);
+                        mark_bytes(marker, op_fo, 8);
                     }
-                    1 | 2 => {
-                        for b in 0..2 {
-                            if op_fo + b < marker.len() {
-                                marker[op_fo + b] |= 1;
-                            }
-                        }
-                    }
+                    1 | 2 => mark_bytes(marker, op_fo, 2),
                     4 => {
                         // HIGHADJ consumes the following u16 as its extra field.
-                        for b in 0..2 {
-                            if op_fo + b < marker.len() {
-                                marker[op_fo + b] |= 1;
-                            }
-                        }
+                        mark_bytes(marker, op_fo, 2);
                         if j + 1 < n {
-                            let xo = bo + 8 + (j + 1) * 2;
-                            extra = u16::from_le_bytes(buf[xo..xo + 2].try_into().unwrap());
+                            extra = structs::read_u16(buf, bo + 8 + (j + 1) * 2);
                         }
                         j += 1;
                     }
@@ -713,6 +685,7 @@ fn rebuild_reloc_blocks(
         .max(reloc_size);
     let limit = (base + (extent & !1) as usize).min(buf.len());
 
+    use crate::pe::structs::{self, ImageBaseRelocation};
     let mut out = base;
     let mut i = 0usize;
     while out + 8 <= limit && i < entries.len() {
@@ -722,22 +695,23 @@ fn rebuild_reloc_blocks(
         let body_start = out;
         while out + 2 <= limit && i < entries.len() && (entries[i].0 & 0xffff_f000) == page {
             let (rva, typ, extra) = entries[i];
-            let e = (typ << 12) | (rva & 0xfff) as u16;
-            buf[out..out + 2].copy_from_slice(&e.to_le_bytes());
+            structs::write_u16(buf, out, (typ << 12) | (rva & 0xfff) as u16);
             out += 2;
             if typ == 4 && out + 2 <= limit {
-                buf[out..out + 2].copy_from_slice(&extra.to_le_bytes());
+                structs::write_u16(buf, out, extra); // HIGHADJ's trailing u16
                 out += 2;
             }
             i += 1;
         }
+        // Pad to a 4-byte boundary with a zero u16 when the entry count is odd.
         if ((out - body_start) / 2) % 2 == 1 && out + 2 <= limit {
-            buf[out..out + 2].copy_from_slice(&0u16.to_le_bytes());
+            structs::write_u16(buf, out, 0);
             out += 2;
         }
-        let size = (out - header) as u32;
-        buf[header..header + 4].copy_from_slice(&page.to_le_bytes());
-        buf[header + 4..header + 8].copy_from_slice(&size.to_le_bytes());
+        if let Some(h) = structs::view_mut::<ImageBaseRelocation>(buf, header) {
+            h.page_rva.set(page);
+            h.size_of_block.set((out - header) as u32);
+        }
     }
 }
 
