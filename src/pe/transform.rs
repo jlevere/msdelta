@@ -127,8 +127,9 @@ pub(crate) fn build_transformed_source(
             transform_disasm_x64(buf, pe, rift);
         }
         if flags & 0x400 != 0 {
-            const EXCEPTION_DIR: usize = 3;
-            if let Some(&(pdata_rva, pdata_size)) = pe.data_directories.get(EXCEPTION_DIR) {
+            if let Some(&(pdata_rva, pdata_size)) =
+                pe.data_directories.get(crate::pe::structs::dir::EXCEPTION)
+            {
                 if pdata_rva != 0 {
                     if let Some(pdata_fo) = rva_to_file_off(pe, pdata_rva as i64) {
                         remap_pdata_rvas(buf, pdata_fo as u32, pdata_size, rift);
@@ -173,39 +174,22 @@ pub(crate) fn build_transformed_source(
 /// PE32+ stores an 8-byte ImageBase at optional-header offset 0x18; PE32 a
 /// 4-byte ImageBase at offset 0x1c.
 fn set_header_image_base(buf: &mut [u8], target_base: u64, is_64bit: bool) {
-    let Some(e) = buf
-        .get(0x3c..0x40)
-        .map(|b| u32::from_le_bytes(b.try_into().unwrap()) as usize)
-    else {
+    let Some(e) = crate::pe::structs::pe_header_offset(buf) else {
         return;
     };
-    if buf.get(e..e + 4) != Some(b"PE\0\0") {
-        return;
-    }
-    let opt = e + 24;
+    let opt = e + 24; // optional header = signature(4) + COFF header(20)
     if is_64bit {
-        if opt + 0x20 <= buf.len() {
-            buf[opt + 0x18..opt + 0x20].copy_from_slice(&target_base.to_le_bytes());
-        }
-    } else if opt + 0x20 <= buf.len() {
-        buf[opt + 0x1c..opt + 0x20].copy_from_slice(&(target_base as u32).to_le_bytes());
+        crate::pe::structs::write_u64(buf, opt + 0x18, target_base); // PE32+ ImageBase
+    } else {
+        crate::pe::structs::write_u32(buf, opt + 0x1c, target_base as u32); // PE32 ImageBase
     }
 }
 
 /// Write the target COFF `TimeDateStamp` into the PE `FileHeader` (at
 /// `e_lfanew + 8`), as `PreProcessPEForApply` does.
 fn set_header_timestamp(buf: &mut [u8], ts: u32) {
-    let Some(e) = buf
-        .get(0x3c..0x40)
-        .map(|b| u32::from_le_bytes(b.try_into().unwrap()) as usize)
-    else {
-        return;
-    };
-    if buf.get(e..e + 4) != Some(b"PE\0\0") {
-        return;
-    }
-    if e + 12 <= buf.len() {
-        buf[e + 8..e + 12].copy_from_slice(&ts.to_le_bytes());
+    if let Some(e) = crate::pe::structs::pe_header_offset(buf) {
+        crate::pe::structs::write_u32(buf, e + 8, ts); // FileHeader.TimeDateStamp
     }
 }
 
@@ -1022,25 +1006,23 @@ pub(crate) fn remap_pdata_rvas(
     // `pdata_file_off` is the on-disk file offset of `.pdata` in `output`
     // (the caller translates the exception-directory RVA through the section
     // table). The field *values* are RVAs and are mapped through `rift`.
+    use crate::pe::structs::{view_mut, RuntimeFunction};
     let start = pdata_file_off as usize;
     let end = start.saturating_add(pdata_size as usize).min(output.len());
     let mut changed = 0u32;
     let mut off = start;
-    while off + 12 <= end {
-        for field in 0..3 {
-            let p = off + field * 4;
-            let rva = u32::from_le_bytes(output[p..p + 4].try_into().unwrap());
-            if rva == 0 {
-                continue;
-            }
-            let delta = rift.map(rva as i64);
-            if delta != 0 {
-                let new = (rva as i64 + delta) as u32;
-                output[p..p + 4].copy_from_slice(&new.to_le_bytes());
-                changed += 1;
+    while off + size_of::<RuntimeFunction>() <= end {
+        if let Some(rf) = view_mut::<RuntimeFunction>(output, off) {
+            for field in [&mut rf.begin, &mut rf.end, &mut rf.unwind_data] {
+                let rva = field.get();
+                let delta = if rva != 0 { rift.map(rva as i64) } else { 0 };
+                if delta != 0 {
+                    field.set((rva as i64 + delta) as u32);
+                    changed += 1;
+                }
             }
         }
-        off += 12;
+        off += size_of::<RuntimeFunction>();
     }
     changed
 }
@@ -1385,8 +1367,8 @@ pub(crate) fn transform_disasm_x64(output: &mut [u8], pe: &PeInfo, rift: &RiftTa
     if rift.entries.is_empty() {
         return 0;
     }
-    const EXCEPTION_DIR: usize = 3;
-    let Some(&(pdata_rva, pdata_size)) = pe.data_directories.get(EXCEPTION_DIR) else {
+    use crate::pe::structs::{self, dir, RuntimeFunction};
+    let Some(&(pdata_rva, pdata_size)) = pe.data_directories.get(dir::EXCEPTION) else {
         return 0;
     };
     if pdata_rva == 0 || pdata_size < 12 {
@@ -1398,12 +1380,12 @@ pub(crate) fn transform_disasm_x64(output: &mut [u8], pe: &PeInfo, rift: &RiftTa
     let n_funcs = (pdata_size / 12) as usize;
     let mut changed = 0u32;
     for i in 0..n_funcs {
-        let ent = pdata_off + i * 12;
-        if ent + 12 > output.len() {
+        let ent = pdata_off + i * size_of::<RuntimeFunction>();
+        let Some(rf) = structs::read::<RuntimeFunction>(output, ent) else {
             break;
-        }
-        let begin = u32::from_le_bytes(output[ent..ent + 4].try_into().unwrap()) as i64;
-        let end = u32::from_le_bytes(output[ent + 4..ent + 8].try_into().unwrap()) as i64;
+        };
+        let begin = rf.begin.get() as i64;
+        let end = rf.end.get() as i64;
         if begin == 0 || end <= begin {
             continue;
         }
