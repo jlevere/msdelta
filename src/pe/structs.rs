@@ -72,6 +72,25 @@ pub struct ImageImportDescriptor {
     pub first_thunk: U32,
 }
 
+/// `IMAGE_EXPORT_DIRECTORY` (40 bytes). The RVA fields the transform remaps are
+/// `name`, `address_of_functions`, `address_of_names`, `address_of_name_ordinals`,
+/// plus the two RVA arrays sized by `number_of_functions` / `number_of_names`.
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Clone, Copy)]
+#[repr(C)]
+pub struct ImageExportDirectory {
+    pub characteristics: U32,
+    pub time_date_stamp: U32,
+    pub major_version: U16,
+    pub minor_version: U16,
+    pub name: U32,
+    pub base: U32,
+    pub number_of_functions: U32,
+    pub number_of_names: U32,
+    pub address_of_functions: U32,
+    pub address_of_names: U32,
+    pub address_of_name_ordinals: U32,
+}
+
 /// `IMAGE_RESOURCE_DIRECTORY_ENTRY` (8 bytes). `name` and `offset_to_data` carry
 /// their high bit as a string-name / subdirectory flag; the low 31 bits are an
 /// offset relative to the resource directory base.

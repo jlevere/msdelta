@@ -41,6 +41,25 @@ fn first_section_rva(pe: &PeInfo) -> i64 {
         .unwrap_or(0)
 }
 
+/// Claim `len` bytes at file offset `fo` in the transform marker (bit 0 = owned),
+/// so a later instruction pass does not also rewrite them.
+fn mark_bytes(marker: &mut [u8], fo: usize, len: usize) {
+    for m in marker.iter_mut().skip(fo).take(len) {
+        *m |= 1;
+    }
+}
+
+/// Map the 4-byte RVA at file offset `fo` through the rift in place (`new = rva +
+/// rift.map(rva)`), then claim its bytes in the marker. The shared per-RVA-field
+/// primitive for the import/export/(resource) transforms.
+fn map_rva_field(buf: &mut [u8], marker: &mut [u8], fo: usize, rift: &RiftTable) {
+    let v = crate::pe::structs::read_u32(buf, fo) as i64;
+    if v != 0 {
+        crate::pe::structs::write_u32(buf, fo, (v + rift.map(v)) as u32);
+    }
+    mark_bytes(marker, fo, 4);
+}
+
 fn rva_to_file_off(pe: &PeInfo, rva: i64) -> Option<usize> {
     pe.sections
         .iter()
@@ -285,67 +304,46 @@ fn transform_source_imports(
     marker: &mut [u8],
     target_base: u64,
 ) {
+    use crate::pe::structs::{self, dir, ImageImportDescriptor};
+    use std::mem::offset_of;
+
     let ptr = if pe.is_64bit { 8usize } else { 4 };
     let ordinal_flag: u64 = if pe.is_64bit { 1 << 63 } else { 1 << 31 };
     let image_base = pe.image_base as i64;
-    let (imp_rva, _imp_size) = match pe.data_directories.get(1).copied() {
-        Some(v) if v.0 != 0 => v,
-        _ => return,
+    let Some((imp_rva, _)) = pe
+        .data_directories
+        .get(dir::IMPORT)
+        .copied()
+        .filter(|v| v.0 != 0)
+    else {
+        return;
     };
     let Some(desc0) = rva_to_file_off(pe, imp_rva as i64) else {
         return;
     };
-    let rd = |b: &[u8], o: usize| -> u32 {
-        b.get(o..o + 4)
-            .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
-            .unwrap_or(0)
-    };
-    // Map the RVA stored at file offset `fo` in place, mark 4 bytes.
-    let map_rva_field = |buf: &mut [u8], marker: &mut [u8], fo: usize| {
-        if fo + 4 > buf.len() {
-            return;
-        }
-        let v = rd(buf, fo) as i64;
-        if v != 0 {
-            let nv = (v + rift.map(v)) as u32;
-            buf[fo..fo + 4].copy_from_slice(&nv.to_le_bytes());
-        }
-        for b in 0..4 {
-            marker[fo + b] |= 1;
-        }
-    };
 
-    let mut di = 0usize;
-    loop {
-        let dfo = desc0 + di * 0x14;
-        if dfo + 0x14 > buf.len() {
+    for di in 0..MAX_IMPORT_DESCRIPTORS {
+        let dfo = desc0 + di * size_of::<ImageImportDescriptor>();
+        let Some(d) = structs::read::<ImageImportDescriptor>(buf, dfo) else {
             break;
-        }
-        let oft = rd(buf, dfo);
-        let tds = rd(buf, dfo + 4);
-        let name = rd(buf, dfo + 0xc);
-        let ft = rd(buf, dfo + 0x10);
-        if oft == 0 && name == 0 && ft == 0 {
-            break; // null terminator descriptor
-        }
-        // Read a pointer-sized thunk (4 or 8 bytes) at file offset `fo`.
-        let rd_thunk = |b: &[u8], fo: usize| -> u64 {
-            if pe.is_64bit {
-                b.get(fo..fo + 8)
-                    .map(|s| u64::from_le_bytes(s.try_into().unwrap()))
-                    .unwrap_or(0)
-            } else {
-                b.get(fo..fo + 4)
-                    .map(|s| u32::from_le_bytes(s.try_into().unwrap()) as u64)
-                    .unwrap_or(0)
-            }
         };
-        // Walk a thunk array at `arr_rva`. `bound` => bound IAT (VAs).
+        let (oft, tds, name, ft) = (
+            d.original_first_thunk.get(),
+            d.time_date_stamp.get(),
+            d.name.get(),
+            d.first_thunk.get(),
+        );
+        if oft == 0 && name == 0 && ft == 0 {
+            break; // null-terminator descriptor
+        }
+        // Walk a pointer-sized thunk array. `bound` => a bound IAT holding
+        // absolute VAs (mapped like relocations); otherwise each by-name entry is
+        // an IMAGE_IMPORT_BY_NAME RVA and by-ordinal entries (high bit) are slots.
         let walk = |buf: &mut [u8], marker: &mut [u8], arr_rva: u32, bound: bool| {
-            if arr_rva == 0 {
-                return;
-            }
-            let Some(base) = rva_to_file_off(pe, arr_rva as i64) else {
+            let Some(base) = (arr_rva != 0)
+                .then(|| rva_to_file_off(pe, arr_rva as i64))
+                .flatten()
+            else {
                 return;
             };
             let mut k = 0usize;
@@ -354,53 +352,59 @@ fn transform_source_imports(
                 if fo + ptr > buf.len() {
                     break;
                 }
-                let v = rd_thunk(buf, fo);
+                let v = if pe.is_64bit {
+                    structs::read_u64(buf, fo)
+                } else {
+                    structs::read_u32(buf, fo) as u64
+                };
                 if v == 0 {
-                    break;
+                    break; // end of thunk array
                 }
                 if bound && tds != 0 {
-                    // bound: absolute VA -> map (VA - sourceBase) as RVA, then
-                    // relinearize against the TARGET image base. Pointer-sized.
                     let r = v as i64 - image_base;
                     let nv = (target_base as i64)
                         .wrapping_add(r)
                         .wrapping_add(rift.map(r)) as u64;
                     if pe.is_64bit {
-                        buf[fo..fo + 8].copy_from_slice(&nv.to_le_bytes());
+                        structs::write_u64(buf, fo, nv);
                     } else {
-                        buf[fo..fo + 4].copy_from_slice(&(nv as u32).to_le_bytes());
+                        structs::write_u32(buf, fo, nv as u32);
                     }
-                    for b in 0..ptr {
-                        marker[fo + b] |= 1;
-                    }
+                    mark_bytes(marker, fo, ptr);
                 } else if v & ordinal_flag == 0 {
-                    // by-name: the low 32 bits are the IMAGE_IMPORT_BY_NAME RVA
-                    // (a 32-bit RVA even in an 8-byte PE32+ thunk; high dword 0).
-                    map_rva_field(buf, marker, fo);
+                    // by-name: low 32 bits are the IMAGE_IMPORT_BY_NAME RVA (a
+                    // 32-bit RVA even in an 8-byte PE32+ thunk; high dword zero).
+                    map_rva_field(buf, marker, fo, rift);
                     if pe.is_64bit {
-                        for b in 4..8 {
-                            marker[fo + b] |= 1;
-                        }
+                        mark_bytes(marker, fo + 4, 4);
                     }
                 } else {
-                    // by-ordinal: not an RVA, but still claim the slot.
-                    for b in 0..ptr {
-                        marker[fo + b] |= 1;
-                    }
+                    mark_bytes(marker, fo, ptr); // by-ordinal slot
                 }
                 k += 1;
             }
         };
         walk(buf, marker, oft, false);
         walk(buf, marker, ft, tds != 0);
-        // The descriptor's own RVA fields.
-        map_rva_field(buf, marker, dfo + 0x0c);
-        map_rva_field(buf, marker, dfo);
-        map_rva_field(buf, marker, dfo + 0x10);
-        di += 1;
-        if di > 4096 {
-            break;
-        }
+        // The descriptor's own RVA fields: Name, OriginalFirstThunk, FirstThunk.
+        map_rva_field(
+            buf,
+            marker,
+            dfo + offset_of!(ImageImportDescriptor, name),
+            rift,
+        );
+        map_rva_field(
+            buf,
+            marker,
+            dfo + offset_of!(ImageImportDescriptor, original_first_thunk),
+            rift,
+        );
+        map_rva_field(
+            buf,
+            marker,
+            dfo + offset_of!(ImageImportDescriptor, first_thunk),
+            rift,
+        );
     }
 }
 
@@ -409,59 +413,48 @@ fn transform_source_imports(
 /// arrays through the rift, marking the bytes. comctl32's export table lives in
 /// `.text`, so these are the residual `.text` RVAs after calls/jmps.
 fn transform_source_exports(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marker: &mut [u8]) {
-    let (exp_rva, _exp_size) = match pe.data_directories.first().copied() {
-        Some(v) if v.0 != 0 => v,
-        _ => return,
-    };
-    let Some(dir) = rva_to_file_off(pe, exp_rva as i64) else {
+    use crate::pe::structs::{self, dir, ImageExportDirectory};
+    use std::mem::offset_of;
+
+    let Some((exp_rva, _)) = pe
+        .data_directories
+        .get(dir::EXPORT)
+        .copied()
+        .filter(|v| v.0 != 0)
+    else {
         return;
     };
-    if dir + 0x28 > buf.len() {
+    let Some(dfo) = rva_to_file_off(pe, exp_rva as i64) else {
         return;
-    }
-    let rd = |b: &[u8], o: usize| u32::from_le_bytes(b[o..o + 4].try_into().unwrap());
-    // Map the RVA stored at file offset `fo` in place, and mark its 4 bytes.
-    let map_field = |buf: &mut [u8], marker: &mut [u8], fo: usize| {
-        if fo + 4 > buf.len() {
-            return;
-        }
-        let v = rd(buf, fo) as i64;
-        if v != 0 {
-            let nv = (v + rift.map(v)) as u32;
-            buf[fo..fo + 4].copy_from_slice(&nv.to_le_bytes());
-        }
-        for b in 0..4 {
-            marker[fo + b] |= 1;
-        }
+    };
+    let Some(ed) = structs::read::<ImageExportDirectory>(buf, dfo) else {
+        return;
     };
 
-    let n_funcs = rd(buf, dir + 0x14);
-    let n_names = rd(buf, dir + 0x18);
-    let aof = rd(buf, dir + 0x1c);
-    let aon = rd(buf, dir + 0x20);
-
-    // AddressOfFunctions[]: NumberOfFunctions RVAs.
-    if aof != 0 {
-        if let Some(base) = rva_to_file_off(pe, aof as i64) {
-            for i in 0..n_funcs as usize {
-                map_field(buf, marker, base + i * 4);
+    // The two RVA arrays: AddressOfFunctions[NumberOfFunctions] and
+    // AddressOfNames[NumberOfNames]. (The ordinal array holds u16 ordinals, not
+    // RVAs, so it is not mapped.)
+    for (arr_rva, count) in [
+        (ed.address_of_functions.get(), ed.number_of_functions.get()),
+        (ed.address_of_names.get(), ed.number_of_names.get()),
+    ] {
+        if arr_rva != 0 {
+            if let Some(base) = rva_to_file_off(pe, arr_rva as i64) {
+                for i in 0..count as usize {
+                    map_rva_field(buf, marker, base + i * 4, rift);
+                }
             }
         }
     }
-    // AddressOfNames[]: NumberOfNames name-string RVAs.
-    if aon != 0 {
-        if let Some(base) = rva_to_file_off(pe, aon as i64) {
-            for i in 0..n_names as usize {
-                map_field(buf, marker, base + i * 4);
-            }
-        }
+    // The directory's own RVA fields.
+    for off in [
+        offset_of!(ImageExportDirectory, name),
+        offset_of!(ImageExportDirectory, address_of_functions),
+        offset_of!(ImageExportDirectory, address_of_names),
+        offset_of!(ImageExportDirectory, address_of_name_ordinals),
+    ] {
+        map_rva_field(buf, marker, dfo + off, rift);
     }
-    // The directory's own RVA fields: Name, AddressOfFunctions, AddressOfNames,
-    // AddressOfNameOrdinals. (Base/counts and the ordinal array are not RVAs.)
-    map_field(buf, marker, dir + 0x0c);
-    map_field(buf, marker, dir + 0x1c);
-    map_field(buf, marker, dir + 0x20);
-    map_field(buf, marker, dir + 0x24);
 }
 
 /// `TransformResources` (dpx, g_transformsMap mask 0x10): recursively walk the
@@ -475,7 +468,11 @@ fn transform_source_exports(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marke
 /// returns `rva + rift.map(rva)`. `IMAGE_RESOURCE_DATA_ENTRY.OffsetToData` is
 /// treated as dirbase-relative here, matching genuine `GetEntryData`.
 fn transform_source_resources(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marker: &mut [u8]) {
-    let (rsrc_rva, rsrc_size) = match pe.data_directories.get(2).copied() {
+    let (rsrc_rva, rsrc_size) = match pe
+        .data_directories
+        .get(crate::pe::structs::dir::RESOURCE)
+        .copied()
+    {
         Some(v) if v.0 != 0 => v,
         _ => return,
     };
@@ -595,7 +592,11 @@ fn transform_source_relocs(
     target_base: u64,
 ) {
     let image_base = pe.image_base as i64;
-    let (reloc_rva, reloc_size) = match pe.data_directories.get(5).copied() {
+    let (reloc_rva, reloc_size) = match pe
+        .data_directories
+        .get(crate::pe::structs::dir::BASERELOC)
+        .copied()
+    {
         Some(v) if v.0 != 0 => v,
         _ => return,
     };
