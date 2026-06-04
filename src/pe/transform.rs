@@ -1472,55 +1472,47 @@ pub(crate) fn undo_x86_e8_translation(buf: &mut [u8]) -> u32 {
 /// `IMAGE_FILE_MACHINE_I386` (0x14C) and a PE32 optional header, and rejects
 /// images whose CLR runtime header (data directory 14) has `COMIMAGE_FLAGS_ILONLY`.
 fn is_i386_native_pe(buf: &[u8]) -> bool {
-    let rd_u16 = |o: usize| -> Option<u16> {
-        buf.get(o..o + 2)
-            .map(|b| u16::from_le_bytes(b.try_into().unwrap()))
-    };
-    let rd_u32 = |o: usize| -> Option<u32> {
-        buf.get(o..o + 4)
-            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
-    };
+    use crate::pe::structs::{self, dir, ImageSectionHeader};
 
-    let e_lfanew = match rd_u32(0x3c) {
-        Some(v) => v as usize,
-        None => return false,
-    };
-    if buf.get(e_lfanew..e_lfanew + 4) != Some(b"PE\0\0") {
+    let Some(e) = structs::pe_header_offset(buf) else {
         return false;
-    }
-    if rd_u16(e_lfanew + 4) != Some(0x014C) {
+    };
+    if structs::read_u16(buf, e + 4) != 0x014C {
         return false; // not i386
     }
-    let num_sections = rd_u16(e_lfanew + 6).unwrap_or(0) as usize;
-    let size_of_opt = rd_u16(e_lfanew + 20).unwrap_or(0) as usize;
-    let opt = e_lfanew + 24;
+    let opt = e + 24;
     // i386 images are PE32 (magic 0x10B); data directories start at opt+96.
-    if rd_u16(opt) != Some(0x010B) {
+    if structs::read_u16(buf, opt) != 0x010B {
         return false;
     }
-    let num_rva = rd_u32(opt + 92).unwrap_or(0) as usize;
-    const CLR_DIR: usize = 14;
-    if num_rva <= CLR_DIR {
+    let num_rva = structs::read_u32(buf, opt + 92) as usize;
+    if num_rva <= dir::COM_DESCRIPTOR {
         return true; // no CLR header -> native
     }
-    let clr_rva = rd_u32(opt + 96 + CLR_DIR * 8).unwrap_or(0);
+    let clr_rva = structs::read_u32(buf, opt + 96 + dir::COM_DESCRIPTOR * 8);
     if clr_rva == 0 {
         return true; // native
     }
     // Map the CLR header RVA to a file offset via the section table and read
     // its COR20 Flags (u32 at +16); ILONLY (bit 0) => managed, skip.
-    let sec_base = opt + size_of_opt;
+    let Some((sec_base, num_sections)) = structs::section_table(buf) else {
+        return true;
+    };
     for i in 0..num_sections {
-        let s = sec_base + i * 40;
-        let vs = rd_u32(s + 8).unwrap_or(0);
-        let va = rd_u32(s + 12).unwrap_or(0);
-        let ro = rd_u32(s + 20).unwrap_or(0);
+        let Some(s) =
+            structs::read::<ImageSectionHeader>(buf, sec_base + i * ImageSectionHeader::SIZE)
+        else {
+            break;
+        };
+        let (vs, va, ro) = (
+            s.virtual_size.get(),
+            s.virtual_address.get(),
+            s.pointer_to_raw_data.get(),
+        );
         if clr_rva >= va && clr_rva < va.wrapping_add(vs) {
             // usize add (a u32 add could overflow on a hostile header).
             let off = ro as usize + (clr_rva - va) as usize;
-            if let Some(flags) = rd_u32(off + 16) {
-                return flags & 0x1 == 0; // ILONLY clear => native
-            }
+            return structs::read_u32(buf, off + 16) & 0x1 == 0; // ILONLY clear => native
         }
     }
     true
@@ -1539,34 +1531,23 @@ fn is_i386_native_pe(buf: &[u8]) -> bool {
 /// (opt+0x70). Returns false for anything not a well-formed PE with a non-empty
 /// data directory 14.
 pub(crate) fn is_managed_pe(buf: &[u8]) -> bool {
-    let rd_u16 = |o: usize| {
-        buf.get(o..o + 2)
-            .map(|b| u16::from_le_bytes(b.try_into().unwrap()))
-    };
-    let rd_u32 = |o: usize| {
-        buf.get(o..o + 4)
-            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
-    };
+    use crate::pe::structs::{self, dir};
 
-    let Some(e) = rd_u32(0x3c).map(|v| v as usize) else {
+    let Some(e) = structs::pe_header_offset(buf) else {
         return false;
     };
-    if buf.get(e..e + 4) != Some(b"PE\0\0") {
-        return false;
-    }
     let opt = e + 24;
     // NumberOfRvaAndSizes + data-directory base differ by optional-header magic.
-    let (num_rva_off, dd_base) = match rd_u16(opt) {
-        Some(0x10b) => (opt + 92, opt + 96),   // PE32
-        Some(0x20b) => (opt + 108, opt + 112), // PE32+
+    let (num_rva_off, dd_base) = match structs::read_u16(buf, opt) {
+        0x10b => (opt + 92, opt + 96),   // PE32
+        0x20b => (opt + 108, opt + 112), // PE32+
         _ => return false,
     };
-    const COM_DIR: usize = 14;
-    if rd_u32(num_rva_off).unwrap_or(0) as usize <= COM_DIR {
+    if structs::read_u32(buf, num_rva_off) as usize <= dir::COM_DESCRIPTOR {
         return false;
     }
     // data directory 14 VirtualAddress != 0 => CLR header present => managed.
-    rd_u32(dd_base + COM_DIR * 8).unwrap_or(0) != 0
+    structs::read_u32(buf, dd_base + dir::COM_DESCRIPTOR * 8) != 0
 }
 
 /// File offset of the PE optional-header CheckSum field (4 bytes), if `data`
