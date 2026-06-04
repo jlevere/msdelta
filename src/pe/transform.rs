@@ -1542,7 +1542,8 @@ pub(crate) fn pe_timestamp(data: &[u8]) -> u32 {
 }
 
 pub(crate) fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
-    use crate::pe::structs::{self, dir, PeView};
+    use crate::pe::structs::{self, dir, ImageDebugDirectory, PeView};
+    use std::mem::offset_of;
 
     let mut offsets = Vec::new();
     let Some(pe) = PeView::parse(data) else {
@@ -1561,15 +1562,17 @@ pub(crate) fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
         }
     }
 
-    // Debug directory: array of IMAGE_DEBUG_DIRECTORY (28 bytes each), with a
-    // TimeDateStamp at +4, SizeOfData at +16 and PointerToRawData at +24.
+    // Debug directory: an array of IMAGE_DEBUG_DIRECTORY entries, each carrying a
+    // TimeDateStamp that mirrors the header's.
+    const DBG: usize = size_of::<ImageDebugDirectory>();
     if let Some(dbg) = pe.data_directory(dir::DEBUG) {
         let (dva, dsize) = (dbg.virtual_address.get(), dbg.size.get());
-        if dva != 0 && dsize >= 28 {
+        if dva != 0 && dsize as usize >= DBG {
             if let Some(base_off) = pe.rva_to_offset(dva) {
-                let num_entries = dsize as usize / 28;
+                let num_entries = dsize as usize / DBG;
+                let time_date_stamp = offset_of!(ImageDebugDirectory, time_date_stamp);
                 for i in 0..num_entries {
-                    offsets.push(base_off + i * 28 + 4);
+                    offsets.push(base_off + i * DBG + time_date_stamp);
                 }
 
                 // Some debug formats embed copies of the header timestamp in the
@@ -1577,12 +1580,13 @@ pub(crate) fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
                 let header_ts = offsets.first().map_or(0, |&o| structs::read_u32(data, o));
                 let ts_bytes = header_ts.to_le_bytes();
                 for i in 0..num_entries {
-                    let entry_off = base_off + i * 28;
-                    if entry_off + 28 > data.len() {
+                    let Some(entry) =
+                        structs::read::<ImageDebugDirectory>(data, base_off + i * DBG)
+                    else {
                         break;
-                    }
-                    let raw_size = structs::read_u32(data, entry_off + 16) as usize;
-                    let raw_ptr = structs::read_u32(data, entry_off + 24) as usize;
+                    };
+                    let raw_size = entry.size_of_data.get() as usize;
+                    let raw_ptr = entry.pointer_to_raw_data.get() as usize;
                     if raw_ptr == 0 || raw_size == 0 || raw_ptr + raw_size > data.len() {
                         continue;
                     }

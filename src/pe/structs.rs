@@ -14,14 +14,24 @@
 use zerocopy::little_endian::{U16, U32, U64};
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
 
-/// `IMAGE_DIRECTORY_ENTRY_*` indices into the optional header's data directory.
+/// `IMAGE_DIRECTORY_ENTRY_*` indices into the optional header's data directory
+/// (the full canonical set; index 15 is reserved). `ARCHITECTURE` (7) and
+/// `GLOBALPTR` (8) follow winnt.h's `IMAGE_DIRECTORY_ENTRY_*` names.
 pub mod dir {
     pub const EXPORT: usize = 0;
     pub const IMPORT: usize = 1;
     pub const RESOURCE: usize = 2;
     pub const EXCEPTION: usize = 3;
+    pub const SECURITY: usize = 4;
     pub const BASERELOC: usize = 5;
     pub const DEBUG: usize = 6;
+    pub const ARCHITECTURE: usize = 7;
+    pub const GLOBALPTR: usize = 8;
+    pub const TLS: usize = 9;
+    pub const LOAD_CONFIG: usize = 10;
+    pub const BOUND_IMPORT: usize = 11;
+    pub const IAT: usize = 12;
+    pub const DELAY_IMPORT: usize = 13;
     pub const COM_DESCRIPTOR: usize = 14;
 }
 
@@ -238,6 +248,90 @@ pub struct ImageOptionalHeader64 {
     pub loader_flags: U32,
     pub number_of_rva_and_sizes: U32,
 }
+
+/// `IMAGE_DEBUG_DIRECTORY` (28 bytes): one entry in the debug data directory
+/// (`dir::DEBUG`). `time_date_stamp` mirrors the COFF header's, which is why the
+/// timestamp-normalization pass records its offset; `address_of_raw_data` /
+/// `pointer_to_raw_data` locate the entry's payload by RVA / file offset.
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Clone, Copy)]
+#[repr(C)]
+pub struct ImageDebugDirectory {
+    pub characteristics: U32,
+    pub time_date_stamp: U32,
+    pub major_version: U16,
+    pub minor_version: U16,
+    pub r#type: U32,
+    pub size_of_data: U32,
+    pub address_of_raw_data: U32,
+    pub pointer_to_raw_data: U32,
+}
+
+/// `IMAGE_TLS_DIRECTORY32` (24 bytes; `dir::TLS`). The address fields are VAs
+/// (not RVAs) and carry base relocations -- a transform target once TLS support
+/// lands.
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Clone, Copy)]
+#[repr(C)]
+pub struct ImageTlsDirectory32 {
+    pub start_address_of_raw_data: U32,
+    pub end_address_of_raw_data: U32,
+    pub address_of_index: U32,
+    pub address_of_callbacks: U32,
+    pub size_of_zero_fill: U32,
+    pub characteristics: U32,
+}
+
+/// `IMAGE_TLS_DIRECTORY64` (40 bytes; `dir::TLS`). Like [`ImageTlsDirectory32`]
+/// but the four address fields are 64-bit VAs.
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Clone, Copy)]
+#[repr(C)]
+pub struct ImageTlsDirectory64 {
+    pub start_address_of_raw_data: U64,
+    pub end_address_of_raw_data: U64,
+    pub address_of_index: U64,
+    pub address_of_callbacks: U64,
+    pub size_of_zero_fill: U32,
+    pub characteristics: U32,
+}
+
+/// `IMAGE_DELAYLOAD_DESCRIPTOR` (32 bytes; `dir::DELAY_IMPORT`). All `*_rva`
+/// fields are RVAs into the delay-load thunk/name tables -- the analogue of
+/// [`ImageImportDescriptor`] for delay-loaded imports, and a transform target
+/// once delay-import support lands.
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Clone, Copy)]
+#[repr(C)]
+pub struct ImageDelayloadDescriptor {
+    pub attributes: U32,
+    pub dll_name_rva: U32,
+    pub module_handle_rva: U32,
+    pub import_address_table_rva: U32,
+    pub import_name_table_rva: U32,
+    pub bound_import_address_table_rva: U32,
+    pub unload_information_table_rva: U32,
+    pub time_date_stamp: U32,
+}
+
+/// Compile-time guard pinning each view to the byte size winnt.h / the PE/COFF
+/// specification mandates. The optional-header structs stop just before the
+/// trailing `DataDirectory[]`, so their canonical sizes are 96 / 112. If a field
+/// is ever added, removed, or retyped, one of these breaks the build before any
+/// silent misparse can reach a fixture.
+const _: () = {
+    use core::mem::size_of;
+    assert!(size_of::<ImageSectionHeader>() == 40);
+    assert!(size_of::<ImageImportDescriptor>() == 20);
+    assert!(size_of::<ImageExportDirectory>() == 40);
+    assert!(size_of::<ImageResourceDirectoryEntry>() == 8);
+    assert!(size_of::<RuntimeFunction>() == 12);
+    assert!(size_of::<ImageBaseRelocation>() == 8);
+    assert!(size_of::<ImageFileHeader>() == 20);
+    assert!(size_of::<ImageDataDirectory>() == 8);
+    assert!(size_of::<ImageOptionalHeader32>() == 96);
+    assert!(size_of::<ImageOptionalHeader64>() == 112);
+    assert!(size_of::<ImageDebugDirectory>() == 28);
+    assert!(size_of::<ImageTlsDirectory32>() == 24);
+    assert!(size_of::<ImageTlsDirectory64>() == 40);
+    assert!(size_of::<ImageDelayloadDescriptor>() == 32);
+};
 
 /// File offset of the PE signature (`e_lfanew`), if `buf` is a PE (`MZ` magic
 /// at 0, `PE\0\0` at `e_lfanew`).
