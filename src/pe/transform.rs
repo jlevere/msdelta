@@ -1542,77 +1542,47 @@ pub(crate) fn pe_timestamp(data: &[u8]) -> u32 {
 }
 
 pub(crate) fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
+    use crate::pe::structs::{self, dir, PeView};
+
     let mut offsets = Vec::new();
-    let pe = match goblin::pe::PE::parse(data) {
-        Ok(pe) => pe,
-        Err(_) => return offsets,
+    let Some(pe) = PeView::parse(data) else {
+        return offsets;
     };
 
-    let pe_off = pe.header.dos_header.pe_pointer as usize;
-    offsets.push(pe_off + 8);
+    // COFF FileHeader.TimeDateStamp.
+    offsets.push(pe.pe_header_offset() + 8);
 
-    let opt = match pe.header.optional_header {
-        Some(o) => o,
-        None => return offsets,
-    };
-
-    let sections = &pe.sections;
-    let rva_to_offset = |rva: u32| -> Option<usize> {
-        for s in sections {
-            if s.pointer_to_raw_data == 0 || s.size_of_raw_data == 0 {
-                continue;
-            }
-            if rva >= s.virtual_address && rva < s.virtual_address + s.virtual_size {
-                return Some((s.pointer_to_raw_data + (rva - s.virtual_address)) as usize);
-            }
-        }
-        None
-    };
-
-    if let Some(&dd) = opt.data_directories.get_export_table() {
-        if dd.virtual_address != 0 {
-            if let Some(off) = rva_to_offset(dd.virtual_address) {
+    // Export directory TimeDateStamp (+4 into IMAGE_EXPORT_DIRECTORY).
+    if let Some(exp) = pe.data_directory(dir::EXPORT) {
+        if exp.virtual_address.get() != 0 {
+            if let Some(off) = pe.rva_to_offset(exp.virtual_address.get()) {
                 offsets.push(off + 4);
             }
         }
     }
 
-    if let Some(&dd) = opt.data_directories.get_debug_table() {
-        if dd.virtual_address != 0 && dd.size >= 28 {
-            if let Some(base_off) = rva_to_offset(dd.virtual_address) {
-                let num_entries = dd.size as usize / 28;
+    // Debug directory: array of IMAGE_DEBUG_DIRECTORY (28 bytes each), with a
+    // TimeDateStamp at +4, SizeOfData at +16 and PointerToRawData at +24.
+    if let Some(dbg) = pe.data_directory(dir::DEBUG) {
+        let (dva, dsize) = (dbg.virtual_address.get(), dbg.size.get());
+        if dva != 0 && dsize >= 28 {
+            if let Some(base_off) = pe.rva_to_offset(dva) {
+                let num_entries = dsize as usize / 28;
                 for i in 0..num_entries {
                     offsets.push(base_off + i * 28 + 4);
                 }
-            }
-        }
-    }
 
-    if let Some(&dd) = opt.data_directories.get_debug_table() {
-        if dd.virtual_address != 0 && dd.size >= 28 {
-            if let Some(base_off) = rva_to_offset(dd.virtual_address) {
-                let num_entries = dd.size as usize / 28;
-                let header_ts = if offsets.is_empty() {
-                    0
-                } else {
-                    u32::from_le_bytes(
-                        data[offsets[0]..offsets[0] + 4]
-                            .try_into()
-                            .unwrap_or([0; 4]),
-                    )
-                };
+                // Some debug formats embed copies of the header timestamp in the
+                // raw data each entry points at; record those occurrences too.
+                let header_ts = offsets.first().map_or(0, |&o| structs::read_u32(data, o));
                 let ts_bytes = header_ts.to_le_bytes();
                 for i in 0..num_entries {
                     let entry_off = base_off + i * 28;
                     if entry_off + 28 > data.len() {
                         break;
                     }
-                    let raw_ptr = u32::from_le_bytes(
-                        data[entry_off + 24..entry_off + 28].try_into().unwrap(),
-                    ) as usize;
-                    let raw_size = u32::from_le_bytes(
-                        data[entry_off + 16..entry_off + 20].try_into().unwrap(),
-                    ) as usize;
+                    let raw_size = structs::read_u32(data, entry_off + 16) as usize;
+                    let raw_ptr = structs::read_u32(data, entry_off + 24) as usize;
                     if raw_ptr == 0 || raw_size == 0 || raw_ptr + raw_size > data.len() {
                         continue;
                     }

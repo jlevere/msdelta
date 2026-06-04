@@ -21,6 +21,7 @@ pub mod dir {
     pub const RESOURCE: usize = 2;
     pub const EXCEPTION: usize = 3;
     pub const BASERELOC: usize = 5;
+    pub const DEBUG: usize = 6;
     pub const COM_DESCRIPTOR: usize = 14;
 }
 
