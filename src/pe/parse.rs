@@ -124,6 +124,14 @@ impl PeInfo {
         })
     }
 
+    /// The `(VirtualAddress, Size)` of data directory `idx` (see
+    /// [`crate::pe::structs::dir`]) if it is present *and* non-empty (RVA != 0).
+    /// Returns `None` for an absent or zero-RVA directory -- the "is this
+    /// directory actually here?" gate every transform applies before mapping it.
+    pub fn data_dir(&self, idx: usize) -> Option<(u32, u32)> {
+        self.data_directories.get(idx).copied().filter(|v| v.0 != 0)
+    }
+
     /// Check if a virtual address falls within this PE's image range.
     pub fn contains_va(&self, va: u64) -> bool {
         va >= self.image_base && va < self.image_base + self.size_of_image as u64

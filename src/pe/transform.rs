@@ -127,13 +127,9 @@ pub(crate) fn build_transformed_source(
             transform_disasm_x64(buf, pe, rift);
         }
         if flags & 0x400 != 0 {
-            if let Some(&(pdata_rva, pdata_size)) =
-                pe.data_directories.get(crate::pe::structs::dir::EXCEPTION)
-            {
-                if pdata_rva != 0 {
-                    if let Some(pdata_fo) = rva_to_file_off(pe, pdata_rva as i64) {
-                        remap_pdata_rvas(buf, pdata_fo as u32, pdata_size, rift);
-                    }
+            if let Some((pdata_rva, pdata_size)) = pe.data_dir(crate::pe::structs::dir::EXCEPTION) {
+                if let Some(pdata_fo) = rva_to_file_off(pe, pdata_rva as i64) {
+                    remap_pdata_rvas(buf, pdata_fo as u32, pdata_size, rift);
                 }
             }
         }
@@ -208,11 +204,8 @@ fn unbind_pe(buf: &mut [u8], pe: &PeInfo) {
     // Unbind each bound import descriptor (non-zero TimeDateStamp): clear the
     // stamp + forwarder chain and copy the ILT (OriginalFirstThunk) over the IAT
     // (FirstThunk), restoring the unbound thunk array.
-    if let Some((imp_rva, _)) = pe.data_directories.get(dir::IMPORT).copied() {
-        if let Some(desc0) = (imp_rva != 0)
-            .then(|| rva_to_file_off(pe, imp_rva as i64))
-            .flatten()
-        {
+    if let Some((imp_rva, _)) = pe.data_dir(dir::IMPORT) {
+        if let Some(desc0) = rva_to_file_off(pe, imp_rva as i64) {
             for di in 0..MAX_IMPORT_DESCRIPTORS {
                 let dfo = desc0 + di * size_of::<ImageImportDescriptor>();
                 let Some(d) = structs::read::<ImageImportDescriptor>(buf, dfo) else {
@@ -294,12 +287,7 @@ fn transform_source_imports(
     let ptr = if pe.is_64bit { 8usize } else { 4 };
     let ordinal_flag: u64 = if pe.is_64bit { 1 << 63 } else { 1 << 31 };
     let image_base = pe.image_base as i64;
-    let Some((imp_rva, _)) = pe
-        .data_directories
-        .get(dir::IMPORT)
-        .copied()
-        .filter(|v| v.0 != 0)
-    else {
+    let Some((imp_rva, _)) = pe.data_dir(dir::IMPORT) else {
         return;
     };
     let Some(desc0) = rva_to_file_off(pe, imp_rva as i64) else {
@@ -400,12 +388,7 @@ fn transform_source_exports(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marke
     use crate::pe::structs::{self, dir, ImageExportDirectory};
     use std::mem::offset_of;
 
-    let Some((exp_rva, _)) = pe
-        .data_directories
-        .get(dir::EXPORT)
-        .copied()
-        .filter(|v| v.0 != 0)
-    else {
+    let Some((exp_rva, _)) = pe.data_dir(dir::EXPORT) else {
         return;
     };
     let Some(dfo) = rva_to_file_off(pe, exp_rva as i64) else {
@@ -452,13 +435,8 @@ fn transform_source_exports(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marke
 /// returns `rva + rift.map(rva)`. `IMAGE_RESOURCE_DATA_ENTRY.OffsetToData` is
 /// treated as dirbase-relative here, matching genuine `GetEntryData`.
 fn transform_source_resources(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marker: &mut [u8]) {
-    let (rsrc_rva, rsrc_size) = match pe
-        .data_directories
-        .get(crate::pe::structs::dir::RESOURCE)
-        .copied()
-    {
-        Some(v) if v.0 != 0 => v,
-        _ => return,
+    let Some((rsrc_rva, rsrc_size)) = pe.data_dir(crate::pe::structs::dir::RESOURCE) else {
+        return;
     };
     let Some(base_fo) = rva_to_file_off(pe, rsrc_rva as i64) else {
         return;
@@ -545,7 +523,7 @@ fn mark_non_executable(buf: &[u8], pe: &PeInfo, marker: &mut [u8]) {
         *m |= 1;
     }
     for sec in &pe.sections {
-        if sec.characteristics & 0x2000_0000 == 0 {
+        if sec.characteristics & crate::pe::structs::SCN_MEM_EXECUTE == 0 {
             continue;
         }
         let a = sec.raw_offset as usize;
@@ -569,13 +547,8 @@ fn transform_source_relocs(
     target_base: u64,
 ) {
     let image_base = pe.image_base as i64;
-    let (reloc_rva, reloc_size) = match pe
-        .data_directories
-        .get(crate::pe::structs::dir::BASERELOC)
-        .copied()
-    {
-        Some(v) if v.0 != 0 => v,
-        _ => return,
+    let Some((reloc_rva, reloc_size)) = pe.data_dir(crate::pe::structs::dir::BASERELOC) else {
+        return;
     };
     let Some(base) = rva_to_file_off(pe, reloc_rva as i64) else {
         return;
@@ -750,7 +723,7 @@ fn marker_set(marker: &[u8], idx: i64) -> bool {
 /// bytes or target are marker-owned.
 fn transform_source_calls_i386(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marker: &[u8]) {
     for sec in &pe.sections {
-        if sec.characteristics & 0x2000_0000 == 0 {
+        if sec.characteristics & crate::pe::structs::SCN_MEM_EXECUTE == 0 {
             continue;
         }
         let sraw = sec.raw_offset as usize;
@@ -796,7 +769,7 @@ fn transform_source_calls_i386(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, ma
 /// new displacement fits a byte.
 fn transform_source_jmps_i386(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marker: &[u8]) {
     for sec in &pe.sections {
-        if sec.characteristics & 0x2000_0000 == 0 {
+        if sec.characteristics & crate::pe::structs::SCN_MEM_EXECUTE == 0 {
             continue;
         }
         let sraw = sec.raw_offset as usize;
@@ -1342,16 +1315,16 @@ pub(crate) fn transform_disasm_x64(output: &mut [u8], pe: &PeInfo, rift: &RiftTa
         return 0;
     }
     use crate::pe::structs::{self, dir, RuntimeFunction};
-    let Some(&(pdata_rva, pdata_size)) = pe.data_directories.get(dir::EXCEPTION) else {
+    let Some((pdata_rva, pdata_size)) = pe.data_dir(dir::EXCEPTION) else {
         return 0;
     };
-    if pdata_rva == 0 || pdata_size < 12 {
+    if (pdata_size as usize) < size_of::<RuntimeFunction>() {
         return 0;
     }
     let Some(pdata_off) = rva_to_file_off(pe, pdata_rva as i64) else {
         return 0;
     };
-    let n_funcs = (pdata_size / 12) as usize;
+    let n_funcs = pdata_size as usize / size_of::<RuntimeFunction>();
     let mut changed = 0u32;
     for i in 0..n_funcs {
         let ent = pdata_off + i * size_of::<RuntimeFunction>();

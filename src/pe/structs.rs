@@ -38,6 +38,9 @@ pub mod dir {
 /// `IMAGE_SCN_MEM_WRITE | IMAGE_SCN_MEM_READ` section characteristics.
 pub const SCN_MEM_WRITE_READ: u32 = 0xC000_0000;
 
+/// `IMAGE_SCN_MEM_EXECUTE` section characteristic (the section holds code).
+pub const SCN_MEM_EXECUTE: u32 = 0x2000_0000;
+
 /// `IMAGE_DOS_SIGNATURE` -- the "MZ" magic at file offset 0.
 pub const DOS_SIGNATURE: u16 = 0x5A4D;
 
