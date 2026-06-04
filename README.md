@@ -120,14 +120,21 @@ are not yet round-trip-validated against Windows.
   across all bundled DCM/PE manifest fixtures and **377/377** against a full
   Win11 24H2 LCU express PSF (baseless PA31).
 - **Native PE deltas** (x86 / x64, `file_type != 1`): **byte-exact** — verified
-  MD5-identical to genuine `dpx.dll` across **24/24** diverse WinSxS version-pair
-  fixtures (DLLs, EXEs, `.mui`, keyboard layouts; i386 + amd64), each cross-checked
-  by dumping genuine's intermediate `T(source)` and composed rift. A
-  separate 24-topology corpus locks the rift composition against regression.
-- **Managed / .NET PE deltas**: detected (CLI metadata stream present) and
+  MD5-identical to genuine `dpx.dll` across **24/24** curated diverse WinSxS
+  version-pair fixtures (DLLs, EXEs, `.mui`, keyboard layouts; i386 + amd64), each
+  cross-checked by dumping genuine's intermediate `T(source)` and composed rift,
+  with a 24-topology corpus locking the rift composition against regression. At
+  scale, a **659-fixture randomly-minted** corpus decodes **598 byte-exact
+  (90.7%)** hash-verified against genuine; the remainder are a documented
+  long-tail (below).
+- **Managed / .NET PE deltas**: detected via the reference's CLR header and
   **rejected** with `Error::Unsupported` rather than decoded wrong. The CLI
-  metadata/disasm transform family is the remaining frontier. ARM/ARM64 likewise
-  not implemented (no fixtures yet).
+  metadata/disasm transform family is unimplemented.
+- **Long-tail native edges** (~30 of the 659): a few binaries carry `.rdata`
+  RVA-table structures genuine remaps that this crate does not yet — these surface
+  as a **clean `HashMismatch` error** from `apply()` (which verifies the embedded
+  target hash), never silent corruption. ARM/ARM64 instruction/`.pdata` transforms
+  are likewise unimplemented (no fixtures yet).
 
 **Encoder ↔ Windows compatibility is partial.** Note that
 `PA31` is **not** an `msdelta.dll` format at all — `msdelta.dll` (build 26100)

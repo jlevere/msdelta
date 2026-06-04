@@ -1562,9 +1562,9 @@ mod tests {
                         exact += 1;
                     } else {
                         mismatch += 1;
-                        if bad.len() < 25 {
-                            bad.push(fid.to_string());
-                        }
+                        let (ft, fl) = parse(&delta).map(|p| (p.header.file_type, p.header.flags)).unwrap_or((-1, 0));
+                        let arch = fid.split("__").next().unwrap_or("?");
+                        bad.push(format!("{arch} ft={ft} fl={fl:#x} {fid}"));
                     }
                 }
                 Err(Error::Unsupported(_)) => managed += 1,
