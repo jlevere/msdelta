@@ -180,44 +180,77 @@ impl RiftTable {
         let mut out = RiftTable {
             entries: Vec::new(),
         };
-
-        // Walk A's segments. Each A entry covers [src, next_src) in A's
-        // source domain and maps it (offset a_off) into A's image. We then
-        // split that image range at B's breakpoints.
         let a = &self.entries;
-        for i in 0..a.len() {
-            let seg_src = a[i].source;
-            let seg_off = a[i].target - a[i].source; // A's offset on this segment
-            let seg_src_end = if i + 1 < a.len() {
-                a[i + 1].source
-            } else {
-                i64::MAX
-            };
 
-            // Current position in A's source domain and its A-image.
-            let mut cur_src = seg_src;
-            loop {
-                let img = cur_src.wrapping_add(seg_off); // A.f(cur_src)
-                let (b_off, b_break) = b.get_rift(img);
-                // result.f(cur_src) = img + b_off = cur_src + seg_off + b_off
-                out.add(cur_src, cur_src.wrapping_add(seg_off).wrapping_add(b_off));
-
-                // Where does B's offset change next, expressed back in A's
-                // source domain? b_break is the last image position in B's
-                // current segment. Map back: src = b_break - seg_off + 1.
-                if b_break == i64::MAX {
-                    break;
-                }
-                let next_src = b_break.wrapping_sub(seg_off).wrapping_add(1);
-                if next_src >= seg_src_end || next_src <= cur_src {
-                    break;
-                }
-                cur_src = next_src;
+        // Pre-first wrap block (decompile lines 50-69). A's GetRift wraps the
+        // region below A's first source `[i64::MIN, A[0].source)` to A's LAST
+        // segment offset. Genuine emits this region as real entries, splitting it
+        // at every breakpoint B introduces on its image. Without this block the
+        // composed forward chain is missing the negative-source wrap segments,
+        // and a later `Reverse` cannot reproduce the genuine inverse (the docprop
+        // `-0x5120`/`bc8` wrap entries originate here, not in `Reverse`).
+        let a_first = a[0].source;
+        if i64::MIN < a_first {
+            let last = a[a.len() - 1];
+            let last_off = last.target - last.source;
+            // Seed at the wrap image of i64::MIN under the last-segment offset.
+            let mut img = last_off.wrapping_add(i64::MIN);
+            let (mut b_off, mut b_break) = b.get_rift(img);
+            out.add(i64::MIN, b_off.wrapping_add(img));
+            // `region` is the remaining width of the pre-first region (as the
+            // decompile's unsigned `uVar2`); `step` the width B's current segment
+            // covers. Advance source by `step + 1` each time B's offset changes.
+            let mut src_pos = i64::MIN;
+            let mut region = (a_first.wrapping_add(i64::MAX)) as u64;
+            let mut step = (b_break.wrapping_sub(img)) as u64;
+            while step < region {
+                src_pos = src_pos.wrapping_add(step as i64).wrapping_add(1);
+                img = b_break.wrapping_add(1);
+                let g = b.get_rift(img);
+                b_off = g.0;
+                b_break = g.1;
+                out.add(src_pos, b_off.wrapping_add(img));
+                region = (a_first.wrapping_sub(1)).wrapping_sub(src_pos) as u64;
+                step = (b_break.wrapping_sub(img)) as u64;
             }
         }
 
+        // Main per-segment walk (decompile lines 71-143). Each A segment covers
+        // `[seg_src, seg_break]` in A's source domain; its image is split at
+        // every B breakpoint. Duplicate-source A entries are skipped (the
+        // `lVar6 == lVar8` continue).
+        for i in 0..a.len() {
+            let seg_src = a[i].source;
+            let seg_break = if i + 1 < a.len() {
+                if a[i + 1].source != seg_src {
+                    a[i + 1].source - 1
+                } else {
+                    continue;
+                }
+            } else {
+                i64::MAX
+            };
+            let mut img = a[i].target; // image of seg_src under A
+            let (b_off, b_break) = b.get_rift(img);
+            out.add(seg_src, b_off.wrapping_add(img));
+            let mut next_break = b_break;
+            let mut src_pos = seg_src;
+            while (next_break.wrapping_sub(img) as u64) < (seg_break.wrapping_sub(src_pos) as u64) {
+                src_pos = src_pos
+                    .wrapping_add(1)
+                    .wrapping_add(next_break.wrapping_sub(img));
+                img = next_break.wrapping_add(1);
+                let g = b.get_rift(img);
+                next_break = g.1;
+                out.add(src_pos, g.0.wrapping_add(img));
+            }
+        }
+
+        // Genuine `Multiply` ends with `Sort` only -- no offset-dedup. Collapsing
+        // equal-offset adjacent segments here drops breakpoints the downstream
+        // `Reverse` working buffer depends on (e.g. docprop's `6400->6a00` after
+        // `6200->6800`, both offset 0x600), so we must preserve them verbatim.
         out.sort();
-        out.dedup_offsets();
         out
     }
 
@@ -1118,6 +1151,81 @@ mod tests {
                 (0x9000, 0x9040),
                 (0x93c0, 0x9420),
                 (0x3b000, 0x3b000),
+            ],
+        );
+    }
+
+    /// Ground truth from genuine dpx.dll for the WRAP case (docprop). docprop's
+    /// `preprocess_rift` is far more intricate (a section-relayout with negative
+    /// source wraps and many small segments). The genuine final copy rift is the
+    /// `Reverse` of `io2rva_src . preprocess_rift . pe_rift`, and it includes
+    /// wrap entries that only exist because `Multiply`'s pre-first wrap block
+    /// seeds the region below A's first source. Composing the three real factors
+    /// with our `Multiply` and reversing must reproduce genuine byte-for-byte,
+    /// including the load-bearing wrap/gap entries that the previous approximate
+    /// `Multiply` (offset-deduped, no wrap block) dropped:
+    ///   `6e0 -> -0x5120`, `bc8 -> -0x4c38`, `6a00,6400`, `7a00,71d0`, `9000,8800`.
+    #[test]
+    fn reverse_docprop_wrap_vector() {
+        // io2rva_src (file offset -> RVA), source PE.
+        let io2rva = t(&[
+            (0x0, 0x0),
+            (0x400, 0x1000),
+            (0x6200, 0x7000),
+            (0x6400, 0xa000),
+            (0x7200, 0xb000),
+            (0x8800, 0xd000),
+        ]);
+        // preprocess_rift (RVA -> target RVA).
+        let pre = t(&[
+            (0x0, 0x0),
+            (0x12e0, 0x1308),
+            (0x17a0, 0x1860),
+            (0x6d20, 0x7350),
+            (0x6fff, 0x7fff),
+            (0xa0e0, 0xb0f0),
+            (0xa120, 0xb138),
+            (0xa14c, 0xb15c),
+            (0xa300, 0xb374),
+            (0xa444, 0xb4c8),
+            (0xa484, 0xb510),
+            (0xa4b0, 0xb534),
+            (0xa596, 0xb746),
+            (0xa7ce, 0xb976),
+            (0xa830, 0xb9f4),
+            (0xa8a0, 0xba7e),
+            (0xaa4e, 0xbc0a),
+            (0xaaa2, 0xbc88),
+            (0xaaea, 0xbd1a),
+            (0xafff, 0xbfff),
+        ]);
+        // pe_rift (target RVA -> target file offset).
+        let pe = t(&[
+            (0x0, 0x0),
+            (0x1000, 0x400),
+            (0x8000, 0x6800),
+            (0xb000, 0x6a00),
+            (0xc000, 0x7a00),
+            (0xe000, 0x9000),
+        ]);
+        let forward = io2rva.multiply(&pre).multiply(&pe);
+        let rev = forward.reverse();
+        contains_all(
+            &rev,
+            &[
+                (0x0, 0x0),
+                (0x400, 0x400),
+                (0x6e0, -0x5120),
+                (0x708, 0x6e0),
+                (0xbc8, -0x4c38),
+                (0xc60, 0xba0),
+                (0x6750, 0x6120),
+                (0x6830, 0x6230),
+                (0x6a00, 0x6400),
+                (0x771a, 0x6eea),
+                (0x7a00, 0x71d0),
+                (0x7a30, 0x7230),
+                (0x9000, 0x8800),
             ],
         );
     }
