@@ -1411,6 +1411,34 @@ mod tests {
             std::fs::write(&path, &t).unwrap();
             eprintln!("wrote our T(source) to {path} ({} bytes)", t.len());
         }
+        // REF_TSRC=<path>: decode against a PROVIDED T(source) (e.g. genuine's
+        // lab dump) with OUR copy rift, to isolate T(source) bugs from rift/decode.
+        if let Ok(refp) = std::env::var("REF_TSRC") {
+            let parsed = parse(&delta).unwrap();
+            let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
+            let rift = build_pe_copy_rift(&base, &pp);
+            let gref = std::fs::read(&refp).unwrap();
+            let dec = crate::lzx::decompress_with_rift(
+                &gref,
+                &parsed.patch_data,
+                parsed.header.target_size as usize,
+                Some(&rift),
+            )
+            .unwrap();
+            let tpe2 = crate::pe::parse::PeInfo::parse_lenient(&truth).unwrap();
+            let total = (0..dec.len().min(truth.len())).filter(|&i| dec[i] != truth[i]).count();
+            let idata = tpe2
+                .sections
+                .iter()
+                .find(|s| s.name == ".idata")
+                .map(|s| {
+                    let a = s.raw_offset as usize;
+                    let e = (a + s.raw_size as usize).min(truth.len()).min(dec.len());
+                    (a..e).filter(|&i| dec[i] != truth[i]).count()
+                })
+                .unwrap_or(0);
+            eprintln!("REF_TSRC decode: total diff={total} .idata={idata} (genuine T(source) + our rift)");
+        }
         if std::env::var("RIFTDUMP").is_ok() {
             let parsed = parse(&delta).unwrap();
             let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
