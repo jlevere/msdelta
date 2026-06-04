@@ -1555,19 +1555,8 @@ pub(crate) fn is_managed_pe(buf: &[u8]) -> bool {
 /// PE32+, and the optional header starts at e_lfanew + 4 (signature) + 20
 /// (COFF file header), so the absolute offset is e_lfanew + 0x58.
 pub(crate) fn pe_checksum_offset(data: &[u8]) -> Option<usize> {
-    if data.len() < 0x40 {
-        return None;
-    }
-    let e_lfanew = u32::from_le_bytes(data[0x3C..0x40].try_into().unwrap()) as usize;
-    if data.get(e_lfanew..e_lfanew + 4) != Some(b"PE\0\0") {
-        return None;
-    }
-    let off = e_lfanew + 0x58;
-    if off + 4 <= data.len() {
-        Some(off)
-    } else {
-        None
-    }
+    let off = crate::pe::structs::pe_header_offset(data)? + 0x58;
+    (off + 4 <= data.len()).then_some(off)
 }
 
 /// Zero the optional-header CheckSum in a reference buffer. msdelta normalizes
@@ -1581,14 +1570,11 @@ pub(crate) fn zero_pe_checksum(data: &mut [u8]) {
 }
 
 pub(crate) fn pe_timestamp(data: &[u8]) -> u32 {
-    if data.len() < 0x40 {
-        return 0;
+    match crate::pe::structs::pe_header_offset(data) {
+        // COFF TimeDateStamp at PE signature + 8.
+        Some(pe_off) => crate::pe::structs::read_u32(data, pe_off + 8),
+        None => 0,
     }
-    let pe_off = u32::from_le_bytes(data[0x3C..0x40].try_into().unwrap()) as usize;
-    if pe_off + 12 > data.len() {
-        return 0;
-    }
-    u32::from_le_bytes(data[pe_off + 8..pe_off + 12].try_into().unwrap())
 }
 
 pub(crate) fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
