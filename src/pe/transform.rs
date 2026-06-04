@@ -1583,6 +1583,43 @@ fn is_i386_native_pe(buf: &[u8]) -> bool {
     true
 }
 
+/// Is `buf` a managed (.NET / CLI) PE image -- one carrying a CLR runtime
+/// header (data directory 14, `IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR`)? Such
+/// images (regular assemblies, `.winmd`, resource satellites) are transformed
+/// through the CLI metadata/disasm pipeline, which this crate does not implement.
+/// Screening here -- on the reference image, before touching the (CLI-shaped and
+/// differently-framed) preprocess stream -- lets `apply` reject them cleanly with
+/// `Error::Unsupported` instead of failing deep in the bitstream parser.
+///
+/// Hand-parses just the header (no `goblin`, which over-validates some genuine
+/// system images), handling both PE32 (data dirs at opt+0x60) and PE32+
+/// (opt+0x70). Returns false for anything not a well-formed PE with a non-empty
+/// data directory 14.
+pub(crate) fn is_managed_pe(buf: &[u8]) -> bool {
+    let rd_u16 = |o: usize| buf.get(o..o + 2).map(|b| u16::from_le_bytes(b.try_into().unwrap()));
+    let rd_u32 = |o: usize| buf.get(o..o + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap()));
+
+    let Some(e) = rd_u32(0x3c).map(|v| v as usize) else {
+        return false;
+    };
+    if buf.get(e..e + 4) != Some(b"PE\0\0") {
+        return false;
+    }
+    let opt = e + 24;
+    // NumberOfRvaAndSizes + data-directory base differ by optional-header magic.
+    let (num_rva_off, dd_base) = match rd_u16(opt) {
+        Some(0x10b) => (opt + 92, opt + 96),  // PE32
+        Some(0x20b) => (opt + 108, opt + 112), // PE32+
+        _ => return false,
+    };
+    const COM_DIR: usize = 14;
+    if rd_u32(num_rva_off).unwrap_or(0) as usize <= COM_DIR {
+        return false;
+    }
+    // data directory 14 VirtualAddress != 0 => CLR header present => managed.
+    rd_u32(dd_base + COM_DIR * 8).unwrap_or(0) != 0
+}
+
 /// File offset of the PE optional-header CheckSum field (4 bytes), if `data`
 /// is a PE. CheckSum sits at optional-header offset 0x40 for both PE32 and
 /// PE32+, and the optional header starts at e_lfanew + 4 (signature) + 20

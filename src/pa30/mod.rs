@@ -169,11 +169,18 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
     }
 
     let (caller_rift, pp) = if parsed.header.file_type != 1 && !parsed.preprocess.is_empty() {
+        // Managed (.NET / CLI) images go through the CLI metadata/disasm pipeline
+        // we do not implement. Screen on the reference's CLR header FIRST -- the
+        // CLI preprocess stream is differently framed and would otherwise fail
+        // deep in the bitstream parser. Reject cleanly instead.
+        if crate::pe::transform::is_managed_pe(reference) {
+            return Err(Error::Unsupported(
+                "CLI metadata transform (managed/.NET image)",
+            ));
+        }
         let pp = parse_pe_preprocess(&parsed.preprocess)?;
-        // Managed (.NET) target: the CLI metadata/map transforms are not yet
-        // implemented (we parse and discard those buffers). Decoding anyway
-        // produces silently-wrong bytes that only surface as a late hash
-        // mismatch, so refuse up front. See TODO.md (PE transform pipeline).
+        // Belt-and-suspenders: some managed deltas carry CLI buffers in the
+        // preprocess without a CLR header surviving in the reference.
         if pp.cli_bytes > 0 {
             return Err(Error::Unsupported(
                 "CLI metadata transform (managed/.NET image)",
