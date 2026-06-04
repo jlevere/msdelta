@@ -135,12 +135,91 @@ pub(super) fn read_compression_lengths(
 }
 
 /// Core decompression implementation shared by `decompress` and `decompress_partial`.
+///
+/// When `copy_src` is `Some`, it is filled in lockstep with `output`: one
+/// `i64` per output byte giving the **reference offset** the byte was copied
+/// from, or `-1` for a literal supplied by the patch. Bytes copied from the
+/// already-reconstructed `output` (LZ back-references) inherit the copy-source
+/// of the region they copy, so the reference provenance propagates through
+/// back-references. This both flags copied-from-reference bytes (`>= 0`) -- the
+/// genuine "transform marker" gate -- and, by inverting against a known target,
+/// reconstructs genuine's transformed source `T(source)` at every copied offset.
+/// Copy `len` bytes into `output` for one match at output position `dst_pos`
+/// with `distance` (source = dst_pos - distance). The source range may lie in
+/// the reference (`< ref_len`), in the already-decoded output (`>= ref_len`,
+/// possibly overlapping), or span the boundary. `copy_src` (when present)
+/// records each byte's reference provenance. The caller advances its position by
+/// `len`. Shared by the fixed-distance path and the SOURCE_COPY rift-segment walk.
+fn copy_one(
+    output: &mut Vec<u8>,
+    mut copy_src: Option<&mut Vec<i64>>,
+    reference: &[u8],
+    ref_len: u64,
+    dst_pos: u64,
+    distance: i64,
+    len: u64,
+) -> Result<()> {
+    let src_start = (dst_pos as i64 - distance) as u64;
+    if src_start.checked_add(len).is_some_and(|e| e <= ref_len) {
+        // Entirely from the reference.
+        let s = src_start as usize;
+        let e = s + len as usize;
+        if e > reference.len() {
+            return Err(Error::Malformed("source copy out of reference bounds"));
+        }
+        output.extend_from_slice(&reference[s..e]);
+        if let Some(p) = copy_src.as_deref_mut() {
+            p.extend((s..e).map(|x| x as i64));
+        }
+    } else if src_start >= ref_len {
+        // Entirely from the output (LZ back-reference; may overlap).
+        let out_start = (src_start - ref_len) as usize;
+        if out_start >= output.len() {
+            return Err(Error::Malformed("back-reference out of output bounds"));
+        }
+        if out_start + len as usize <= output.len() {
+            output.extend_from_within(out_start..out_start + len as usize);
+            if let Some(p) = copy_src.as_deref_mut() {
+                p.extend_from_within(out_start..out_start + len as usize);
+            }
+        } else {
+            for k in 0..len as usize {
+                let idx = out_start + k;
+                let byte = output[idx];
+                output.push(byte);
+                if let Some(p) = copy_src.as_deref_mut() {
+                    p.push(p[idx]);
+                }
+            }
+        }
+    } else {
+        // Spans the reference/output boundary -- split.
+        let ref_bytes = (ref_len - src_start) as usize;
+        let out_bytes = len as usize - ref_bytes;
+        output.extend_from_slice(&reference[src_start as usize..ref_len as usize]);
+        if let Some(p) = copy_src.as_deref_mut() {
+            p.extend((src_start as usize..ref_len as usize).map(|x| x as i64));
+        }
+        for i in 0..out_bytes {
+            if i >= output.len() {
+                return Err(Error::Malformed("back-reference out of output bounds"));
+            }
+            output.push(output[i]);
+            if let Some(p) = copy_src.as_deref_mut() {
+                p.push(p[i]);
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn decompress_into(
     reference: &[u8],
     patch_data: &[u8],
     target_size: usize,
     caller_rift: Option<&rift::RiftTable>,
     output: &mut Vec<u8>,
+    mut copy_src: Option<&mut Vec<i64>>,
 ) -> Result<()> {
     if patch_data.is_empty() {
         return if target_size == 0 {
@@ -182,6 +261,9 @@ pub(super) fn decompress_into(
 
     let mut seg_idx = 0;
     output.reserve(target_size);
+    if let Some(p) = copy_src.as_deref_mut() {
+        p.reserve(target_size);
+    }
     let mut lru: [i64; 3] = [0; 3];
     let mut pos: u64 = ref_len as u64;
     let end: u64 = pos + target_size as u64;
@@ -205,6 +287,9 @@ pub(super) fn decompress_into(
 
         if match_len == 1 && raw_offset < 256 {
             output.push(raw_offset as u8);
+            if let Some(p) = copy_src.as_deref_mut() {
+                p.push(-1);
+            }
             pos += 1;
             continue;
         }
@@ -232,54 +317,47 @@ pub(super) fn decompress_into(
             }
         }
 
-        let src_start = (pos as i64 - distance) as u64;
-        if src_start
-            .checked_add(copy_len)
-            .is_some_and(|end| end <= ref_len as u64)
-        {
-            // Entire copy from reference -- bulk copy
-            let start = src_start as usize;
-            let end = start + copy_len as usize;
-            if end > reference.len() {
-                return Err(Error::Malformed("source copy out of reference bounds"));
-            }
-            output.extend_from_slice(&reference[start..end]);
-            pos += copy_len;
-        } else if src_start >= ref_len as u64 {
-            // Entire copy from output -- may overlap (like LZ back-reference)
-            let out_start = (src_start - ref_len as u64) as usize;
-            if out_start >= output.len() {
-                return Err(Error::Malformed("back-reference out of output bounds"));
-            }
-            if out_start + (copy_len as usize) <= output.len() {
-                // Non-overlapping: bulk copy via extend_from_within
-                let start = out_start;
-                let len = copy_len as usize;
-                output.extend_from_within(start..start + len);
-            } else {
-                // Overlapping: byte-by-byte (LZ repeat pattern)
-                for _ in 0..copy_len {
-                    let idx = (pos as i64 - distance) as u64 - ref_len as u64;
-                    let byte = output[idx as usize];
-                    output.push(byte);
-                    pos += 1;
-                }
-                continue; // pos already advanced
+        // SOURCE_COPY re-anchors at every rift breakpoint WITHIN the copy:
+        // genuine `Decompressor::Run` (the 0x54000 case) walks rift segments,
+        // setting source = output_pos + segment_offset and jumping to the next
+        // segment when its breakpoint falls inside the copy. A flat fixed-distance
+        // copy is wrong whenever a SOURCE copy spans a breakpoint (e.g. docprop
+        // .idata). Other distance classes use a fixed distance (no rift walk).
+        if raw_offset == SOURCE_COPY {
+            // Re-anchor the source at every rift breakpoint inside the copy: per
+            // segment, source = output_pos + segment_offset (distance = -offset).
+            let mut remaining = copy_len;
+            let mut p = pos;
+            while remaining > 0 {
+                let (seg_off, next_bp) = ort.segment_at(p as i64);
+                let avail = (next_bp as u64).saturating_sub(p).max(1);
+                let chunk = remaining.min(avail);
+                copy_one(
+                    &mut *output,
+                    copy_src.as_deref_mut(),
+                    reference,
+                    ref_len as u64,
+                    p,
+                    -seg_off,
+                    chunk,
+                )?;
+                p += chunk;
+                remaining -= chunk;
             }
             pos += copy_len;
-        } else {
-            // Copy spans reference/output boundary -- split
-            let ref_bytes = (ref_len as u64 - src_start) as usize;
-            let out_bytes = copy_len as usize - ref_bytes;
-            output.extend_from_slice(&reference[src_start as usize..ref_len]);
-            for i in 0..out_bytes {
-                if i >= output.len() {
-                    return Err(Error::Malformed("back-reference out of output bounds"));
-                }
-                output.push(output[i]);
-            }
-            pos += copy_len;
+            continue;
         }
+
+        copy_one(
+            &mut *output,
+            copy_src.as_deref_mut(),
+            reference,
+            ref_len as u64,
+            pos,
+            distance,
+            copy_len,
+        )?;
+        pos += copy_len;
     }
 
     if output.len() != target_size {

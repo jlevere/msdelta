@@ -1,5 +1,6 @@
 //! Minimal PE parser extracting the fields needed for MSDelta transforms.
 
+use crate::pe::structs::PeView;
 use crate::{Error, Result};
 
 /// Parsed PE metadata needed for delta transforms.
@@ -87,98 +88,48 @@ impl PeInfo {
     /// the transforms need (image base, size, sections, data directories) by
     /// walking the headers directly. Supports PE32 and PE32+.
     pub fn parse_lenient(data: &[u8]) -> Result<Self> {
-        let rd16 = |o: usize| -> u16 {
-            data.get(o..o + 2)
-                .map(|b| u16::from_le_bytes(b.try_into().unwrap()))
-                .unwrap_or(0)
-        };
-        let rd32 = |o: usize| -> u32 {
-            data.get(o..o + 4)
-                .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
-                .unwrap_or(0)
-        };
-        let rd64 = |o: usize| -> u64 {
-            data.get(o..o + 8)
-                .map(|b| u64::from_le_bytes(b.try_into().unwrap()))
-                .unwrap_or(0)
-        };
+        let pe = PeView::parse(data).ok_or(Error::Malformed("PE: bad headers"))?;
 
-        if data.len() < 0x40 {
-            return Err(Error::Malformed("PE: too small"));
-        }
-        let e = rd32(0x3c) as usize;
-        if data.get(e..e + 4) != Some(b"PE\0\0") {
-            return Err(Error::Malformed("PE: bad signature"));
-        }
-        let num_sections = rd16(e + 6) as usize;
-        let size_of_opt = rd16(e + 20) as usize;
-        let timestamp = rd32(e + 8);
-        let opt = e + 24;
-        let magic = rd16(opt);
-        let is_64bit = magic == 0x20b;
-        if magic != 0x10b && magic != 0x20b {
-            return Err(Error::Malformed("PE: bad optional magic"));
-        }
-        // PE32: ImageBase u32 @ opt+28, NumberOfRvaAndSizes @ opt+92, dirs @ opt+96.
-        // PE32+: ImageBase u64 @ opt+24, NumberOfRvaAndSizes @ opt+108, dirs @ opt+112.
-        let (image_base, size_of_image, check_sum, num_rva, dir_base) = if is_64bit {
-            (
-                rd64(opt + 24),
-                rd32(opt + 56),
-                rd32(opt + 64),
-                rd32(opt + 108),
-                opt + 112,
-            )
-        } else {
-            (
-                rd32(opt + 28) as u64,
-                rd32(opt + 56),
-                rd32(opt + 64),
-                rd32(opt + 92),
-                opt + 96,
-            )
-        };
+        let data_directories = (0..16)
+            .map(|i| {
+                pe.data_directory(i)
+                    .map(|d| (d.virtual_address.get(), d.size.get()))
+                    .unwrap_or((0, 0))
+            })
+            .collect();
 
-        let mut data_directories = vec![(0u32, 0u32); 16];
-        for (i, slot) in data_directories
-            .iter_mut()
-            .enumerate()
-            .take((num_rva as usize).min(16))
-        {
-            let d = dir_base + i * 8;
-            *slot = (rd32(d), rd32(d + 4));
-        }
-
-        let sec_base = opt + size_of_opt;
-        let mut sections = Vec::with_capacity(num_sections);
-        for i in 0..num_sections {
-            let s = sec_base + i * 40;
-            if s + 40 > data.len() {
-                break;
-            }
-            let name = String::from_utf8_lossy(
-                &data[s..s + 8][..data[s..s + 8].iter().position(|&b| b == 0).unwrap_or(8)],
-            )
-            .to_string();
-            sections.push(SectionInfo {
-                name,
-                virtual_size: rd32(s + 8),
-                virtual_address: rd32(s + 12),
-                raw_size: rd32(s + 16),
-                raw_offset: rd32(s + 20),
-                characteristics: rd32(s + 36),
-            });
-        }
+        let sections = pe
+            .sections()
+            .map(|s| {
+                let len = s.name.iter().position(|&b| b == 0).unwrap_or(8);
+                SectionInfo {
+                    name: String::from_utf8_lossy(&s.name[..len]).into_owned(),
+                    virtual_size: s.virtual_size.get(),
+                    virtual_address: s.virtual_address.get(),
+                    raw_size: s.size_of_raw_data.get(),
+                    raw_offset: s.pointer_to_raw_data.get(),
+                    characteristics: s.characteristics.get(),
+                }
+            })
+            .collect();
 
         Ok(PeInfo {
-            image_base,
-            size_of_image,
-            timestamp,
-            checksum: check_sum,
-            is_64bit,
+            image_base: pe.image_base(),
+            size_of_image: pe.size_of_image(),
+            timestamp: pe.timestamp(),
+            checksum: pe.check_sum(),
+            is_64bit: pe.is_64bit(),
             sections,
             data_directories,
         })
+    }
+
+    /// The `(VirtualAddress, Size)` of data directory `idx` (see
+    /// [`crate::pe::structs::dir`]) if it is present *and* non-empty (RVA != 0).
+    /// Returns `None` for an absent or zero-RVA directory -- the "is this
+    /// directory actually here?" gate every transform applies before mapping it.
+    pub fn data_dir(&self, idx: usize) -> Option<(u32, u32)> {
+        self.data_directories.get(idx).copied().filter(|v| v.0 != 0)
     }
 
     /// Check if a virtual address falls within this PE's image range.
@@ -205,4 +156,3 @@ mod tests {
         }
     }
 }
-

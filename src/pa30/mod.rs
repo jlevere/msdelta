@@ -23,11 +23,126 @@ use signature::hex_str;
 
 use crate::{Error, Result};
 
+/// Build the decompressor's copy-placement rift in the TARGET FILE-OFFSET
+/// domain. The decompressor indexes the rift by `pos = ref_len +
+/// target_file_offset` and, for a source copy, resolves it to the matching
+/// SOURCE file offset. Genuine `PreProcessor::PreProcessPEForApply` computes
+/// this as (native, non-.NET reduction; the CLI `Sum` is identity):
+///
+///   final = Reverse( Multiply( Multiply(rift_B, io2rva), io2rva ) )
+///
+/// where `rift_B` is the decoded preprocess rift (source RVA -> target RVA)
+/// and `io2rva` = `SectionHelper::ExtractImageOffsetToRva` maps file offset ->
+/// RVA. Semantically that conjugation is `io2rva^-1 . rift_B^-1 . io2rva`, i.e.
+/// for a target file offset:
+///   target_fo --io2rva--> rva --rift_B^-1--> source_rva --io2rva^-1--> source_fo
+///
+/// Genuine holds only the SOURCE image, so it uses the source `io2rva` on both
+/// sides; that is exact on amd64 (FileAlignment == SectionAlignment, so file
+/// offset == RVA). On i386 (FileAlignment 0x200 != SectionAlignment) the TARGET
+/// file offset of an RVA-preserved tail section differs from the SOURCE file
+/// offset, so the input side must use the TARGET file-offset <-> RVA map. We
+/// have it: `pp.pe_rift` is the target RVA -> target file-offset map, so its
+/// reverse is the target `io2rva`. Using the target map on the input side and
+/// the source map on the output side makes the relayout exact for both arches:
+///
+///   final(target_fo) = io2rva_src^-1( rift_B^-1( io2rva_tgt(target_fo) ) )
+fn build_pe_copy_rift(
+    reference: &[u8],
+    pp: &preprocess::PePreprocess,
+) -> crate::lzx::rift::RiftTable {
+    use crate::lzx::rift::RiftEntry;
+    let ref_len = reference.len() as i64;
+
+    let Ok(src_pe) = crate::pe::parse::PeInfo::parse_lenient(reference) else {
+        // Reference is not a parseable PE: fall back to the RVA-domain
+        // concatenation (pe_rift then preprocess_rift), sorted by source.
+        let mut combined = pp.pe_rift.clone();
+        for e in &pp.preprocess_rift.entries {
+            combined.entries.push(*e);
+        }
+        combined.entries.sort_by_key(|e| e.source);
+        return combined;
+    };
+
+    // io2rva for the SOURCE image, exactly as ExtractImageOffsetToRva.
+    let io2rva_src = build_pe_io2rva(&src_pe);
+
+    // Genuine `PreProcessPEForApply` builds the FORWARD chain in the source
+    // file-offset -> target file-offset direction and applies a SINGLE
+    // `Reverse` to the whole thing (then `Sum`s with the empty CLI map, which
+    // is identity, so no Sum is needed here):
+    //
+    //   forward(source_fo) = pe_rift( preprocess_rift( io2rva_src(source_fo) ) )
+    //                      = source_fo --io2rva_src--> rva
+    //                                  --preprocess_rift--> target_rva
+    //                                  --pe_rift--> target_fo
+    //
+    // (`a.multiply(b)` composes as `b . a`, applied innermost-first, so the
+    // left-to-right `io2rva_src . preprocess_rift . pe_rift` is exactly that
+    // chain.) `pe_rift` is the target RVA -> target file-offset map, used
+    // directly -- no per-factor reverse. The single `Reverse` of the forward
+    // chain handles the i386 FileAlignment relayout's overlaps and gaps via the
+    // genuine working-buffer interval logic, which a naive swap cannot.
+    let forward = io2rva_src
+        .multiply(&pp.preprocess_rift)
+        .multiply(&pp.pe_rift);
+    let composed = forward.reverse();
+
+    // composed maps target file offset -> source file offset. Fold into the
+    // decompressor's keying: entry source = ref_len + target_fo, target = src_fo.
+    let mut out = crate::lzx::rift::RiftTable {
+        entries: Vec::with_capacity(composed.entries.len()),
+    };
+    for e in &composed.entries {
+        // wrapping: composed entries can carry near-i64::MIN/MAX wrap-boundary
+        // values; the sum wraps (correct) in release but would overflow-panic in
+        // a debug build. The decompressor's offset lookups are wrap-consistent.
+        out.entries.push(RiftEntry {
+            source: ref_len.wrapping_add(e.source),
+            target: e.target,
+        });
+    }
+    out.entries.sort_by_key(|e| e.source);
+    out
+}
+
+/// Build `io2rva` exactly as `SectionHelper::ExtractImageOffsetToRva`: an
+/// initial `Add(0, 0)` entry, then per section (skipping those whose
+/// VirtualAddress == 0 or PointerToRawData == 0) an `Add(PointerToRawData,
+/// VirtualAddress)` -- i.e. `{source = file offset, target = RVA}` -- sorted by
+/// source. Maps file offset -> RVA.
+fn build_pe_io2rva(pe: &crate::pe::parse::PeInfo) -> crate::lzx::rift::RiftTable {
+    use crate::lzx::rift::RiftEntry;
+    let mut entries = vec![RiftEntry {
+        source: 0,
+        target: 0,
+    }];
+    for s in &pe.sections {
+        if s.virtual_address == 0 || s.raw_offset == 0 {
+            continue;
+        }
+        entries.push(RiftEntry {
+            source: s.raw_offset as i64,
+            target: s.virtual_address as i64,
+        });
+    }
+    entries.sort_by_key(|e| e.source);
+    crate::lzx::rift::RiftTable { entries }
+}
+
 /// Apply a delta to a reference buffer.
 ///
 /// Supports PA30, PA31, and PA19 formats.
 /// Equivalent to `ApplyDeltaB(0, reference, delta, &out)` on Windows.
 pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
+    apply_impl(reference, delta, true)
+}
+
+/// Apply core with an optional target-hash check. `verify = false` returns the
+/// reconstructed bytes even when they fail the embedded hash -- used by the
+/// coverage harness to inspect *where* a decode diverges.
+pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result<Vec<u8>> {
     if delta.len() >= 4 && &delta[..4] == PA19_MAGIC {
         return crate::pa19::apply(reference, delta);
     }
@@ -44,7 +159,7 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
     // target the delta was diffed against). target_size is the source length.
     if parsed.header.file_type_set & 0x100 != 0 {
         let output = reverse::apply_reversal(reference, &parsed.patch_data, target_size)?;
-        if parsed.header.hash_alg_id != 0 && !parsed.header.target_hash.is_empty() {
+        if verify && parsed.header.hash_alg_id != 0 && !parsed.header.target_hash.is_empty() {
             let computed = get_signature(&output, parsed.header.hash_alg_id as u32)?;
             if computed.hash != parsed.header.target_hash {
                 return Err(Error::HashMismatch {
@@ -57,122 +172,24 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
     }
 
     let (caller_rift, pp) = if parsed.header.file_type != 1 && !parsed.preprocess.is_empty() {
+        // Managed (.NET / CLI) images go through the CLI metadata/disasm pipeline
+        // we do not implement. Screen on the reference's CLR header FIRST -- the
+        // CLI preprocess stream is differently framed and would otherwise fail
+        // deep in the bitstream parser. Reject cleanly instead.
+        if crate::pe::transform::is_managed_pe(reference) {
+            return Err(Error::Unsupported(
+                "CLI metadata transform (managed/.NET image)",
+            ));
+        }
         let pp = parse_pe_preprocess(&parsed.preprocess)?;
-        // Managed (.NET) target: the CLI metadata/map transforms are not yet
-        // implemented (we parse and discard those buffers). Decoding anyway
-        // produces silently-wrong bytes that only surface as a late hash
-        // mismatch, so refuse up front. See TODO.md (PE transform pipeline).
+        // Belt-and-suspenders: some managed deltas carry CLI buffers in the
+        // preprocess without a CLR header surviving in the reference.
         if pp.cli_bytes > 0 {
             return Err(Error::Unsupported(
                 "CLI metadata transform (managed/.NET image)",
             ));
         }
-        // Build the decompressor's copy-placement rift in the TARGET FILE-OFFSET
-        // domain. The decompressor indexes the rift by `pos = ref_len +
-        // target_file_offset` and, for a source copy, reads `reference[pos -
-        // distance]`; with the rift offset folded in this resolves to the
-        // matching SOURCE file offset. So each entry must read
-        //   { source: ref_len + new_file_offset, target: old_file_offset }
-        // at every section boundary where the new->old file-offset shift changes.
-        //
-        // `pp.pe_rift` carries the NEW image's `RVA -> file-offset` map (its
-        // entries are exactly the new section starts: source = new RVA, target =
-        // new file offset). Section RVAs are preserved across the delta, so we
-        // match each new section to the old one by RVA (parsed from the
-        // reference) and emit the new->old file-offset correspondence.
-        //
-        // On amd64 FileAlignment == SectionAlignment, so RVA == file offset and
-        // this reduces to the identity the old code happened to produce; on i386
-        // (FileAlignment 0x200) it is what actually relays the tail sections.
-        //
-        // The intra-section RVA changes carried by `pp.preprocess_rift` are ALSO
-        // copy-placement: where bytes moved *within* a section between source and
-        // target, the copy must follow that shift too. We fold those breakpoints
-        // into the same file-offset rift below. Field-level fixups that the copy
-        // cannot express (e.g. relocation rebasing) remain post-decompress passes.
-        use crate::lzx::rift::RiftEntry;
-        let ref_len = reference.len() as i64;
-        let mut combined = crate::lzx::rift::RiftTable {
-            entries: Vec::new(),
-        };
-        if let Ok(src_pe) = crate::pe::parse::PeInfo::parse_lenient(reference) {
-            // NEW section starts: pe_rift entry source = new RVA, target = new FO.
-            // Convert any TARGET RVA to a TARGET file offset by locating the
-            // bracketing new-section start (RVA -> FO is a constant shift inside a
-            // section).
-            let new_starts: Vec<(u32, u32)> = pp
-                .pe_rift
-                .entries
-                .iter()
-                .map(|e| (e.source as u32, e.target as u32))
-                .collect();
-            let tgt_rva_to_fo = |rva: u32| -> Option<u32> {
-                let mut best: Option<(u32, u32)> = None;
-                for &(srva, sfo) in &new_starts {
-                    if srva <= rva && best.map(|(b, _)| srva >= b).unwrap_or(true) {
-                        best = Some((srva, sfo));
-                    }
-                }
-                best.map(|(srva, sfo)| sfo + (rva - srva))
-            };
-            // SOURCE RVA -> SOURCE file offset via the reference section table.
-            let src_rva_to_fo = |rva: u32| -> Option<u32> {
-                src_pe
-                    .sections
-                    .iter()
-                    .find(|s| {
-                        rva >= s.virtual_address
-                            && rva < s.virtual_address + s.virtual_size.max(s.raw_size)
-                    })
-                    .map(|s| s.raw_offset + (rva - s.virtual_address))
-            };
-
-            // Section-boundary entries (new FO -> old FO, matched by RVA).
-            for e in &pp.pe_rift.entries {
-                let new_rva = e.source as u32;
-                let new_fo = e.target as u32;
-                if let Some(s) = src_pe.sections.iter().find(|s| {
-                    new_rva >= s.virtual_address
-                        && new_rva < s.virtual_address + s.virtual_size.max(s.raw_size)
-                }) {
-                    let old_fo = s.raw_offset + (new_rva - s.virtual_address);
-                    combined.entries.push(RiftEntry {
-                        source: ref_len + new_fo as i64,
-                        target: old_fo as i64,
-                    });
-                } else {
-                    combined.entries.push(RiftEntry {
-                        source: ref_len + new_fo as i64,
-                        target: new_fo as i64,
-                    });
-                }
-            }
-
-            // Intra-section breakpoints from the preprocess rift: at each
-            // (source RVA -> target RVA) entry, the copy source shifts. Express
-            // it in the file-offset domain: break at the TARGET file offset, read
-            // the SOURCE file offset.
-            for e in &pp.preprocess_rift.entries {
-                let src_rva = e.source as u32;
-                let tgt_rva = e.target as u32;
-                if let (Some(tgt_fo), Some(src_fo)) =
-                    (tgt_rva_to_fo(tgt_rva), src_rva_to_fo(src_rva))
-                {
-                    combined.entries.push(RiftEntry {
-                        source: ref_len + tgt_fo as i64,
-                        target: src_fo as i64,
-                    });
-                }
-            }
-        } else {
-            // Reference is not a parseable PE: fall back to the previous
-            // behaviour (RVA-domain pe_rift + preprocess_rift concatenation).
-            combined = pp.pe_rift.clone();
-            for e in &pp.preprocess_rift.entries {
-                combined.entries.push(*e);
-            }
-        }
-        combined.entries.sort_by_key(|e| e.source);
+        let combined = build_pe_copy_rift(reference, &pp);
         (Some(combined), Some(pp))
     } else {
         (None, None)
@@ -182,9 +199,24 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
     // optional-header CheckSum before applying. Mirror that so copies resolve
     // identically (the target's real checksum is carried as literals).
     let pe_ref;
-    let decode_ref: &[u8] = if pp.is_some() {
+    let decode_ref: &[u8] = if let Some(pp) = &pp {
         let mut r = reference.to_vec();
         crate::pe::transform::zero_pe_checksum(&mut r);
+        // Build T(source): transform the reference exactly as genuine
+        // PreProcessPEForApply does before the LZX copy stage, so copies land
+        // bit-identical. i386 relative calls/jmps + relocation operands, gated
+        // by the header transform-selection flags. No-op on amd64 (handled by a
+        // separate pass) and on images whose flags leave these transforms off.
+        if let Ok(src_pe) = crate::pe::parse::PeInfo::parse_lenient(&r) {
+            crate::pe::transform::build_transformed_source(
+                &mut r,
+                &src_pe,
+                &pp.preprocess_rift,
+                parsed.header.flags as u64,
+                pp.target_image_base,
+                pp.target_timestamp,
+            );
+        }
         pe_ref = r;
         &pe_ref
     } else {
@@ -222,39 +254,9 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
 
     if let Some(pp) = &pp {
         apply_pe_timestamp_fixup(reference, pp, &mut output)?;
-
-        // AMD64 .pdata RVA remap (RiftTransformPdataAmd64 apply pass): rewrite
-        // each RUNTIME_FUNCTION's RVA fields through the preprocess rift so they
-        // point at the target layout. Only for x64 images; the rift maps
-        // source-RVA -> target-RVA, and is a no-op when empty (e.g. cabinet).
-        if parsed.header.file_type == crate::pe::transform::FILE_TYPE_AMD64
-            && !pp.preprocess_rift.entries.is_empty()
-        {
-            if let Ok(out_pe) = crate::pe::parse::PeInfo::parse(&output) {
-                const EXCEPTION_DIR: usize = 3;
-                if let Some(&(pdata_rva, pdata_size)) =
-                    out_pe.data_directories.get(EXCEPTION_DIR)
-                {
-                    // Translate the exception-directory RVA to a file offset via
-                    // the output's own section table (file offset != RVA here).
-                    let pdata_file_off = out_pe
-                        .sections
-                        .iter()
-                        .find(|s| {
-                            pdata_rva >= s.virtual_address
-                                && pdata_rva < s.virtual_address + s.virtual_size.max(s.raw_size)
-                        })
-                        .map(|s| s.raw_offset + (pdata_rva - s.virtual_address))
-                        .unwrap_or(pdata_rva);
-                    crate::pe::transform::remap_pdata_rvas(
-                        &mut output,
-                        pdata_file_off,
-                        pdata_size,
-                        &pp.preprocess_rift,
-                    );
-                }
-            }
-        }
+        // AMD64 DisasmX64 + PdataX64 now run as SOURCE transforms in
+        // build_transformed_source (decode_ref = T(source)), mirroring genuine
+        // PreProcessPEForApply -- so they are no longer post-decode passes here.
     }
 
     // The x86 0xE8/0xE9 CALL/JMP un-translation is gated by header flag bit 0:
@@ -267,7 +269,7 @@ pub fn apply(reference: &[u8], delta: &[u8]) -> Result<Vec<u8>> {
         crate::pe::transform::undo_x86_e8_translation(&mut output);
     }
 
-    if parsed.header.hash_alg_id != 0 && !parsed.header.target_hash.is_empty() {
+    if verify && parsed.header.hash_alg_id != 0 && !parsed.header.target_hash.is_empty() {
         let computed = get_signature(&output, parsed.header.hash_alg_id as u32)?;
         if computed.hash != parsed.header.target_hash {
             return Err(Error::HashMismatch {
@@ -977,19 +979,17 @@ mod tests {
         let cab_out = apply(&cab_old, &cab_delta).unwrap();
         assert_eq!(cab_out, cab_new, "cabinet control regressed");
 
-        // comctl32 amd64: the .pdata UnwindData remap plus the file-offset rift
-        // composition drop the diff to 144 (the residual is the unwind-info
-        // relayout, a separate pass).
+        // comctl32 amd64: BYTE-EXACT. The amd64 T(source) architecture --
+        // DisasmX64 (RIP-relative disp32 / rel32) and PdataX64 (RUNTIME_FUNCTION
+        // RVA fields) run as SOURCE transforms before the LZX copy stage, exactly
+        // as genuine PreProcessPEForApply does -- so both copied and literal-
+        // provided bytes land the transformed value. 644585 -> 0.
         let old = std::fs::read(dir.join("comctl32_old.dll")).unwrap();
         let delta = std::fs::read(dir.join("comctl32.delta")).unwrap();
         let truth = std::fs::read(dir.join("comctl32_new.dll")).unwrap();
         let out = apply(&old, &delta).unwrap();
         assert_eq!(out.len(), truth.len(), "comctl32 length");
-        let pdata = section_diff(&truth, &out, ".pdata");
-        assert!(
-            pdata <= 147,
-            "comctl32 .pdata diff regressed: {pdata} (expected <= 147, was 6877 pre-remap)"
-        );
+        assert_eq!(out, truth, "comctl32 amd64 not byte-exact");
 
         // comctl32 i386 (file_type 2): the target-file-offset rift composition
         // (section boundaries + intra-section preprocess breakpoints) relays the
@@ -1025,16 +1025,809 @@ mod tests {
             section_diff(&x86_truth, &x86_out, ".data") <= 5,
             "comctl32 x86 .data regressed (was 5, pre-rift 764)"
         );
-        // Upper bounds that must not regress while the .text/.reloc transforms
-        // remain unimplemented (pre-rift these were 338983 and 73198).
-        assert!(
-            section_diff(&x86_truth, &x86_out, ".text") <= 16690,
-            "comctl32 x86 .text regressed (expected <= 16690, was 338983 pre-rift)"
+        // The full i386 transform family (T(source): relative calls/jmps,
+        // relocation operand rewrite + .reloc block rebuild, MarkNonExe gate,
+        // export-table RVA mapping) reconstructs comctl32 x86 BYTE-EXACTLY --
+        // 644585 total diffs pre-campaign -> 0.
+        assert_eq!(x86_out, x86_truth, "comctl32 x86 not byte-exact");
+    }
+
+    /// Per-section diff report for the genuine PE fixtures via the full
+    /// `apply()` path. A progress harness for the remaining transforms
+    /// (notably the i386 .reloc block rebuild). Ignored (needs the gitignored
+    /// fixtures); run with `--ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn pe_fixture_section_report() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures");
+        if !dir.join("comctl32x86.delta").exists() {
+            eprintln!("pe fixtures absent; skipping");
+            return;
+        }
+        let report = |name: &str, old: &str, delta: &str, truth: &str| {
+            let o = std::fs::read(dir.join(old)).unwrap();
+            let d = std::fs::read(dir.join(delta)).unwrap();
+            let t = std::fs::read(dir.join(truth)).unwrap();
+            let out = apply(&o, &d).unwrap();
+            let pe = crate::pe::parse::PeInfo::parse_lenient(&t).unwrap();
+            let total: usize = (0..out.len().min(t.len()))
+                .filter(|&i| out[i] != t[i])
+                .count();
+            eprintln!("{name}: total diff = {total}");
+            for s in &pe.sections {
+                let (a, len) = (s.raw_offset as usize, s.raw_size as usize);
+                let end = (a + len).min(t.len()).min(out.len());
+                let n = (a..end).filter(|&i| out[i] != t[i]).count();
+                if n > 0 {
+                    eprintln!("  {:<8} diff = {n}", s.name);
+                }
+            }
+        };
+        report(
+            "comctl32 x86",
+            "comctl32x86_old.dll",
+            "comctl32x86.delta",
+            "comctl32x86_new.dll",
         );
-        assert!(
-            section_diff(&x86_truth, &x86_out, ".reloc") <= 19453,
-            "comctl32 x86 .reloc regressed (expected <= 19453, was 73198 pre-rift)"
+        report(
+            "comctl32 amd64",
+            "comctl32_old.dll",
+            "comctl32.delta",
+            "comctl32_new.dll",
         );
+    }
+
+    /// T(source) oracle: reconstruct genuine's transformed source by inverting
+    /// the delta's copy ops against the known target (truth), then diff our
+    /// `build_transformed_source` against it BY SOURCE OFFSET + SECTION. This
+    /// isolates source-transform bugs from decode/copy/literal noise -- the
+    /// instrument for driving the remaining transforms to byte-exact. Ignored
+    /// (needs gitignored fixtures); run with `--ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn tsource_oracle() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures");
+        if !dir.join("comctl32x86.delta").exists() {
+            eprintln!("pe fixtures absent; skipping");
+            return;
+        }
+        // FIX=<matrix-fixture-dirname> runs the oracle on a coverage-matrix
+        // fixture (base.bin/forward.delta/truth.bin) instead of comctl32.
+        if let Ok(fix) = std::env::var("FIX") {
+            let fd = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("notes/pe-fixtures-matrix")
+                .join(&fix);
+            return run_tsource_oracle(
+                &fix,
+                std::fs::read(fd.join("base.bin")).unwrap(),
+                std::fs::read(fd.join("forward.delta")).unwrap(),
+                std::fs::read(fd.join("truth.bin")).unwrap(),
+            );
+        }
+        let check = |label: &str, oldf: &str, deltaf: &str, truthf: &str| {
+            let old = std::fs::read(dir.join(oldf)).unwrap();
+            let delta_raw = std::fs::read(dir.join(deltaf)).unwrap();
+            let truth = std::fs::read(dir.join(truthf)).unwrap();
+            run_tsource_oracle(label, old, delta_raw, truth);
+        };
+        check(
+            "comctl32 x86",
+            "comctl32x86_old.dll",
+            "comctl32x86.delta",
+            "comctl32x86_new.dll",
+        );
+    }
+
+    fn run_tsource_oracle(label: &str, old: Vec<u8>, delta_raw: Vec<u8>, truth: Vec<u8>) {
+        {
+            let parsed = parse(&delta_raw).unwrap();
+            let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
+            let combined = build_pe_copy_rift(&old, &pp);
+            if std::env::var("RIFTDUMP").is_ok() {
+                let spe0 = crate::pe::parse::PeInfo::parse_lenient(&old).unwrap();
+                eprintln!(
+                    "{label}: src_base={:#x} tgt_base={:#x} rift_entries={} pe_rift={}",
+                    spe0.image_base,
+                    pp.target_image_base,
+                    pp.preprocess_rift.entries.len(),
+                    pp.pe_rift.entries.len()
+                );
+                for e in pp.preprocess_rift.entries.iter().take(12) {
+                    eprintln!(
+                        "  rift src={:#x} -> tgt={:#x} (off {})",
+                        e.source,
+                        e.target,
+                        e.target - e.source
+                    );
+                }
+            }
+
+            // Copy-source map from a decode (offsets are content-independent).
+            let mut zsrc = old.clone();
+            crate::pe::transform::zero_pe_checksum(&mut zsrc);
+            let (_out, copy_src) = crate::lzx::decompress_with_copy_source(
+                &zsrc,
+                &parsed.patch_data,
+                parsed.header.target_size as usize,
+                Some(&combined),
+            )
+            .unwrap();
+
+            // observed_Tsrc[s] = truth[o] for every output byte o that copied
+            // reference offset s. This is genuine's T(source) at copied offsets.
+            let mut observed: Vec<Option<u8>> = vec![None; old.len()];
+            for (o, &s) in copy_src.iter().enumerate() {
+                if s >= 0 && (s as usize) < observed.len() && o < truth.len() {
+                    observed[s as usize] = Some(truth[o]);
+                }
+            }
+
+            // Our T(source).
+            let mut mine = old.clone();
+            crate::pe::transform::zero_pe_checksum(&mut mine);
+            let spe = crate::pe::parse::PeInfo::parse_lenient(&mine).unwrap();
+            crate::pe::transform::build_transformed_source(
+                &mut mine,
+                &spe,
+                &pp.preprocess_rift,
+                parsed.header.flags as u64,
+                pp.target_image_base,
+                pp.target_timestamp,
+            );
+
+            let sec_of = |fo: usize| -> String {
+                spe.sections
+                    .iter()
+                    .find(|s| {
+                        fo >= s.raw_offset as usize && fo < (s.raw_offset + s.raw_size) as usize
+                    })
+                    .map(|s| s.name.clone())
+                    .unwrap_or_else(|| "<hdr/gap>".into())
+            };
+            let mut by_sec = std::collections::BTreeMap::<String, usize>::new();
+            let mut covered = 0usize;
+            let mut shown = 0usize;
+            for (s, obs) in observed.iter().enumerate() {
+                let Some(t) = obs else { continue };
+                covered += 1;
+                if mine[s] != *t {
+                    let sec = sec_of(s);
+                    *by_sec.entry(sec.clone()).or_default() += 1;
+                    let want = std::env::var("SECFILTER").unwrap_or_else(|_| ".text".into());
+                    if shown < 14 && sec == want {
+                        let w = |buf: &[u8]| -> String {
+                            (s.saturating_sub(6)..(s + 6).min(buf.len()))
+                                .map(|k| format!("{:02x}", buf[k]))
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        };
+                        let g: Vec<u8> = (s.saturating_sub(6)..(s + 6).min(old.len()))
+                            .map(|k| observed[k].unwrap_or(old[k]))
+                            .collect();
+                        eprintln!("  TSDIFF fo={s:#x} [{sec}]");
+                        eprintln!("    raw    : {}", w(&old));
+                        eprintln!(
+                            "    genuine: {}",
+                            g.iter()
+                                .map(|b| format!("{b:02x}"))
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        );
+                        eprintln!("    mine   : {}", w(&mine));
+                        shown += 1;
+                    }
+                }
+            }
+            let total: usize = by_sec.values().sum();
+            eprintln!(
+                "{label}: T(source) mismatches = {total} over {covered} copied bytes; by section: {by_sec:?}"
+            );
+        };
+    }
+
+    /// Dump the .reloc block structure of raw source vs genuine truth, to ground
+    /// the block-rebuild implementation. Ignored; `--ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn reloc_structure_dump() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures");
+        if !dir.join("comctl32x86.delta").exists() {
+            return;
+        }
+        let old = std::fs::read(dir.join("comctl32x86_old.dll")).unwrap();
+        let truth = std::fs::read(dir.join("comctl32x86_new.dll")).unwrap();
+        let dump = |label: &str, img: &[u8]| {
+            let pe = crate::pe::parse::PeInfo::parse_lenient(img).unwrap();
+            let (rrva, rsize) = pe.data_directories[5];
+            let fo = pe
+                .sections
+                .iter()
+                .find(|s| {
+                    rrva >= s.virtual_address
+                        && rrva < s.virtual_address + s.virtual_size.max(s.raw_size)
+                })
+                .map(|s| (s.raw_offset + (rrva - s.virtual_address)) as usize)
+                .unwrap();
+            eprintln!("{label}: reloc rva={rrva:#x} size={rsize:#x} fo={fo:#x}");
+            let mut bo = fo;
+            let end = fo + rsize as usize;
+            let mut blocks = 0;
+            while bo + 8 <= end && blocks < 8 {
+                let page = u32::from_le_bytes(img[bo..bo + 4].try_into().unwrap());
+                let sz = u32::from_le_bytes(img[bo + 4..bo + 8].try_into().unwrap());
+                let nent = if sz >= 8 { (sz - 8) / 2 } else { 0 };
+                let first: Vec<String> = (0..nent.min(4))
+                    .map(|j| {
+                        let e = u16::from_le_bytes(
+                            img[bo + 8 + j as usize * 2..bo + 8 + j as usize * 2 + 2]
+                                .try_into()
+                                .unwrap(),
+                        );
+                        format!("t{}:{:#05x}", e >> 12, e & 0xfff)
+                    })
+                    .collect();
+                eprintln!(
+                    "  page={page:#x} size={sz:#x} nent={nent} [{}]",
+                    first.join(" ")
+                );
+                if sz < 8 {
+                    break;
+                }
+                bo += sz as usize;
+                blocks += 1;
+            }
+        };
+        dump("raw source", &old);
+        dump("genuine truth", &truth);
+
+        // Build our T(source) and compare its .reloc to truth's.
+        let delta_raw = std::fs::read(dir.join("comctl32x86.delta")).unwrap();
+        let parsed = parse(&delta_raw).unwrap();
+        let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
+        let mut mine = old.clone();
+        crate::pe::transform::zero_pe_checksum(&mut mine);
+        let spe = crate::pe::parse::PeInfo::parse_lenient(&mine).unwrap();
+        crate::pe::transform::build_transformed_source(
+            &mut mine,
+            &spe,
+            &pp.preprocess_rift,
+            parsed.header.flags as u64,
+            pp.target_image_base,
+            pp.target_timestamp,
+        );
+        dump("mine T(source)", &mine);
+        // First divergence in .reloc between mine and truth.
+        let (rrva, rsize) = spe.data_directories[5];
+        let mfo = spe
+            .sections
+            .iter()
+            .find(|s| {
+                rrva >= s.virtual_address
+                    && rrva < s.virtual_address + s.virtual_size.max(s.raw_size)
+            })
+            .map(|s| (s.raw_offset + (rrva - s.virtual_address)) as usize)
+            .unwrap();
+        let tpe = crate::pe::parse::PeInfo::parse_lenient(&truth).unwrap();
+        let (trva, _) = tpe.data_directories[5];
+        let tfo = tpe
+            .sections
+            .iter()
+            .find(|s| {
+                trva >= s.virtual_address
+                    && trva < s.virtual_address + s.virtual_size.max(s.raw_size)
+            })
+            .map(|s| (s.raw_offset + (trva - s.virtual_address)) as usize)
+            .unwrap();
+        for k in 0..(rsize as usize) {
+            if mine.get(mfo + k) != truth.get(tfo + k) {
+                eprintln!(
+                    "first .reloc divergence at block-rel {:#x}: mine={:02x?} truth={:02x?}",
+                    k,
+                    &mine[mfo + k..mfo + k + 16],
+                    &truth[tfo + k..tfo + k + 16]
+                );
+                break;
+            }
+        }
+    }
+
+    /// Coverage matrix: apply every minted (base, delta, truth) triple in
+    /// notes/pe-fixtures-matrix and report per-fixture pass/diff + per-section
+    /// breakdown. The systematic breadth check across diverse DLLs/arches.
+    /// Ignored (needs the gitignored fixtures); `--ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn pe_coverage_matrix() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures-matrix");
+        if !root.exists() {
+            eprintln!("matrix fixtures absent; skipping");
+            return;
+        }
+        let mut dirs: Vec<_> = std::fs::read_dir(&root)
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.is_dir())
+            .collect();
+        dirs.sort();
+        let mut exact = 0;
+        let mut nonzero = 0;
+        let mut errored = 0;
+        let mut rows: Vec<(String, String)> = Vec::new();
+        for d in &dirs {
+            let name = d.file_name().unwrap().to_string_lossy().to_string();
+            let (base, delta, truth) = (
+                std::fs::read(d.join("base.bin")),
+                std::fs::read(d.join("forward.delta")),
+                std::fs::read(d.join("truth.bin")),
+            );
+            let (Ok(base), Ok(delta), Ok(truth)) = (base, delta, truth) else {
+                continue;
+            };
+            let (ft, fl) = parse(&delta)
+                .map(|p| (p.header.file_type, p.header.flags))
+                .unwrap_or((-1, 0));
+            match apply_impl(&base, &delta, false) {
+                Ok(out) => {
+                    let total: usize = (0..out.len().min(truth.len()))
+                        .filter(|&i| out[i] != truth[i])
+                        .count()
+                        + (out.len() as i64 - truth.len() as i64).unsigned_abs() as usize;
+                    if total == 0 {
+                        exact += 1;
+                    } else {
+                        nonzero += 1;
+                        // per-section breakdown of the worst offenders
+                        let secs = crate::pe::parse::PeInfo::parse_lenient(&truth)
+                            .map(|pe| {
+                                let mut v: Vec<(String, usize)> = pe
+                                    .sections
+                                    .iter()
+                                    .map(|s| {
+                                        let a = s.raw_offset as usize;
+                                        let e = (a + s.raw_size as usize)
+                                            .min(truth.len())
+                                            .min(out.len());
+                                        let n = (a..e).filter(|&i| out[i] != truth[i]).count();
+                                        (s.name.clone(), n)
+                                    })
+                                    .filter(|(_, n)| *n > 0)
+                                    .collect();
+                                v.sort_by_key(|(_, n)| std::cmp::Reverse(*n));
+                                v.iter()
+                                    .take(4)
+                                    .map(|(s, n)| format!("{s}:{n}"))
+                                    .collect::<Vec<_>>()
+                                    .join(" ")
+                            })
+                            .unwrap_or_default();
+                        rows.push((
+                            name.clone(),
+                            format!("ft={ft} fl={fl:#x} DIFF={total} [{secs}]"),
+                        ));
+                    }
+                }
+                Err(e) => {
+                    errored += 1;
+                    rows.push((name.clone(), format!("ft={ft} fl={fl:#x} ERR={e}")));
+                }
+            }
+        }
+        eprintln!("\n=== PE COVERAGE MATRIX ({} fixtures) ===", dirs.len());
+        for (n, info) in &rows {
+            eprintln!("  {n:<60} {info}");
+        }
+        eprintln!(
+            "\nSUMMARY: byte-exact={exact}  diff={nonzero}  errored={errored}  total={}",
+            dirs.len()
+        );
+    }
+
+    /// Rift-composition corpus: validate `build_pe_copy_rift` against genuine
+    /// dpx's composed copy rift dumped by the lab harness (notes/lab/rifts/<fix>.rift,
+    /// gitignored). Each line is `target_fo,source_fo` (hex, possibly negative as
+    /// 0xffff.. unsigned). We compare our composed rift (with the ref_len shift
+    /// removed) to genuine's, ignoring only the i64::MIN/MAX wrap sentinels.
+    /// This exercises the multiply/reverse composition across every minted
+    /// topology (4..304 entries). Ignored; needs the gitignored dumps.
+    #[test]
+    #[ignore]
+    fn rift_corpus() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures-matrix");
+        let rifts = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/lab/rifts");
+        if !rifts.exists() {
+            eprintln!("rift dumps absent; skipping");
+            return;
+        }
+        // A value within this of i64::MIN/MAX is a wrap sentinel, not a real entry.
+        let is_sentinel = |v: i64| !(-0x7000_0000_0000_0000..=0x7000_0000_0000_0000).contains(&v);
+        let parse_hex = |s: &str| -> i64 {
+            u64::from_str_radix(s.trim(), 16)
+                .map(|u| u as i64)
+                .unwrap_or(0)
+        };
+        let mut pass = 0;
+        let mut fail = 0;
+        let mut rows: Vec<String> = Vec::new();
+        let mut entries: Vec<_> = std::fs::read_dir(&rifts)
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().is_some_and(|x| x == "rift"))
+            .collect();
+        entries.sort();
+        for rp in &entries {
+            let fix = rp.file_stem().unwrap().to_string_lossy().to_string();
+            let d = root.join(&fix);
+            let (Ok(base), Ok(delta)) = (
+                std::fs::read(d.join("base.bin")),
+                std::fs::read(d.join("forward.delta")),
+            ) else {
+                continue;
+            };
+            let Ok(parsed) = parse(&delta) else { continue };
+            if parsed.preprocess.is_empty() {
+                continue;
+            }
+            let Ok(pp) = parse_pe_preprocess(&parsed.preprocess) else {
+                continue;
+            };
+            // Managed (.NET) images carry a CLI-metadata rift contribution we do
+            // not implement (apply_impl rejects them up front); their composed
+            // rift legitimately differs, so they are out of scope here.
+            if pp.cli_bytes > 0 {
+                continue;
+            }
+            let reflen = base.len() as i64;
+            let ours = build_pe_copy_rift(&base, &pp);
+
+            // Genuine (target_fo, source_fo) set, sentinels dropped.
+            let mut want: Vec<(i64, i64)> = std::fs::read_to_string(rp)
+                .unwrap()
+                .lines()
+                .filter_map(|l| l.split_once(','))
+                .map(|(a, b)| (parse_hex(a), parse_hex(b)))
+                .filter(|&(t, s)| !is_sentinel(t) && !is_sentinel(s))
+                .collect();
+            want.sort();
+            // Ours, ref_len removed, sentinels dropped.
+            let mut got: Vec<(i64, i64)> = ours
+                .entries
+                .iter()
+                .map(|e| (e.source - reflen, e.target))
+                .filter(|&(t, s)| !is_sentinel(t) && !is_sentinel(s))
+                .collect();
+            got.sort();
+            got.dedup();
+            want.dedup();
+            if got == want {
+                pass += 1;
+            } else {
+                fail += 1;
+                let only_want: Vec<_> = want.iter().filter(|e| !got.contains(e)).take(4).collect();
+                let only_got: Vec<_> = got.iter().filter(|e| !want.contains(e)).take(4).collect();
+                rows.push(format!(
+                    "{fix}: genuine={} ours={} | missing={:x?} extra={:x?}",
+                    want.len(),
+                    got.len(),
+                    only_want,
+                    only_got
+                ));
+            }
+        }
+        eprintln!("\n=== RIFT CORPUS ===");
+        for r in &rows {
+            eprintln!("  {r}");
+        }
+        eprintln!("\nrift corpus: {pass} match / {fail} differ");
+        assert_eq!(
+            fail, 0,
+            "rift composition diverges from genuine on {fail} fixtures"
+        );
+    }
+
+    /// Large-scale bulk corpus: apply every minted (base, delta) pair in
+    /// notes/pe-fixtures-bulk and verify the output SHA-256 against the genuine
+    /// truth hash recorded in manifest.csv (fixid,truth_sha256,base_len). Ships
+    /// only base+delta+hash (no truth.bin) to keep the corpus transferable, so it
+    /// scales to hundreds of diverse WinSxS version-pair fixtures. Reports
+    /// byte-exact / mismatch / managed-rejected / errored. Ignored; needs the
+    /// gitignored corpus. `cargo test --release --lib bulk_corpus -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn bulk_corpus() {
+        use digest::Digest;
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures-bulk");
+        let manifest = root.join("manifest.csv");
+        if !manifest.exists() {
+            eprintln!("bulk corpus absent; skipping");
+            return;
+        }
+        let txt = std::fs::read_to_string(&manifest).unwrap();
+        let (mut exact, mut mismatch, mut managed, mut errored, mut total) = (0, 0, 0, 0, 0);
+        let mut bad: Vec<String> = Vec::new();
+        for line in txt.lines() {
+            let mut it = line.split(',');
+            let (Some(fid), Some(sha)) = (it.next(), it.next()) else {
+                continue;
+            };
+            let d = root.join(fid);
+            let (Ok(base), Ok(delta)) = (
+                std::fs::read(d.join("base.bin")),
+                std::fs::read(d.join("forward.delta")),
+            ) else {
+                continue;
+            };
+            total += 1;
+            match apply_impl(&base, &delta, false) {
+                Ok(out) => {
+                    let mut h = sha2::Sha256::new();
+                    h.update(&out);
+                    let got: String = h.finalize().iter().map(|b| format!("{b:02x}")).collect();
+                    if got == sha {
+                        exact += 1;
+                    } else {
+                        mismatch += 1;
+                        let (ft, fl) = parse(&delta)
+                            .map(|p| (p.header.file_type, p.header.flags))
+                            .unwrap_or((-1, 0));
+                        let arch = fid.split("__").next().unwrap_or("?");
+                        bad.push(format!("{arch} ft={ft} fl={fl:#x} {fid}"));
+                    }
+                }
+                Err(Error::Unsupported(_)) => managed += 1,
+                Err(e) => {
+                    errored += 1;
+                    if bad.len() < 25 {
+                        bad.push(format!("{fid} ERR={e}"));
+                    }
+                }
+            }
+        }
+        eprintln!("\n=== BULK CORPUS ({total} fixtures) ===");
+        for b in &bad {
+            eprintln!("  FAIL {b}");
+        }
+        eprintln!(
+            "byte-exact={exact}  mismatch={mismatch}  managed-rejected={managed}  errored={errored}  total={total}"
+        );
+        // Exploratory breadth corpus (randomly minted, regenerable, gitignored):
+        // a generous floor catches a catastrophic decode regression without
+        // red-failing on the known long-tail edges (drivers, codecs, .NET
+        // satellites). The curated matrix / 377 RAW / rift corpora are the strict
+        // regression gates.
+        assert!(
+            total == 0 || exact * 100 >= total * 80,
+            "bulk byte-exact rate {exact}/{total} fell below 80%"
+        );
+    }
+
+    /// amd64 ground-truth probe: apply a matrix fixture and dump the final
+    /// output-vs-truth byte diffs for one section, with context. Unlike the
+    /// tsource_oracle this is NON-circular -- it compares our real apply output
+    /// to genuine truth directly, the right instrument for the post-decode amd64
+    /// transforms (.pdata/.reloc/RIP-rel). `FIX=<dir> SEC=<.pdata> [N=<count>]`.
+    /// Ignored; `cargo test --release --lib amd64_probe -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn amd64_probe() {
+        let fix = match std::env::var("FIX") {
+            Ok(f) => f,
+            Err(_) => {
+                eprintln!("set FIX=<matrix dir>");
+                return;
+            }
+        };
+        let sec_want = std::env::var("SEC").unwrap_or_else(|_| ".pdata".into());
+        let limit: usize = std::env::var("N")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(16);
+        // Special case: the comctl32 amd64 fixture lives in notes/pe-fixtures
+        // (the cleanest amd64 .pdata-only signal), not the matrix dir.
+        let (base, delta, truth) = if fix == "comctl32-amd64" {
+            let d = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures");
+            (
+                std::fs::read(d.join("comctl32_old.dll")).unwrap(),
+                std::fs::read(d.join("comctl32.delta")).unwrap(),
+                std::fs::read(d.join("comctl32_new.dll")).unwrap(),
+            )
+        } else {
+            let fd = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("notes/pe-fixtures-matrix")
+                .join(&fix);
+            if !fd.exists() {
+                eprintln!("fixture absent");
+                return;
+            }
+            (
+                std::fs::read(fd.join("base.bin")).unwrap(),
+                std::fs::read(fd.join("forward.delta")).unwrap(),
+                std::fs::read(fd.join("truth.bin")).unwrap(),
+            )
+        };
+        let out = apply_impl(&base, &delta, false).unwrap();
+        // DUMP_TSRC=<path>: write OUR build_transformed_source output (T(source))
+        // for byte-diff against genuine's dpx-dumped T(source) (lab harness).
+        if let Ok(path) = std::env::var("DUMP_TSRC") {
+            let parsed = parse(&delta).unwrap();
+            let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
+            let mut t = base.clone();
+            crate::pe::transform::zero_pe_checksum(&mut t);
+            let spe = crate::pe::parse::PeInfo::parse_lenient(&t).unwrap();
+            crate::pe::transform::build_transformed_source(
+                &mut t,
+                &spe,
+                &pp.preprocess_rift,
+                parsed.header.flags as u64,
+                pp.target_image_base,
+                pp.target_timestamp,
+            );
+            std::fs::write(&path, &t).unwrap();
+            eprintln!("wrote our T(source) to {path} ({} bytes)", t.len());
+        }
+        // REF_TSRC=<path>: decode against a PROVIDED T(source) (e.g. genuine's
+        // lab dump) with OUR copy rift, to isolate T(source) bugs from rift/decode.
+        if let Ok(refp) = std::env::var("REF_TSRC") {
+            let parsed = parse(&delta).unwrap();
+            let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
+            let rift = build_pe_copy_rift(&base, &pp);
+            let gref = std::fs::read(&refp).unwrap();
+            let (dec, csrc) = crate::lzx::decompress_with_copy_source(
+                &gref,
+                &parsed.patch_data,
+                parsed.header.target_size as usize,
+                Some(&rift),
+            )
+            .unwrap();
+            let tpe2 = crate::pe::parse::PeInfo::parse_lenient(&truth).unwrap();
+            let total = (0..dec.len().min(truth.len()))
+                .filter(|&i| dec[i] != truth[i])
+                .count();
+            let sec = tpe2.sections.iter().find(|s| s.name == ".idata");
+            let idata = sec
+                .map(|s| {
+                    let a = s.raw_offset as usize;
+                    let e = (a + s.raw_size as usize).min(truth.len()).min(dec.len());
+                    (a..e).filter(|&i| dec[i] != truth[i]).count()
+                })
+                .unwrap_or(0);
+            eprintln!(
+                "REF_TSRC decode: total diff={total} .idata={idata} (genuine T(source) + our rift)"
+            );
+            // For the first few .idata diffs: is it a copy (csrc>=0, reading the
+            // wrong source) or a literal (csrc==-1)? gref==genuine T(source).
+            if let Some(s) = sec {
+                let a = s.raw_offset as usize;
+                let e = (a + s.raw_size as usize).min(truth.len()).min(dec.len());
+                let mut shown = 0;
+                let mut i = a;
+                while i < e && shown < 8 {
+                    if dec[i] != truth[i] {
+                        let cs = csrc[i];
+                        let kind = if cs < 0 {
+                            "LITERAL".to_string()
+                        } else {
+                            format!(
+                                "copy<-src {cs:#x} grefbyte={:#04x}",
+                                gref.get(cs as usize).copied().unwrap_or(0)
+                            )
+                        };
+                        eprintln!(
+                            "  .idata fo={i:#x} out={:#04x} truth={:#04x}  {kind}",
+                            dec[i], truth[i]
+                        );
+                        shown += 1;
+                        while i < e && dec[i] != truth[i] {
+                            i += 1;
+                        }
+                        continue;
+                    }
+                    i += 1;
+                }
+            }
+        }
+        if std::env::var("RIFTDUMP").is_ok() {
+            let parsed = parse(&delta).unwrap();
+            let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
+            eprintln!(
+                "preprocess_rift ({} entries):",
+                pp.preprocess_rift.entries.len()
+            );
+            for e in &pp.preprocess_rift.entries {
+                eprintln!(
+                    "  src={:#x} -> tgt={:#x} (off {})",
+                    e.source,
+                    e.target,
+                    e.target - e.source
+                );
+            }
+            // Our composed copy rift, with the ref_len shift removed so it is in
+            // the same target_fo -> source_fo domain as genuine's dumped rift.
+            let reflen = base.len() as i64;
+            let composed = build_pe_copy_rift(&base, &pp);
+            eprintln!(
+                "build_pe_copy_rift ({} entries) [source-ref_len, target]:",
+                composed.entries.len()
+            );
+            for e in &composed.entries {
+                eprintln!("  {:x},{:x}", e.source - reflen, e.target);
+            }
+            // FORWARDCHAIN: dump the forward chain (source_fo -> target_fo)
+            // io2rva_src . preprocess_rift . pe_rift, as raw (source,target) pairs
+            // so the scratch Reverse port can be validated against genuine.
+            if std::env::var("FORWARDCHAIN").is_ok() {
+                if let Ok(src_pe) = crate::pe::parse::PeInfo::parse_lenient(&base) {
+                    let io2rva_src = build_pe_io2rva(&src_pe);
+                    eprintln!("io2rva_src ({} entries):", io2rva_src.entries.len());
+                    for e in &io2rva_src.entries {
+                        eprintln!("  {:x},{:x}", e.source, e.target);
+                    }
+                    eprintln!("pe_rift ({} entries):", pp.pe_rift.entries.len());
+                    for e in &pp.pe_rift.entries {
+                        eprintln!("  {:x},{:x}", e.source, e.target);
+                    }
+                    let fwd = io2rva_src
+                        .multiply(&pp.preprocess_rift)
+                        .multiply(&pp.pe_rift);
+                    eprintln!(
+                        "forward_chain ({} entries) [source_fo,target_fo]:",
+                        fwd.entries.len()
+                    );
+                    for e in &fwd.entries {
+                        eprintln!("  {:x},{:x}", e.source, e.target);
+                    }
+                }
+            }
+        }
+        let tpe = crate::pe::parse::PeInfo::parse_lenient(&truth).unwrap();
+        // SEC=ALL scans the whole buffer (catches header/gap diffs); otherwise a
+        // named section's raw range.
+        let (a, e) = if sec_want == "ALL" {
+            (0usize, out.len().min(truth.len()))
+        } else {
+            let Some(sec) = tpe.sections.iter().find(|s| s.name == sec_want) else {
+                eprintln!("section {sec_want} not found");
+                return;
+            };
+            (
+                sec.raw_offset as usize,
+                (sec.raw_offset + sec.raw_size) as usize,
+            )
+        };
+        let sec = tpe
+            .sections
+            .iter()
+            .find(|s| s.name == sec_want)
+            .unwrap_or(&tpe.sections[0]);
+        let n: usize = (a..e.min(out.len()).min(truth.len()))
+            .filter(|&i| out[i] != truth[i])
+            .count();
+        eprintln!(
+            "{fix} [{sec_want}] rva={:#x} fo={:#x} size={:#x}: {n} diffs",
+            sec.virtual_address, sec.raw_offset, sec.raw_size
+        );
+        let mut shown = 0usize;
+        let mut i = a;
+        while i < e.min(out.len()).min(truth.len()) && shown < limit {
+            if out[i] != truth[i] {
+                let rva = sec.virtual_address as usize + (i - sec.raw_offset as usize);
+                let w = |b: &[u8]| {
+                    (i.saturating_sub(4)..(i + 12).min(b.len()))
+                        .map(|k| format!("{:02x}", b[k]))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                };
+                eprintln!("  fo={i:#x} rva={rva:#x}");
+                eprintln!("    out  : {}", w(&out));
+                eprintln!("    truth: {}", w(&truth));
+                shown += 1;
+                // skip to the next run of equal bytes to avoid spamming one field
+                while i < e && out[i] != truth[i] {
+                    i += 1;
+                }
+                continue;
+            }
+            i += 1;
+        }
     }
 
     const DELTA_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/deltas");

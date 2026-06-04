@@ -80,50 +80,63 @@ msdelta = { version = "0.1", default-features = false }
 | **PseudoLzx** codec | yes | yes |
 | **BsDiff** codec | yes | yes |
 | **LZMS** codec | yes | yes |
-| **PE transforms** (offset/rift, timestamps) | yes | yes |
-| **PE transforms** (byte-rewriting: CALL/JMP/disasm/CLI) | partial | partial |
-
-PE delta encoding auto-detects x86/x86-64 binaries and generates rift tables from section layout, data directories, imports, exports, resources, and exception tables.
+| **PE transforms** — native x86 / x64 | yes (byte-exact) | partial |
+| **PE transforms** — managed (.NET / CLI) | no | no |
 
 ### PE transforms
 
-MSDelta preprocesses PE targets through a pipeline of transforms (the decoder
-undoes them). **Which transforms run is selected by a flag word in the delta
-header** (set by the encoder), AND'd against a static transform table — it is
-*not* re-derived from the machine type at apply time. Two layers gate them:
+MSDelta preprocesses PE targets through a pipeline of transforms before
+compression; the decoder reproduces the transformed source (`T(source)`) and the
+copy/literal stream resolves against it. **Which transforms run is selected by a
+flag word in the delta header**, AND'd against a static transform table. Two
+layers gate them:
 
-- `file_type == 1` (**RAW**) skips the PE pipeline entirely; only output
-  post-processes that are flag-gated (e.g. the `0xE8`/`0xE9` x86 filter on
-  header flag bit 0) apply.
-- `file_type != 1` (**PE/CLI**) runs the full pipeline below, each transform
-  enabled by its own header flag bit.
+- `file_type == 1` (**RAW**) skips the PE pipeline; only flag-gated output
+  post-processes (e.g. the `0xE8` x86 filter on header bit 0) apply.
+- `file_type != 1` (**PE**) runs the pipeline below, each transform enabled by
+  its own header flag bit, in `g_transformsMap` order.
 
-| Transform | Kind | Status |
-|-----------|------|--------|
-| PseudoLzx / LZMS / BsDiff payload + LRU/rift offset remap | offset | implemented |
-| PE timestamp fixup (COFF / export / debug dirs) | offset | implemented |
-| `RelativeCallsX86` / `RelativeJmpsX86` — `0xE8`/`0xE9` displacements | content | **implemented, header-flag-gated** (`0xE8` done; `0xE9` not yet) |
-| `SmashLockPrefixesX86` — x86 lock-prefix IAT smash | content | not implemented |
-| `TransformImports` / `Exports` / `Resources` | content + offset | partial — rift remaps offsets; RVA-rewrite half missing |
-| `TransformRelocations` (HIGHLOW/DIR64 + inferred-x86) | content | partial — not wired into `apply()` |
-| Instruction disasm — X64 / ARM / ARM64 | content | not implemented |
-| CLI metadata / disasm (.NET) | content | not implemented |
-| `.pdata` — X64 / ARM / ARM64 | content | not implemented |
+**Decode** of native x86 / x64 PE deltas is complete and byte-exact (see status
+below). Encode emits a structurally valid delta but the byte-rewriting transforms
+are not yet round-trip-validated against Windows.
 
-**Decode status is honest by artifact class:**
+| Transform (decode) | Status |
+|--------------------|--------|
+| PseudoLzx / LZMS / BsDiff payload + LRU/rift copy placement | implemented |
+| Copy-rift composition (`Multiply`/`Reverse`/`Sum`, source re-anchor at breakpoints) | implemented (genuine-exact) |
+| PE timestamp + ImageBase header fixups | implemented |
+| `PeUnbinder` (reset bound imports, mark `.idata` writable) | implemented |
+| `RelativeCallsX86` / `RelativeJmpsX86` (`0xE8`/`0xE9` + near→short collapse) | implemented |
+| `0xE8` x86 whole-image filter (header bit 0) | implemented |
+| `TransformImports` / `Exports` / `Resources` (RVA + thunk/offset rewrite) | implemented (x86 + x64) |
+| `TransformRelocations` (HIGHLOW + DIR64, block rebuild) | implemented |
+| `DisasmX64` (RIP-relative disp32) + `PdataX64` (RUNTIME_FUNCTION/unwind) | implemented |
+| Instruction disasm / `.pdata` — ARM / ARM64 | not implemented |
+| CLI metadata / disasm (.NET managed) | not implemented (rejected) |
 
-- **RAW deltas** (the entire express-LCU class): verified bit-exact — MD5-identical
-  to `msdelta.dll` across all bundled DCM/PE manifest fixtures, and **377/377**
-  against a full Win11 24H2 LCU express PSF (baseless PA31), including the
-  header-flag-gated `0xE8` x86 filter.
-- **PE/CLI deltas** (`file_type != 1`): the transform pipeline above is
-  **partial and largely unvalidated** — the express-LCU corpus contains no such
-  deltas, so the import/export/resource/reloc/disasm/CLI/pdata transforms have no
-  population oracle yet. This is the active frontier; each needs a per-transform
-  inverse validated in isolation and PE-type fixtures (fetched per-architecture
-  via the `uup` toolchain).
+**Decode status, by artifact class:**
 
-**Encoder ↔ Windows compatibility is partial and being closed.** Note that
+- **RAW deltas** (express-LCU class): bit-exact — MD5-identical to `msdelta.dll`
+  across all bundled DCM/PE manifest fixtures and **377/377** against a full
+  Win11 24H2 LCU express PSF (baseless PA31).
+- **Native PE deltas** (x86 / x64, `file_type != 1`): **byte-exact** — verified
+  MD5-identical to genuine `dpx.dll` across **24/24** curated diverse WinSxS
+  version-pair fixtures (DLLs, EXEs, `.mui`, keyboard layouts; i386 + amd64), each
+  cross-checked by dumping genuine's intermediate `T(source)` and composed rift,
+  with a 24-topology corpus locking the rift composition against regression. At
+  scale, a **659-fixture randomly-minted** corpus decodes **598 byte-exact
+  (90.7%)** hash-verified against genuine; the remainder are a documented
+  long-tail (below).
+- **Managed / .NET PE deltas**: detected via the reference's CLR header and
+  **rejected** with `Error::Unsupported` rather than decoded wrong. The CLI
+  metadata/disasm transform family is unimplemented.
+- **Long-tail native edges** (~30 of the 659): a few binaries carry `.rdata`
+  RVA-table structures genuine remaps that this crate does not yet — these surface
+  as a **clean `HashMismatch` error** from `apply()` (which verifies the embedded
+  target hash), never silent corruption. ARM/ARM64 instruction/`.pdata` transforms
+  are likewise unimplemented (no fixtures yet).
+
+**Encoder ↔ Windows compatibility is partial.** Note that
 `PA31` is **not** an `msdelta.dll` format at all — `msdelta.dll` (build 26100)
 implements only PA30/PA19 and rejects PA31 with `ERROR_INVALID_DATA`. PA31 lives
 in **`UpdateCompression.dll`** / **`dpx.dll`**, which expose the same
@@ -161,32 +174,32 @@ MSRV: 1.85
 
 ## Known limitations
 
-- Encoder ↔ `msdelta.dll` compatibility is partial. A Windows cross-check
-  (genuine `ApplyDeltaB`, build 26100) currently passes for RAW PseudoLzx/PA30
-  at any size (the encoder emits the same "simple mode" framing as genuine
-  deltas for small inputs and "complex mode" for large ones), with an MD5
-  hash, and for identical/empty-target edges. Still open:
-  - **BsDiff** codec: rejected with `ERROR_INVALID_DATA`; our LZMS-wrapped
-    BsDiff container framing does not match `msdelta.dll`.
-  - **PE rift transforms**: accepted structurally but decode to incorrect
-    bytes; the rift/preprocess encoding does not match `msdelta.dll`'s
-    interpretation. This is the largest open item.
-  - **PA31** and **SHA-256**: `msdelta.dll` does not implement PA31 — it is a
-    `UpdateCompression.dll` / `dpx.dll` format. Validate PA31/SHA-256 deltas
-    against those, not `msdelta.dll`.
-  - Genuine deltas stamp a creation FILETIME in the header (bytes 4-11) that
-    this crate zeroes; not required for acceptance but a divergence.
+**Decode** (the primary use case) is complete for RAW and native x86 / x64 PE
+deltas. Not yet supported:
 
-  The in-crate round-trip tests pass because this crate's decoder mirrors its
-  own encoder conventions; Windows is the only ground truth for the encoder.
-- Byte-rewriting PE transforms (CALL/JMP/lock-prefix/disasm/CLI metadata) are
-  incomplete — see the [PE transforms](#pe-transforms) table. The decoder
-  reconstructs 369/377 of a real LCU express PA31 population; the rest need these.
-- PA19 encoding not implemented (legacy format, the `lzxd` crate is decode-only). PA19 decode works.
-- LZX encoder does not use rift tables during match finding (rift is written for the decoder but compression doesn't exploit it).
+- **Managed / .NET images**: deltas whose target carries a CLI metadata stream
+  are rejected (`Error::Unsupported`) — the CLI metadata/disasm transform family
+  is unimplemented. ARM / ARM64 instruction and `.pdata` transforms are likewise
+  unimplemented (no fixtures yet).
 
-Decode is verified MD5-identical to `msdelta.dll` across all bundled DCM/PE
-fixtures, including the multi-segment WOW64 proxystub manifest.
+**Encode ↔ Windows** compatibility is partial. A cross-check against genuine
+`ApplyDeltaB` (`msdelta.dll` build 26100 for PA30, `UpdateCompression.dll` /
+`dpx.dll` for PA31) passes for **RAW PseudoLzx** at any size, with MD5/SHA-256
+hashes and identical/empty-target edges. Still open:
+
+- **BsDiff** codec: our LZMS-wrapped container framing does not match genuine.
+- **Byte-rewriting PE transforms on the encode side**: the decoder reproduces
+  them byte-exactly (validated against genuine), but emitting a delta whose
+  transformed source matches genuine's is not yet round-trip-verified.
+- `msdelta.dll` does not implement **PA31** — validate PA31 / SHA-256 against
+  `UpdateCompression.dll` / `dpx.dll`. Genuine deltas also stamp a creation
+  FILETIME (header bytes 4-11) this crate zeroes (a benign divergence).
+
+In-crate round-trip tests prove self-consistency; Windows is the ground truth.
+
+- **PA19 encoding** not implemented (legacy; `lzxd` is decode-only). Decode works.
+- The LZX encoder does not exploit rift tables during match finding (rift is
+  written for the decoder; compression does not use it).
 
 ## License
 

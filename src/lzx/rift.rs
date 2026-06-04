@@ -180,70 +180,339 @@ impl RiftTable {
         let mut out = RiftTable {
             entries: Vec::new(),
         };
-
-        // Walk A's segments. Each A entry covers [src, next_src) in A's
-        // source domain and maps it (offset a_off) into A's image. We then
-        // split that image range at B's breakpoints.
         let a = &self.entries;
-        for i in 0..a.len() {
-            let seg_src = a[i].source;
-            let seg_off = a[i].target - a[i].source; // A's offset on this segment
-            let seg_src_end = if i + 1 < a.len() {
-                a[i + 1].source
-            } else {
-                i64::MAX
-            };
 
-            // Current position in A's source domain and its A-image.
-            let mut cur_src = seg_src;
-            loop {
-                let img = cur_src.wrapping_add(seg_off); // A.f(cur_src)
-                let (b_off, b_break) = b.get_rift(img);
-                // result.f(cur_src) = img + b_off = cur_src + seg_off + b_off
-                out.add(cur_src, cur_src.wrapping_add(seg_off).wrapping_add(b_off));
-
-                // Where does B's offset change next, expressed back in A's
-                // source domain? b_break is the last image position in B's
-                // current segment. Map back: src = b_break - seg_off + 1.
-                if b_break == i64::MAX {
-                    break;
-                }
-                let next_src = b_break.wrapping_sub(seg_off).wrapping_add(1);
-                if next_src >= seg_src_end || next_src <= cur_src {
-                    break;
-                }
-                cur_src = next_src;
+        // Pre-first wrap block (decompile lines 50-69). A's GetRift wraps the
+        // region below A's first source `[i64::MIN, A[0].source)` to A's LAST
+        // segment offset. Genuine emits this region as real entries, splitting it
+        // at every breakpoint B introduces on its image. Without this block the
+        // composed forward chain is missing the negative-source wrap segments,
+        // and a later `Reverse` cannot reproduce the genuine inverse (the docprop
+        // `-0x5120`/`bc8` wrap entries originate here, not in `Reverse`).
+        let a_first = a[0].source;
+        if i64::MIN < a_first {
+            let last = a[a.len() - 1];
+            let last_off = last.target - last.source;
+            // Seed at the wrap image of i64::MIN under the last-segment offset.
+            let mut img = last_off.wrapping_add(i64::MIN);
+            let (mut b_off, mut b_break) = b.get_rift(img);
+            out.add(i64::MIN, b_off.wrapping_add(img));
+            // `region` is the remaining width of the pre-first region (as the
+            // decompile's unsigned `uVar2`); `step` the width B's current segment
+            // covers. Advance source by `step + 1` each time B's offset changes.
+            let mut src_pos = i64::MIN;
+            let mut region = (a_first.wrapping_add(i64::MAX)) as u64;
+            let mut step = (b_break.wrapping_sub(img)) as u64;
+            while step < region {
+                src_pos = src_pos.wrapping_add(step as i64).wrapping_add(1);
+                img = b_break.wrapping_add(1);
+                let g = b.get_rift(img);
+                b_off = g.0;
+                b_break = g.1;
+                out.add(src_pos, b_off.wrapping_add(img));
+                region = (a_first.wrapping_sub(1)).wrapping_sub(src_pos) as u64;
+                step = (b_break.wrapping_sub(img)) as u64;
             }
         }
 
+        // Main per-segment walk (decompile lines 71-143). Each A segment covers
+        // `[seg_src, seg_break]` in A's source domain; its image is split at
+        // every B breakpoint. Duplicate-source A entries are skipped (the
+        // `lVar6 == lVar8` continue).
+        for i in 0..a.len() {
+            let seg_src = a[i].source;
+            let seg_break = if i + 1 < a.len() {
+                if a[i + 1].source != seg_src {
+                    a[i + 1].source - 1
+                } else {
+                    continue;
+                }
+            } else {
+                i64::MAX
+            };
+            let mut img = a[i].target; // image of seg_src under A
+            let (b_off, b_break) = b.get_rift(img);
+            out.add(seg_src, b_off.wrapping_add(img));
+            let mut next_break = b_break;
+            let mut src_pos = seg_src;
+            while (next_break.wrapping_sub(img) as u64) < (seg_break.wrapping_sub(src_pos) as u64) {
+                src_pos = src_pos
+                    .wrapping_add(1)
+                    .wrapping_add(next_break.wrapping_sub(img));
+                img = next_break.wrapping_add(1);
+                let g = b.get_rift(img);
+                next_break = g.1;
+                out.add(src_pos, g.0.wrapping_add(img));
+            }
+        }
+
+        // Genuine `Multiply` ends with `Sort` only -- no offset-dedup. Collapsing
+        // equal-offset adjacent segments here drops breakpoints the downstream
+        // `Reverse` working buffer depends on (e.g. docprop's `6400->6a00` after
+        // `6200->6800`, both offset 0x600), so we must preserve them verbatim.
         out.sort();
-        out.dedup_offsets();
         out
     }
 
     /// `compo::RiftTable::Reverse(A)` -> the inverse map `A^-1`.
     ///
-    /// For a strictly monotonic offset map this swaps the role of source and
-    /// target: an entry `{s, t}` with following source `s'` covers image
-    /// `[t, t + (s' - s))`, which inverts to `{t, s}`. The decompiled body
-    /// additionally normalises overlaps produced by non-monotonic inputs; for
-    /// the well-formed (monotonic, non-overlapping) tables the apply pipeline
-    /// produces, the swap-and-sort form is exact.
+    /// Faithful port of `RiftTable::Reverse` (dpx.dll `18003bb24`). A swap of
+    /// `{s, t}` to `{t, s}` is only correct when `A` is strictly monotonic and
+    /// non-overlapping. Real apply-pipeline forward chains are NOT: on i386 the
+    /// FileAlignment relayout makes adjacent target file-offset segments overlap
+    /// (decreasing offsets) or leave gaps (increasing offsets). Genuine resolves
+    /// both with a working buffer of covered image intervals, walking `A`'s
+    /// segments in wrap order (starting at the first positive-source segment,
+    /// processing the pre-first region first) and, per segment, splitting/merging
+    /// the buffer's intervals against the segment's image `[lo, hi)`. Each split
+    /// emits an `Add(image_pos, source_pos)` pair. This reproduces both the adsnt
+    /// overlap topology and the pku2u gap topology exactly.
+    ///
+    /// Buffer slot layout matches the decompile: a pair `(f0, f1)` where the
+    /// search/iteration key is `f1` (the `+8` field) and `f0` (`+0`) the image
+    /// start of the covered interval.
     pub fn reverse(&self) -> RiftTable {
-        if self.entries.is_empty() {
+        let n = self.entries.len() as u64;
+        if n == 0 {
             return RiftTable {
                 entries: Vec::new(),
             };
         }
         let mut out = RiftTable {
-            entries: Vec::with_capacity(self.entries.len()),
+            entries: Vec::new(),
         };
-        for e in &self.entries {
-            out.add(e.target, e.source);
+        let src = |i: u64| self.entries[i as usize].source;
+        let tgt = |i: u64| self.entries[i as usize].target;
+
+        // Degenerate case: a single distinct source. Genuine emits one entry.
+        let mut all_same = true;
+        for i in 1..n {
+            if src(i) != src(0) {
+                all_same = false;
+                break;
+            }
         }
+        if all_same {
+            out.add(0, tgt(0).wrapping_sub(src(0)));
+            return out;
+        }
+
+        // Working buffer of covered image intervals as parallel (f0, f1) arrays.
+        // `f1` is the sorted search key. `live` (== decompile `local_res18`) is
+        // the number of live slots.
+        let cap = (2 * n) as usize;
+        let mut f0: Vec<i64> = vec![0; cap];
+        let mut f1: Vec<i64> = vec![0; cap];
+        let mut live: u64 = 0;
+
+        // Wrap start: first index whose source is positive; if none (or it lands
+        // at 0) the whole table is the wrap region (`local_90 = n`). The pre-first
+        // region (sources <= 0, i.e. the segment that wraps to the end) is then
+        // processed first by seeding `local_88 = local_90 - 1`.
+        let mut local_90: u64 = 0;
+        loop {
+            if src(local_90) > 0 {
+                break;
+            }
+            local_90 += 1;
+            if n <= local_90 {
+                break;
+            }
+        }
+        if local_90 == 0 {
+            local_90 = n;
+        }
+        let mut term_idx: u64 = local_90 - 1; // decompile `uVar10` exit comparator
+        let mut local_98: i64 = 0;
+        local_90 = if local_90 < n { local_90 } else { 0 };
+        let mut u_var7: u64 = local_90;
+        let mut local_88: u64 = term_idx;
+        let restart_88: u64 = term_idx;
+
+        loop {
+            // Inner do-while: walk the image of segment `local_88` from `local_98`
+            // up to `src(u_var7)` (the next segment's source), splitting at the
+            // current segment's image extent each iteration.
+            loop {
+                // Two's-complement (wrapping) arithmetic throughout: the working
+                // buffer carries i64::MIN/MAX sentinels and the genuine C does
+                // these on unsigned values, so plain +/- would overflow-panic in
+                // debug while wrapping (correct) in release.
+                let seg_off = tgt(local_88).wrapping_sub(src(local_88));
+                let end_idx = u_var7;
+                let mut span = src(u_var7).wrapping_sub(local_98);
+                let lo = seg_off.wrapping_add(local_98); // image start
+                if lo != i64::MIN {
+                    let clamp = (i64::MIN.wrapping_sub(seg_off)).wrapping_sub(local_98);
+                    if (clamp as u64) < (span as u64) {
+                        span = clamp;
+                    }
+                }
+                if span != 0 {
+                    let hi = lo.wrapping_add(span); // image end (exclusive bound value)
+                                                    // First buffer index whose key (f1) is >= lo or a sentinel.
+                    let mut start: u64 = 0;
+                    if live != 0 {
+                        let mut k = 0u64;
+                        loop {
+                            start = k;
+                            let key = f1[k as usize];
+                            if lo <= key || key == i64::MIN {
+                                break;
+                            }
+                            k += 1;
+                            start = k;
+                            if k >= live {
+                                break;
+                            }
+                        }
+                    }
+                    let mut ins = start;
+                    let mut stop = start;
+                    let mut val = hi;
+                    if start < live {
+                        // Extend `stop` past every interval the image overlaps.
+                        // The end scan compares the image END `hi` against each
+                        // interval's image START (`f0`, the `+0` field) -- NOT its
+                        // end (`f1`) -- matching the decompile's `plVar8 =
+                        // local_c8 + start*0x10` base and `lVar9 < *plVar5`.
+                        let mut k = start;
+                        loop {
+                            let key = f0[k as usize];
+                            if hi != i64::MIN && hi < key {
+                                break;
+                            }
+                            stop += 1;
+                            k += 1;
+                            if stop >= live {
+                                break;
+                            }
+                        }
+                        if start == stop {
+                            // No overlap: pure insert.
+                            out.add(lo, local_98);
+                            Self::shift_for_insert(&mut f0, &mut f1, ins, stop, live);
+                            live = live.wrapping_add(ins.wrapping_sub(stop)).wrapping_add(1);
+                            f0[ins as usize] = lo;
+                            f1[ins as usize] = val;
+                            term_idx = restart_88;
+                        } else {
+                            // Compare `lo` against the first overlapping interval's
+                            // image START (`f0`, the `+0` field), per the decompile's
+                            // `if (lVar15 < *plVar8)` where `plVar8` = slot `start`
+                            // base. When `lo` already lies at/after that start, no
+                            // boundary `Add` is emitted (the spurious half of the
+                            // overlap pair) and `lo` is pulled back to the interval
+                            // start instead.
+                            let buf_lo = f0[start as usize];
+                            let mut lo_m = lo;
+                            if lo < buf_lo {
+                                out.add(lo, local_98);
+                            } else {
+                                lo_m = buf_lo;
+                            }
+                            val = seg_off;
+                            if ins < stop - 1 {
+                                // Emit one boundary `Add` per fully-covered
+                                // interior interval (`start ..= stop-2`), using
+                                // its image end (`f1`) and the segment offset.
+                                for idx in start..(stop - 1) {
+                                    let v = f1[idx as usize];
+                                    out.add(v, v.wrapping_sub(val));
+                                }
+                                ins = start;
+                                u_var7 = local_90;
+                            }
+                            let last_key = f1[(stop - 1) as usize];
+                            val = last_key;
+                            if last_key != i64::MIN && (hi == i64::MIN || last_key < hi) {
+                                out.add(last_key, last_key.wrapping_sub(seg_off));
+                                val = hi;
+                            }
+                            Self::shift_for_insert(&mut f0, &mut f1, ins, stop, live);
+                            live = live.wrapping_add(ins.wrapping_sub(stop)).wrapping_add(1);
+                            f0[ins as usize] = lo_m;
+                            f1[ins as usize] = val;
+                            term_idx = restart_88;
+                        }
+                    } else {
+                        // start >= live: append.
+                        out.add(lo, local_98);
+                        Self::shift_for_insert(&mut f0, &mut f1, ins, stop, live);
+                        live = live.wrapping_add(ins.wrapping_sub(stop)).wrapping_add(1);
+                        f0[ins as usize] = lo;
+                        f1[ins as usize] = val;
+                        term_idx = restart_88;
+                    }
+                }
+                local_98 = local_98.wrapping_add(span);
+                if local_98 == src(end_idx) {
+                    break;
+                }
+            }
+            local_88 = u_var7;
+            if term_idx != u_var7 {
+                local_90 = if u_var7 + 1 < n { u_var7 + 1 } else { 0 };
+                u_var7 = local_90;
+                continue;
+            }
+            break;
+        }
+
         out.sort();
-        out.dedup_offsets();
+        // Drop sentinel intervals the working buffer may have emitted.
+        out.entries
+            .retain(|e| e.source != i64::MIN && e.target != i64::MIN);
+        out.dedup_same_source();
         out
+    }
+
+    /// Collapse entries sharing the same `source` (keep the last written),
+    /// without touching offset-continuous distinct sources. Mirrors the effect
+    /// of `Sort` over `Add`s where a later segment supersedes an earlier one at
+    /// the identical key.
+    fn dedup_same_source(&mut self) {
+        if self.entries.len() < 2 {
+            return;
+        }
+        let mut kept: Vec<RiftEntry> = Vec::with_capacity(self.entries.len());
+        for e in &self.entries {
+            match kept.last_mut() {
+                Some(prev) if prev.source == e.source => *prev = *e,
+                _ => kept.push(*e),
+            }
+        }
+        self.entries = kept;
+    }
+
+    /// Working-buffer element move for `Reverse`. When `ins + 1 != stop` and
+    /// `stop < live`, slide the tail `[stop, live)` to start at `ins + 1`,
+    /// matching the displacement loop in the decompile (`uVar10 < uVar4 - 1`
+    /// region and its `local_res18`-bounded memmove). For the pure-insert case
+    /// (`ins == stop`) this is the upward shift that opens one slot at `ins`.
+    fn shift_for_insert(f0: &mut [i64], f1: &mut [i64], ins: u64, stop: u64, live: u64) {
+        if ins == stop {
+            // Open a single slot at `ins`: shift [ins, live) up by one.
+            if ins < live {
+                let mut j = live;
+                while j > ins {
+                    f0[j as usize] = f0[(j - 1) as usize];
+                    f1[j as usize] = f1[(j - 1) as usize];
+                    j -= 1;
+                }
+            }
+            return;
+        }
+        if ins + 1 != stop && stop < live {
+            let shift = (ins as i64) - (stop as i64) + 1;
+            let mut j = stop;
+            while j < live {
+                let dst = (j as i64 + shift) as u64;
+                f0[dst as usize] = f0[j as usize];
+                f1[dst as usize] = f1[j as usize];
+                j += 1;
+            }
+        }
     }
 
     /// `compo::RiftTable::Sum(A, B)` -> the pointwise sum of two offset maps:
@@ -375,6 +644,24 @@ impl OffsetRiftTable {
             Err(0) => self.entries[0].1,
             Err(i) => self.entries[i - 1].1,
         }
+    }
+
+    /// Segment offset at `pos` plus the next breakpoint position (`i64::MAX` if
+    /// none follows). Genuine `Decompressor::Run`'s SOURCE-copy loop walks these
+    /// segments, re-anchoring the source at each breakpoint inside a single copy.
+    pub fn segment_at(&self, pos: i64) -> (i64, i64) {
+        let idx = match self.entries.binary_search_by_key(&pos, |&(p, _)| p) {
+            Ok(i) => i,
+            Err(0) => 0,
+            Err(i) => i - 1,
+        };
+        let off = self.entries[idx].1;
+        let next = self
+            .entries
+            .get(idx + 1)
+            .map(|&(p, _)| p)
+            .unwrap_or(i64::MAX);
+        (off, next)
     }
 }
 
@@ -748,9 +1035,7 @@ mod tests {
     fn multiply_with_identity_is_copy() {
         // Empty table is the identity element for Multiply.
         let a = t(&[(0, 0), (0x1000, 0x1200), (0x5000, 0x5800)]);
-        let id = RiftTable {
-            entries: vec![],
-        };
+        let id = RiftTable { entries: vec![] };
         let left = id.multiply(&a);
         let right = a.multiply(&id);
         for &x in &[0i64, 0x1000, 0x1500, 0x5000, 0x9000] {
@@ -774,22 +1059,193 @@ mod tests {
 
     #[test]
     fn reverse_reverse_is_identity() {
-        let a = t(&[(0x1000, 0x1200), (0x5000, 0x5800), (0x9000, 0x9000)]);
-        let rr = a.reverse().reverse();
-        // reverse∘reverse restores the mapping on the original source domain.
-        for &x in &[0x1000i64, 0x3000, 0x5000, 0x7000, 0x9000, 0x10000] {
-            assert_eq!(eval(&rr, x), eval(&a, x), "rev∘rev at {x:#x}");
-        }
+        // Genuine `Reverse` is normalised, NOT a literal entry-list involution.
+        // It walks segments in wrap order, splits the inverse at every covered
+        // image-interval boundary, emits an initial offset-0 anchor, and drops
+        // sentinels. Consequently `rev∘rev` is generally a DIFFERENT normalised
+        // map than the original (its breakpoints live in the image domain and
+        // re-inverting relocates them), so the old "involution" assertion does
+        // not reflect genuine behaviour.
+        //
+        // What genuine DOES guarantee, and what we assert here, is that a single
+        // `Reverse` of a clean monotonic, 0-anchored, identity-tailed map is the
+        // exact literal inverse: each `{s, t}` becomes `{t, s}`. (This is the
+        // non-overlapping branch of the working-buffer logic, where every
+        // boundary `Add` is a pure swap.)
+        let a = t(&[(0, 0), (0x1000, 0x1100), (0x2000, 0x2300), (0x3000, 0x3000)]);
+        let r = a.reverse();
+        let got: Vec<(i64, i64)> = r.entries.iter().map(|e| (e.source, e.target)).collect();
+        assert_eq!(
+            got,
+            vec![(0, 0), (0x1100, 0x1000), (0x2300, 0x2000), (0x3300, 0x3300)],
+            "Reverse of a clean monotonic map is the literal swap"
+        );
     }
 
     #[test]
     fn reverse_inverts() {
-        let a = t(&[(0x1000, 0x1200), (0x5000, 0x5800)]);
+        // 0-anchored, contiguous map: each segment's image start carries a real
+        // breakpoint, so the inverse maps image points back to their source
+        // exactly. A.f(0x1000)=0x1200, A.f(0x5000)=0x5400.
+        let a = t(&[(0, 0), (0x1000, 0x1200), (0x5000, 0x5400)]);
         let r = a.reverse();
-        // For a point in A's image, reverse maps it back to the source offset.
-        // A.f(0x1000)=0x1200 ; r.f(0x1200) should be 0x1000.
         assert_eq!(eval(&r, 0x1200), 0x1000);
-        assert_eq!(eval(&r, 0x5800), 0x5000);
+        assert_eq!(eval(&r, 0x5400), 0x5000);
+        assert_eq!(eval(&r, 0), 0, "anchor preserved");
+        // Genuine emits the offset-0 anchor and a breakpoint at each image start
+        // (0, 0x1200, 0x5400); the non-anchored 2-entry form instead wraps the
+        // pre-first region to the tail offset, which is why we anchor here.
+    }
+
+    /// Assert `rev` contains every `(source, target)` pair in `want`.
+    fn contains_all(rev: &RiftTable, want: &[(i64, i64)]) {
+        for &(s, d) in want {
+            assert!(
+                rev.entries.iter().any(|e| e.source == s && e.target == d),
+                "reverse missing {s:#x},{d:#x}; got {:x?}",
+                rev.entries
+                    .iter()
+                    .map(|e| (e.source, e.target))
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+
+    /// Ground truth from genuine dpx.dll for the GAP case (pku2u, increasing
+    /// offsets). The forward chain `io2rva_src . preprocess_rift . pe_rift`
+    /// (source_fo -> target_fo), reversed, must reproduce genuine's final
+    /// (target_fo, source_fo) copy rift. The `0x400,0x400` header boundary is
+    /// kept in the forward chain (it survives the real composition).
+    #[test]
+    fn reverse_pku2u_gap_vector() {
+        let fwd = t(&[
+            (0, 0),
+            (0x400, 0x400),
+            (0x2158, 0x246c),
+            (0x9ad0, 0xa860),
+            (0xadf0, 0xbc60),
+            (0x10b10, 0x11dc0),
+            (0x35c6c, 0x36fac),
+            (0x36600, 0x37a00),
+        ]);
+        let rev = fwd.reverse();
+        contains_all(
+            &rev,
+            &[
+                (0, 0),
+                (0x400, 0x400),
+                (0x246c, 0x2158),
+                (0xa860, 0x9ad0),
+                (0xbc60, 0xadf0),
+                (0x11dc0, 0x10b10),
+                (0x36fac, 0x35c6c),
+                (0x37a00, 0x36600),
+            ],
+        );
+    }
+
+    /// Ground truth from genuine dpx.dll for the OVERLAP case (adsnt, decreasing
+    /// offsets). The reversed forward chain must reproduce genuine's load-bearing
+    /// breakpoints (`0x718`, `0x3990`, `0x9000`, `0x93c0`).
+    #[test]
+    fn reverse_adsnt_overlap_vector() {
+        let fwd = t(&[
+            (0, 0),
+            (0x400, 0x400),
+            (0x718, 0x710),
+            (0x3998, 0x3968),
+            (0x9030, 0x8ff0),
+            (0x9400, 0x93a0),
+            (0x3b000, 0x3b000),
+        ]);
+        let rev = fwd.reverse();
+        contains_all(
+            &rev,
+            &[
+                (0, 0),
+                (0x400, 0x400),
+                (0x718, 0x720),
+                (0x3990, 0x39c0),
+                (0x9000, 0x9040),
+                (0x93c0, 0x9420),
+                (0x3b000, 0x3b000),
+            ],
+        );
+    }
+
+    /// Ground truth from genuine dpx.dll for the WRAP case (docprop). docprop's
+    /// `preprocess_rift` is far more intricate (a section-relayout with negative
+    /// source wraps and many small segments). The genuine final copy rift is the
+    /// `Reverse` of `io2rva_src . preprocess_rift . pe_rift`, and it includes
+    /// wrap entries that only exist because `Multiply`'s pre-first wrap block
+    /// seeds the region below A's first source. Composing the three real factors
+    /// with our `Multiply` and reversing must reproduce genuine byte-for-byte,
+    /// including the load-bearing wrap/gap entries that the previous approximate
+    /// `Multiply` (offset-deduped, no wrap block) dropped:
+    ///   `6e0 -> -0x5120`, `bc8 -> -0x4c38`, `6a00,6400`, `7a00,71d0`, `9000,8800`.
+    #[test]
+    fn reverse_docprop_wrap_vector() {
+        // io2rva_src (file offset -> RVA), source PE.
+        let io2rva = t(&[
+            (0x0, 0x0),
+            (0x400, 0x1000),
+            (0x6200, 0x7000),
+            (0x6400, 0xa000),
+            (0x7200, 0xb000),
+            (0x8800, 0xd000),
+        ]);
+        // preprocess_rift (RVA -> target RVA).
+        let pre = t(&[
+            (0x0, 0x0),
+            (0x12e0, 0x1308),
+            (0x17a0, 0x1860),
+            (0x6d20, 0x7350),
+            (0x6fff, 0x7fff),
+            (0xa0e0, 0xb0f0),
+            (0xa120, 0xb138),
+            (0xa14c, 0xb15c),
+            (0xa300, 0xb374),
+            (0xa444, 0xb4c8),
+            (0xa484, 0xb510),
+            (0xa4b0, 0xb534),
+            (0xa596, 0xb746),
+            (0xa7ce, 0xb976),
+            (0xa830, 0xb9f4),
+            (0xa8a0, 0xba7e),
+            (0xaa4e, 0xbc0a),
+            (0xaaa2, 0xbc88),
+            (0xaaea, 0xbd1a),
+            (0xafff, 0xbfff),
+        ]);
+        // pe_rift (target RVA -> target file offset).
+        let pe = t(&[
+            (0x0, 0x0),
+            (0x1000, 0x400),
+            (0x8000, 0x6800),
+            (0xb000, 0x6a00),
+            (0xc000, 0x7a00),
+            (0xe000, 0x9000),
+        ]);
+        let forward = io2rva.multiply(&pre).multiply(&pe);
+        let rev = forward.reverse();
+        contains_all(
+            &rev,
+            &[
+                (0x0, 0x0),
+                (0x400, 0x400),
+                (0x6e0, -0x5120),
+                (0x708, 0x6e0),
+                (0xbc8, -0x4c38),
+                (0xc60, 0xba0),
+                (0x6750, 0x6120),
+                (0x6830, 0x6230),
+                (0x6a00, 0x6400),
+                (0x771a, 0x6eea),
+                (0x7a00, 0x71d0),
+                (0x7a30, 0x7230),
+                (0x9000, 0x8800),
+            ],
+        );
     }
 
     #[test]
