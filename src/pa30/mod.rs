@@ -1514,6 +1514,76 @@ mod tests {
         );
     }
 
+    /// Large-scale bulk corpus: apply every minted (base, delta) pair in
+    /// notes/pe-fixtures-bulk and verify the output SHA-256 against the genuine
+    /// truth hash recorded in manifest.csv (fixid,truth_sha256,base_len). Ships
+    /// only base+delta+hash (no truth.bin) to keep the corpus transferable, so it
+    /// scales to hundreds of diverse WinSxS version-pair fixtures. Reports
+    /// byte-exact / mismatch / managed-rejected / errored. Ignored; needs the
+    /// gitignored corpus. `cargo test --release --lib bulk_corpus -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn bulk_corpus() {
+        use digest::Digest;
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures-bulk");
+        let manifest = root.join("manifest.csv");
+        if !manifest.exists() {
+            eprintln!("bulk corpus absent; skipping");
+            return;
+        }
+        let txt = std::fs::read_to_string(&manifest).unwrap();
+        let (mut exact, mut mismatch, mut managed, mut errored, mut total) = (0, 0, 0, 0, 0);
+        let mut bad: Vec<String> = Vec::new();
+        for line in txt.lines() {
+            let mut it = line.split(',');
+            let (Some(fid), Some(sha)) = (it.next(), it.next()) else {
+                continue;
+            };
+            let d = root.join(fid);
+            let (Ok(base), Ok(delta)) =
+                (std::fs::read(d.join("base.bin")), std::fs::read(d.join("forward.delta")))
+            else {
+                continue;
+            };
+            total += 1;
+            match apply_impl(&base, &delta, false) {
+                Ok(out) => {
+                    let mut h = sha2::Sha256::new();
+                    h.update(&out);
+                    let got: String = h.finalize().iter().map(|b| format!("{b:02x}")).collect();
+                    if got == sha {
+                        exact += 1;
+                    } else {
+                        mismatch += 1;
+                        if bad.len() < 25 {
+                            bad.push(fid.to_string());
+                        }
+                    }
+                }
+                Err(Error::Unsupported(_)) => managed += 1,
+                Err(e) => {
+                    errored += 1;
+                    if bad.len() < 25 {
+                        bad.push(format!("{fid} ERR={e}"));
+                    }
+                }
+            }
+        }
+        eprintln!("\n=== BULK CORPUS ({total} fixtures) ===");
+        for b in &bad {
+            eprintln!("  FAIL {b}");
+        }
+        eprintln!(
+            "byte-exact={exact}  mismatch={mismatch}  managed-rejected={managed}  errored={errored}  total={total}"
+        );
+        assert_eq!(
+            mismatch + errored,
+            0,
+            "{} bulk fixtures decoded wrong (not managed)",
+            mismatch + errored
+        );
+    }
+
     /// amd64 ground-truth probe: apply a matrix fixture and dump the final
     /// output-vs-truth byte diffs for one section, with context. Unlike the
     /// tsource_oracle this is NON-circular -- it compares our real apply output
