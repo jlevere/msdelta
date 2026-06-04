@@ -643,6 +643,24 @@ impl OffsetRiftTable {
             Err(i) => self.entries[i - 1].1,
         }
     }
+
+    /// Segment offset at `pos` plus the next breakpoint position (`i64::MAX` if
+    /// none follows). Genuine `Decompressor::Run`'s SOURCE-copy loop walks these
+    /// segments, re-anchoring the source at each breakpoint inside a single copy.
+    pub fn segment_at(&self, pos: i64) -> (i64, i64) {
+        let idx = match self.entries.binary_search_by_key(&pos, |&(p, _)| p) {
+            Ok(i) => i,
+            Err(0) => 0,
+            Err(i) => i - 1,
+        };
+        let off = self.entries[idx].1;
+        let next = self
+            .entries
+            .get(idx + 1)
+            .map(|&(p, _)| p)
+            .unwrap_or(i64::MAX);
+        (off, next)
+    }
 }
 
 /// IntFormat: Huffman-coded signed integer encoding.

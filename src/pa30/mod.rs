@@ -1513,7 +1513,7 @@ mod tests {
             let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
             let rift = build_pe_copy_rift(&base, &pp);
             let gref = std::fs::read(&refp).unwrap();
-            let dec = crate::lzx::decompress_with_rift(
+            let (dec, csrc) = crate::lzx::decompress_with_copy_source(
                 &gref,
                 &parsed.patch_data,
                 parsed.header.target_size as usize,
@@ -1522,10 +1522,8 @@ mod tests {
             .unwrap();
             let tpe2 = crate::pe::parse::PeInfo::parse_lenient(&truth).unwrap();
             let total = (0..dec.len().min(truth.len())).filter(|&i| dec[i] != truth[i]).count();
-            let idata = tpe2
-                .sections
-                .iter()
-                .find(|s| s.name == ".idata")
+            let sec = tpe2.sections.iter().find(|s| s.name == ".idata");
+            let idata = sec
                 .map(|s| {
                     let a = s.raw_offset as usize;
                     let e = (a + s.raw_size as usize).min(truth.len()).min(dec.len());
@@ -1533,6 +1531,31 @@ mod tests {
                 })
                 .unwrap_or(0);
             eprintln!("REF_TSRC decode: total diff={total} .idata={idata} (genuine T(source) + our rift)");
+            // For the first few .idata diffs: is it a copy (csrc>=0, reading the
+            // wrong source) or a literal (csrc==-1)? gref==genuine T(source).
+            if let Some(s) = sec {
+                let a = s.raw_offset as usize;
+                let e = (a + s.raw_size as usize).min(truth.len()).min(dec.len());
+                let mut shown = 0;
+                let mut i = a;
+                while i < e && shown < 8 {
+                    if dec[i] != truth[i] {
+                        let cs = csrc[i];
+                        let kind = if cs < 0 {
+                            "LITERAL".to_string()
+                        } else {
+                            format!("copy<-src {cs:#x} grefbyte={:#04x}", gref.get(cs as usize).copied().unwrap_or(0))
+                        };
+                        eprintln!("  .idata fo={i:#x} out={:#04x} truth={:#04x}  {kind}", dec[i], truth[i]);
+                        shown += 1;
+                        while i < e && dec[i] != truth[i] {
+                            i += 1;
+                        }
+                        continue;
+                    }
+                    i += 1;
+                }
+            }
         }
         if std::env::var("RIFTDUMP").is_ok() {
             let parsed = parse(&delta).unwrap();
