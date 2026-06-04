@@ -1351,6 +1351,101 @@ mod tests {
         );
     }
 
+    /// Rift-composition corpus: validate `build_pe_copy_rift` against genuine
+    /// dpx's composed copy rift dumped by the lab harness (notes/lab/rifts/<fix>.rift,
+    /// gitignored). Each line is `target_fo,source_fo` (hex, possibly negative as
+    /// 0xffff.. unsigned). We compare our composed rift (with the ref_len shift
+    /// removed) to genuine's, ignoring only the i64::MIN/MAX wrap sentinels.
+    /// This exercises the multiply/reverse composition across every minted
+    /// topology (4..304 entries). Ignored; needs the gitignored dumps.
+    #[test]
+    #[ignore]
+    fn rift_corpus() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures-matrix");
+        let rifts = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/lab/rifts");
+        if !rifts.exists() {
+            eprintln!("rift dumps absent; skipping");
+            return;
+        }
+        // A value within this of i64::MIN/MAX is a wrap sentinel, not a real entry.
+        let is_sentinel =
+            |v: i64| !(-0x7000_0000_0000_0000..=0x7000_0000_0000_0000).contains(&v);
+        let parse_hex = |s: &str| -> i64 {
+            u64::from_str_radix(s.trim(), 16).map(|u| u as i64).unwrap_or(0)
+        };
+        let mut pass = 0;
+        let mut fail = 0;
+        let mut rows: Vec<String> = Vec::new();
+        let mut entries: Vec<_> = std::fs::read_dir(&rifts)
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().is_some_and(|x| x == "rift"))
+            .collect();
+        entries.sort();
+        for rp in &entries {
+            let fix = rp.file_stem().unwrap().to_string_lossy().to_string();
+            let d = root.join(&fix);
+            let (Ok(base), Ok(delta)) =
+                (std::fs::read(d.join("base.bin")), std::fs::read(d.join("forward.delta")))
+            else {
+                continue;
+            };
+            let Ok(parsed) = parse(&delta) else { continue };
+            if parsed.preprocess.is_empty() {
+                continue;
+            }
+            let Ok(pp) = parse_pe_preprocess(&parsed.preprocess) else { continue };
+            // Managed (.NET) images carry a CLI-metadata rift contribution we do
+            // not implement (apply_impl rejects them up front); their composed
+            // rift legitimately differs, so they are out of scope here.
+            if pp.cli_bytes > 0 {
+                continue;
+            }
+            let reflen = base.len() as i64;
+            let ours = build_pe_copy_rift(&base, &pp);
+
+            // Genuine (target_fo, source_fo) set, sentinels dropped.
+            let mut want: Vec<(i64, i64)> = std::fs::read_to_string(rp)
+                .unwrap()
+                .lines()
+                .filter_map(|l| l.split_once(','))
+                .map(|(a, b)| (parse_hex(a), parse_hex(b)))
+                .filter(|&(t, s)| !is_sentinel(t) && !is_sentinel(s))
+                .collect();
+            want.sort();
+            // Ours, ref_len removed, sentinels dropped.
+            let mut got: Vec<(i64, i64)> = ours
+                .entries
+                .iter()
+                .map(|e| (e.source - reflen, e.target))
+                .filter(|&(t, s)| !is_sentinel(t) && !is_sentinel(s))
+                .collect();
+            got.sort();
+            got.dedup();
+            want.dedup();
+            if got == want {
+                pass += 1;
+            } else {
+                fail += 1;
+                let only_want: Vec<_> = want.iter().filter(|e| !got.contains(e)).take(4).collect();
+                let only_got: Vec<_> = got.iter().filter(|e| !want.contains(e)).take(4).collect();
+                rows.push(format!(
+                    "{fix}: genuine={} ours={} | missing={:x?} extra={:x?}",
+                    want.len(),
+                    got.len(),
+                    only_want,
+                    only_got
+                ));
+            }
+        }
+        eprintln!("\n=== RIFT CORPUS ===");
+        for r in &rows {
+            eprintln!("  {r}");
+        }
+        eprintln!("\nrift corpus: {pass} match / {fail} differ");
+        assert_eq!(fail, 0, "rift composition diverges from genuine on {fail} fixtures");
+    }
+
     /// amd64 ground-truth probe: apply a matrix fixture and dump the final
     /// output-vs-truth byte diffs for one section, with context. Unlike the
     /// tsource_oracle this is NON-circular -- it compares our real apply output
