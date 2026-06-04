@@ -1472,50 +1472,28 @@ pub(crate) fn undo_x86_e8_translation(buf: &mut [u8]) -> u32 {
 /// `IMAGE_FILE_MACHINE_I386` (0x14C) and a PE32 optional header, and rejects
 /// images whose CLR runtime header (data directory 14) has `COMIMAGE_FLAGS_ILONLY`.
 fn is_i386_native_pe(buf: &[u8]) -> bool {
-    use crate::pe::structs::{self, dir, ImageSectionHeader};
+    use crate::pe::structs::{self, dir, machine, PeView};
 
-    let Some(e) = structs::pe_header_offset(buf) else {
+    let Some(pe) = PeView::parse(buf) else {
         return false;
     };
-    if structs::read_u16(buf, e + 4) != 0x014C {
-        return false; // not i386
-    }
-    let opt = e + 24;
-    // i386 images are PE32 (magic 0x10B); data directories start at opt+96.
-    if structs::read_u16(buf, opt) != 0x010B {
+    // i386 images are PE32 with machine i386.
+    if pe.is_64bit() || pe.machine() != machine::I386 {
         return false;
     }
-    let num_rva = structs::read_u32(buf, opt + 92) as usize;
-    if num_rva <= dir::COM_DESCRIPTOR {
-        return true; // no CLR header -> native
-    }
-    let clr_rva = structs::read_u32(buf, opt + 96 + dir::COM_DESCRIPTOR * 8);
+    let Some(clr) = pe.data_directory(dir::COM_DESCRIPTOR) else {
+        return true; // no CLR directory -> native
+    };
+    let clr_rva = clr.virtual_address.get();
     if clr_rva == 0 {
         return true; // native
     }
-    // Map the CLR header RVA to a file offset via the section table and read
-    // its COR20 Flags (u32 at +16); ILONLY (bit 0) => managed, skip.
-    let Some((sec_base, num_sections)) = structs::section_table(buf) else {
-        return true;
-    };
-    for i in 0..num_sections {
-        let Some(s) =
-            structs::read::<ImageSectionHeader>(buf, sec_base + i * ImageSectionHeader::SIZE)
-        else {
-            break;
-        };
-        let (vs, va, ro) = (
-            s.virtual_size.get(),
-            s.virtual_address.get(),
-            s.pointer_to_raw_data.get(),
-        );
-        if clr_rva >= va && clr_rva < va.wrapping_add(vs) {
-            // usize add (a u32 add could overflow on a hostile header).
-            let off = ro as usize + (clr_rva - va) as usize;
-            return structs::read_u32(buf, off + 16) & 0x1 == 0; // ILONLY clear => native
-        }
+    // Map the CLR header RVA to a file offset and read its COR20 Flags (u32 at
+    // +16); ILONLY (bit 0) set => managed, skip.
+    match pe.rva_to_offset(clr_rva) {
+        Some(off) => structs::read_u32(buf, off + 16) & 0x1 == 0, // ILONLY clear => native
+        None => true,
     }
-    true
 }
 
 /// Is `buf` a managed (.NET / CLI) PE image -- one carrying a CLR runtime
@@ -1526,28 +1504,14 @@ fn is_i386_native_pe(buf: &[u8]) -> bool {
 /// differently-framed) preprocess stream -- lets `apply` reject them cleanly with
 /// `Error::Unsupported` instead of failing deep in the bitstream parser.
 ///
-/// Hand-parses just the header (no `goblin`, which over-validates some genuine
-/// system images), handling both PE32 (data dirs at opt+0x60) and PE32+
-/// (opt+0x70). Returns false for anything not a well-formed PE with a non-empty
-/// data directory 14.
+/// Lenient header parse (no `goblin`, which over-validates some genuine system
+/// images): a non-empty data directory 14 means a CLR header is present.
 pub(crate) fn is_managed_pe(buf: &[u8]) -> bool {
-    use crate::pe::structs::{self, dir};
+    use crate::pe::structs::{dir, PeView};
 
-    let Some(e) = structs::pe_header_offset(buf) else {
-        return false;
-    };
-    let opt = e + 24;
-    // NumberOfRvaAndSizes + data-directory base differ by optional-header magic.
-    let (num_rva_off, dd_base) = match structs::read_u16(buf, opt) {
-        0x10b => (opt + 92, opt + 96),   // PE32
-        0x20b => (opt + 108, opt + 112), // PE32+
-        _ => return false,
-    };
-    if structs::read_u32(buf, num_rva_off) as usize <= dir::COM_DESCRIPTOR {
-        return false;
-    }
-    // data directory 14 VirtualAddress != 0 => CLR header present => managed.
-    structs::read_u32(buf, dd_base + dir::COM_DESCRIPTOR * 8) != 0
+    PeView::parse(buf)
+        .and_then(|pe| pe.data_directory(dir::COM_DESCRIPTOR))
+        .is_some_and(|clr| clr.virtual_address.get() != 0)
 }
 
 /// File offset of the PE optional-header CheckSum field (4 bytes), if `data`

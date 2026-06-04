@@ -27,6 +27,25 @@ pub mod dir {
 /// `IMAGE_SCN_MEM_WRITE | IMAGE_SCN_MEM_READ` section characteristics.
 pub const SCN_MEM_WRITE_READ: u32 = 0xC000_0000;
 
+/// `IMAGE_DOS_SIGNATURE` -- the "MZ" magic at file offset 0.
+pub const DOS_SIGNATURE: u16 = 0x5A4D;
+
+/// `IMAGE_FILE_MACHINE_*` values (COFF `FileHeader.Machine`).
+pub mod machine {
+    pub const I386: u16 = 0x014C;
+    pub const AMD64: u16 = 0x8664;
+    pub const ARMNT: u16 = 0x01C4;
+    pub const ARM64: u16 = 0xAA64;
+    pub const IA64: u16 = 0x0200;
+}
+
+/// `IMAGE_NT_OPTIONAL_HDR*_MAGIC` values (`OptionalHeader.Magic`).
+pub mod magic {
+    pub const PE32: u16 = 0x010B;
+    pub const PE32_PLUS: u16 = 0x020B;
+    pub const ROM: u16 = 0x0107;
+}
+
 /// `IMAGE_SECTION_HEADER` (40 bytes). Only the fields the transforms touch are
 /// named; `characteristics` is the rewritten one (PeUnbinder marks `.idata`
 /// writable). `name` is 8 bytes, null- or space-padded, not necessarily NUL-
@@ -118,9 +137,114 @@ pub struct ImageBaseRelocation {
     pub size_of_block: U32,
 }
 
-/// File offset of the PE signature (`e_lfanew`), if `buf` is a PE.
+/// `IMAGE_FILE_HEADER` (COFF header, 20 bytes). Immediately follows the 4-byte
+/// `PE\0\0` signature. `size_of_optional_header` locates the section table;
+/// `machine` distinguishes i386 / amd64 / arm64.
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Clone, Copy)]
+#[repr(C)]
+pub struct ImageFileHeader {
+    pub machine: U16,
+    pub number_of_sections: U16,
+    pub time_date_stamp: U32,
+    pub pointer_to_symbol_table: U32,
+    pub number_of_symbols: U32,
+    pub size_of_optional_header: U16,
+    pub characteristics: U16,
+}
+
+/// `IMAGE_DATA_DIRECTORY` (8 bytes): an RVA + byte size. The optional header
+/// ends with `NumberOfRvaAndSizes` of these (see `dir` for the indices).
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Clone, Copy, Default)]
+#[repr(C)]
+pub struct ImageDataDirectory {
+    pub virtual_address: U32,
+    pub size: U32,
+}
+
+/// `IMAGE_OPTIONAL_HEADER32` (PE32) up to but not including the trailing
+/// `DataDirectory[]` -- exactly 96 bytes, so the data directories begin at
+/// `optional_header_offset + 96`. PE32 carries `base_of_data` and 32-bit
+/// `image_base` / stack / heap fields (the point of difference from PE32+).
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Clone, Copy)]
+#[repr(C)]
+pub struct ImageOptionalHeader32 {
+    pub magic: U16,
+    pub major_linker_version: u8,
+    pub minor_linker_version: u8,
+    pub size_of_code: U32,
+    pub size_of_initialized_data: U32,
+    pub size_of_uninitialized_data: U32,
+    pub address_of_entry_point: U32,
+    pub base_of_code: U32,
+    pub base_of_data: U32,
+    pub image_base: U32,
+    pub section_alignment: U32,
+    pub file_alignment: U32,
+    pub major_operating_system_version: U16,
+    pub minor_operating_system_version: U16,
+    pub major_image_version: U16,
+    pub minor_image_version: U16,
+    pub major_subsystem_version: U16,
+    pub minor_subsystem_version: U16,
+    pub win32_version_value: U32,
+    pub size_of_image: U32,
+    pub size_of_headers: U32,
+    pub check_sum: U32,
+    pub subsystem: U16,
+    pub dll_characteristics: U16,
+    pub size_of_stack_reserve: U32,
+    pub size_of_stack_commit: U32,
+    pub size_of_heap_reserve: U32,
+    pub size_of_heap_commit: U32,
+    pub loader_flags: U32,
+    pub number_of_rva_and_sizes: U32,
+}
+
+/// `IMAGE_OPTIONAL_HEADER64` (PE32+) up to but not including the trailing
+/// `DataDirectory[]` -- exactly 112 bytes, so the data directories begin at
+/// `optional_header_offset + 112`. No `base_of_data`; `image_base` and the
+/// stack / heap reserve/commit fields are 64-bit.
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned, Clone, Copy)]
+#[repr(C)]
+pub struct ImageOptionalHeader64 {
+    pub magic: U16,
+    pub major_linker_version: u8,
+    pub minor_linker_version: u8,
+    pub size_of_code: U32,
+    pub size_of_initialized_data: U32,
+    pub size_of_uninitialized_data: U32,
+    pub address_of_entry_point: U32,
+    pub base_of_code: U32,
+    pub image_base: U64,
+    pub section_alignment: U32,
+    pub file_alignment: U32,
+    pub major_operating_system_version: U16,
+    pub minor_operating_system_version: U16,
+    pub major_image_version: U16,
+    pub minor_image_version: U16,
+    pub major_subsystem_version: U16,
+    pub minor_subsystem_version: U16,
+    pub win32_version_value: U32,
+    pub size_of_image: U32,
+    pub size_of_headers: U32,
+    pub check_sum: U32,
+    pub subsystem: U16,
+    pub dll_characteristics: U16,
+    pub size_of_stack_reserve: U64,
+    pub size_of_stack_commit: U64,
+    pub size_of_heap_reserve: U64,
+    pub size_of_heap_commit: U64,
+    pub loader_flags: U32,
+    pub number_of_rva_and_sizes: U32,
+}
+
+/// File offset of the PE signature (`e_lfanew`), if `buf` is a PE (`MZ` magic
+/// at 0, `PE\0\0` at `e_lfanew`).
 #[inline]
 pub fn pe_header_offset(buf: &[u8]) -> Option<usize> {
+    if read_u16(buf, 0) != DOS_SIGNATURE {
+        return None;
+    }
     let e = read_u32(buf, 0x3c) as usize;
     (buf.get(e..e + 4) == Some(b"PE\0\0")).then_some(e)
 }
@@ -193,5 +317,194 @@ pub fn write_u64(buf: &mut [u8], off: usize, val: u64) {
 pub fn write_u16(buf: &mut [u8], off: usize, val: u16) {
     if let Some(v) = view_mut::<U16>(buf, off) {
         v.set(val);
+    }
+}
+
+/// A lightweight, lenient *read* cursor over a PE image's headers.
+///
+/// This is the single entry point for header navigation: it locates the COFF
+/// header, optional header (PE32 / PE32+), data directories and section table,
+/// and resolves RVAs to/from file offsets -- replacing the several hand-rolled
+/// header walkers that used to each re-derive these offsets. It is deliberately
+/// lenient (the same reason the transforms avoid `goblin`): it validates only
+/// the `MZ` / `PE\0\0` / optional-magic gates and reads everything else through
+/// the bounds-checked helpers, so a truncated or unusual-but-real system image
+/// yields zeroes rather than a parse failure.
+#[derive(Clone, Copy)]
+pub struct PeView<'a> {
+    buf: &'a [u8],
+    /// File offset of the `PE\0\0` signature (`e_lfanew`).
+    pe_off: usize,
+    /// File offset of the optional header (`pe_off + 4 + 20`).
+    opt_off: usize,
+    /// PE32+ (true) vs PE32 (false), from the optional-header magic.
+    pe32_plus: bool,
+}
+
+impl<'a> PeView<'a> {
+    /// Parse just enough to navigate: requires `MZ`, `PE\0\0`, and a recognized
+    /// optional-header magic (PE32 or PE32+). Returns `None` otherwise.
+    pub fn parse(buf: &'a [u8]) -> Option<Self> {
+        let pe_off = pe_header_offset(buf)?;
+        let opt_off = pe_off + 24;
+        let pe32_plus = match read_u16(buf, opt_off) {
+            magic::PE32 => false,
+            magic::PE32_PLUS => true,
+            _ => return None,
+        };
+        Some(Self {
+            buf,
+            pe_off,
+            opt_off,
+            pe32_plus,
+        })
+    }
+
+    /// The underlying image bytes.
+    #[inline]
+    pub fn buf(&self) -> &'a [u8] {
+        self.buf
+    }
+
+    /// File offset of the `PE\0\0` signature.
+    #[inline]
+    pub fn pe_header_offset(&self) -> usize {
+        self.pe_off
+    }
+
+    /// File offset of the optional header.
+    #[inline]
+    pub fn optional_header_offset(&self) -> usize {
+        self.opt_off
+    }
+
+    /// True for PE32+ (64-bit) images.
+    #[inline]
+    pub fn is_64bit(&self) -> bool {
+        self.pe32_plus
+    }
+
+    /// The COFF file header (`IMAGE_FILE_HEADER`), if in bounds.
+    #[inline]
+    pub fn file_header(&self) -> Option<ImageFileHeader> {
+        read::<ImageFileHeader>(self.buf, self.pe_off + 4)
+    }
+
+    /// `FileHeader.Machine` (e.g. [`machine::I386`], [`machine::AMD64`]).
+    #[inline]
+    pub fn machine(&self) -> u16 {
+        read_u16(self.buf, self.pe_off + 4)
+    }
+
+    /// `FileHeader.NumberOfSections`.
+    #[inline]
+    pub fn number_of_sections(&self) -> usize {
+        read_u16(self.buf, self.pe_off + 6) as usize
+    }
+
+    /// `FileHeader.SizeOfOptionalHeader` (locates the section table).
+    #[inline]
+    fn size_of_optional_header(&self) -> usize {
+        read_u16(self.buf, self.pe_off + 20) as usize
+    }
+
+    /// `FileHeader.TimeDateStamp`.
+    #[inline]
+    pub fn timestamp(&self) -> u32 {
+        read_u32(self.buf, self.pe_off + 8)
+    }
+
+    /// `OptionalHeader.ImageBase` (u32 for PE32, u64 for PE32+).
+    #[inline]
+    pub fn image_base(&self) -> u64 {
+        if self.pe32_plus {
+            read_u64(self.buf, self.opt_off + 24)
+        } else {
+            read_u32(self.buf, self.opt_off + 28) as u64
+        }
+    }
+
+    /// `OptionalHeader.SizeOfImage` (offset 56 for both magics).
+    #[inline]
+    pub fn size_of_image(&self) -> u32 {
+        read_u32(self.buf, self.opt_off + 56)
+    }
+
+    /// `OptionalHeader.CheckSum` (offset 64 for both magics).
+    #[inline]
+    pub fn check_sum(&self) -> u32 {
+        read_u32(self.buf, self.opt_off + 64)
+    }
+
+    /// `OptionalHeader.NumberOfRvaAndSizes`.
+    #[inline]
+    pub fn number_of_rva_and_sizes(&self) -> u32 {
+        let off = self.opt_off + if self.pe32_plus { 108 } else { 92 };
+        read_u32(self.buf, off)
+    }
+
+    /// File offset of the data-directory array (just past the fixed optional
+    /// header: +112 for PE32+, +96 for PE32).
+    #[inline]
+    fn data_directory_base(&self) -> usize {
+        self.opt_off + if self.pe32_plus { 112 } else { 96 }
+    }
+
+    /// Data directory `index` (see [`dir`]), or `None` if `index` is beyond
+    /// `NumberOfRvaAndSizes` or out of bounds.
+    #[inline]
+    pub fn data_directory(&self, index: usize) -> Option<ImageDataDirectory> {
+        if index >= self.number_of_rva_and_sizes() as usize {
+            return None;
+        }
+        read::<ImageDataDirectory>(self.buf, self.data_directory_base() + index * 8)
+    }
+
+    /// File offset of the section table (just past the optional header).
+    #[inline]
+    pub fn section_table_offset(&self) -> usize {
+        self.opt_off + self.size_of_optional_header()
+    }
+
+    /// Iterate the section headers (each a `Copy` view; stops at the first one
+    /// that runs past the buffer).
+    pub fn sections(&self) -> impl Iterator<Item = ImageSectionHeader> + 'a {
+        let buf = self.buf;
+        let base = self.section_table_offset();
+        let count = self.number_of_sections();
+        (0..count).map_while(move |i| {
+            read::<ImageSectionHeader>(buf, base + i * ImageSectionHeader::SIZE)
+        })
+    }
+
+    /// Map a relative virtual address to a file offset via the section table.
+    /// Sections with no raw backing (`pointer_to_raw_data == 0`) are skipped;
+    /// containment uses `virtual_size`.
+    pub fn rva_to_offset(&self, rva: u32) -> Option<usize> {
+        for s in self.sections() {
+            let ptr = s.pointer_to_raw_data.get();
+            if ptr == 0 {
+                continue;
+            }
+            let va = s.virtual_address.get();
+            if rva >= va && rva < va.wrapping_add(s.virtual_size.get()) {
+                return Some(ptr as usize + (rva - va) as usize);
+            }
+        }
+        None
+    }
+
+    /// Map a file offset back to a relative virtual address via the section
+    /// table (inverse of [`rva_to_offset`](Self::rva_to_offset)).
+    pub fn offset_to_rva(&self, off: usize) -> Option<u32> {
+        let off = u32::try_from(off).ok()?;
+        for s in self.sections() {
+            let ptr = s.pointer_to_raw_data.get();
+            let raw = s.size_of_raw_data.get();
+            if raw != 0 && off >= ptr && off < ptr.wrapping_add(raw) {
+                return Some(s.virtual_address.get() + (off - ptr));
+            }
+        }
+        None
     }
 }
