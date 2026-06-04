@@ -95,8 +95,11 @@ fn build_pe_copy_rift(
         entries: Vec::with_capacity(composed.entries.len()),
     };
     for e in &composed.entries {
+        // wrapping: composed entries can carry near-i64::MIN/MAX wrap-boundary
+        // values; the sum wraps (correct) in release but would overflow-panic in
+        // a debug build. The decompressor's offset lookups are wrap-consistent.
         out.entries.push(RiftEntry {
-            source: ref_len + e.source,
+            source: ref_len.wrapping_add(e.source),
             target: e.target,
         });
     }
@@ -1547,9 +1550,10 @@ mod tests {
                 continue;
             };
             let d = root.join(fid);
-            let (Ok(base), Ok(delta)) =
-                (std::fs::read(d.join("base.bin")), std::fs::read(d.join("forward.delta")))
-            else {
+            let (Ok(base), Ok(delta)) = (
+                std::fs::read(d.join("base.bin")),
+                std::fs::read(d.join("forward.delta")),
+            ) else {
                 continue;
             };
             total += 1;
@@ -1562,7 +1566,9 @@ mod tests {
                         exact += 1;
                     } else {
                         mismatch += 1;
-                        let (ft, fl) = parse(&delta).map(|p| (p.header.file_type, p.header.flags)).unwrap_or((-1, 0));
+                        let (ft, fl) = parse(&delta)
+                            .map(|p| (p.header.file_type, p.header.flags))
+                            .unwrap_or((-1, 0));
                         let arch = fid.split("__").next().unwrap_or("?");
                         bad.push(format!("{arch} ft={ft} fl={fl:#x} {fid}"));
                     }

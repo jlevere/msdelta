@@ -1596,8 +1596,14 @@ fn is_i386_native_pe(buf: &[u8]) -> bool {
 /// (opt+0x70). Returns false for anything not a well-formed PE with a non-empty
 /// data directory 14.
 pub(crate) fn is_managed_pe(buf: &[u8]) -> bool {
-    let rd_u16 = |o: usize| buf.get(o..o + 2).map(|b| u16::from_le_bytes(b.try_into().unwrap()));
-    let rd_u32 = |o: usize| buf.get(o..o + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap()));
+    let rd_u16 = |o: usize| {
+        buf.get(o..o + 2)
+            .map(|b| u16::from_le_bytes(b.try_into().unwrap()))
+    };
+    let rd_u32 = |o: usize| {
+        buf.get(o..o + 4)
+            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+    };
 
     let Some(e) = rd_u32(0x3c).map(|v| v as usize) else {
         return false;
@@ -1608,7 +1614,7 @@ pub(crate) fn is_managed_pe(buf: &[u8]) -> bool {
     let opt = e + 24;
     // NumberOfRvaAndSizes + data-directory base differ by optional-header magic.
     let (num_rva_off, dd_base) = match rd_u16(opt) {
-        Some(0x10b) => (opt + 92, opt + 96),  // PE32
+        Some(0x10b) => (opt + 92, opt + 96),   // PE32
         Some(0x20b) => (opt + 108, opt + 112), // PE32+
         _ => return false,
     };

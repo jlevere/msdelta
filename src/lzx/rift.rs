@@ -293,7 +293,7 @@ impl RiftTable {
             }
         }
         if all_same {
-            out.add(0, tgt(0) - src(0));
+            out.add(0, tgt(0).wrapping_sub(src(0)));
             return out;
         }
 
@@ -334,10 +334,14 @@ impl RiftTable {
             // up to `src(u_var7)` (the next segment's source), splitting at the
             // current segment's image extent each iteration.
             loop {
-                let seg_off = tgt(local_88) - src(local_88);
+                // Two's-complement (wrapping) arithmetic throughout: the working
+                // buffer carries i64::MIN/MAX sentinels and the genuine C does
+                // these on unsigned values, so plain +/- would overflow-panic in
+                // debug while wrapping (correct) in release.
+                let seg_off = tgt(local_88).wrapping_sub(src(local_88));
                 let end_idx = u_var7;
-                let mut span = src(u_var7) - local_98;
-                let lo = seg_off + local_98; // image start
+                let mut span = src(u_var7).wrapping_sub(local_98);
+                let lo = seg_off.wrapping_add(local_98); // image start
                 if lo != i64::MIN {
                     let clamp = (i64::MIN.wrapping_sub(seg_off)).wrapping_sub(local_98);
                     if (clamp as u64) < (span as u64) {
@@ -345,8 +349,8 @@ impl RiftTable {
                     }
                 }
                 if span != 0 {
-                    let hi = lo + span; // image end (exclusive bound value)
-                                        // First buffer index whose key (f1) is >= lo or a sentinel.
+                    let hi = lo.wrapping_add(span); // image end (exclusive bound value)
+                                                    // First buffer index whose key (f1) is >= lo or a sentinel.
                     let mut start: u64 = 0;
                     if live != 0 {
                         let mut k = 0u64;
@@ -414,7 +418,7 @@ impl RiftTable {
                                 // its image end (`f1`) and the segment offset.
                                 for idx in start..(stop - 1) {
                                     let v = f1[idx as usize];
-                                    out.add(v, v - val);
+                                    out.add(v, v.wrapping_sub(val));
                                 }
                                 ins = start;
                                 u_var7 = local_90;
@@ -422,7 +426,7 @@ impl RiftTable {
                             let last_key = f1[(stop - 1) as usize];
                             val = last_key;
                             if last_key != i64::MIN && (hi == i64::MIN || last_key < hi) {
-                                out.add(last_key, last_key - seg_off);
+                                out.add(last_key, last_key.wrapping_sub(seg_off));
                                 val = hi;
                             }
                             Self::shift_for_insert(&mut f0, &mut f1, ins, stop, live);
@@ -441,7 +445,7 @@ impl RiftTable {
                         term_idx = restart_88;
                     }
                 }
-                local_98 += span;
+                local_98 = local_98.wrapping_add(span);
                 if local_98 == src(end_idx) {
                     break;
                 }
