@@ -19,6 +19,10 @@ pub const FILE_TYPE_CLI4_AMD64: i64 = 0x20;
 const RELOC_MARKER: u32 = 0x01010101;
 const RELOC_CHECK: u32 = 0x02020202;
 
+/// Upper bound on the import-descriptor walk (a malformed table without a
+/// null terminator must not loop unboundedly).
+const MAX_IMPORT_DESCRIPTORS: usize = 4096;
+
 use crate::lzx::rift::RiftTable;
 
 /// `MapRva`: map a source RVA to its target RVA through the (coarse) rift.
@@ -194,91 +198,73 @@ fn set_header_timestamp(buf: &mut [u8], ts: u32) {
 /// the `.idata` section writable (Characteristics |= MEM_WRITE|MEM_READ). (The
 /// bound-import *directory* clear is omitted; none of our fixtures carry one.)
 fn unbind_pe(buf: &mut [u8], pe: &PeInfo) {
-    let ptr = if pe.is_64bit { 8usize } else { 4 };
-    let rd = |b: &[u8], o: usize| -> u32 {
-        b.get(o..o + 4)
-            .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
-            .unwrap_or(0)
-    };
+    use crate::pe::structs::{self, dir, ImageImportDescriptor, ImageSectionHeader};
 
-    // Unbind each bound import descriptor (TimeDateStamp != 0).
-    if let Some((imp_rva, _)) = pe.data_directories.get(1).copied() {
-        if imp_rva != 0 {
-            if let Some(desc0) = rva_to_file_off(pe, imp_rva as i64) {
-                let mut di = 0usize;
+    let ptr = if pe.is_64bit { 8usize } else { 4 };
+
+    // Unbind each bound import descriptor (non-zero TimeDateStamp): clear the
+    // stamp + forwarder chain and copy the ILT (OriginalFirstThunk) over the IAT
+    // (FirstThunk), restoring the unbound thunk array.
+    if let Some((imp_rva, _)) = pe.data_directories.get(dir::IMPORT).copied() {
+        if let Some(desc0) = (imp_rva != 0)
+            .then(|| rva_to_file_off(pe, imp_rva as i64))
+            .flatten()
+        {
+            for di in 0..MAX_IMPORT_DESCRIPTORS {
+                let dfo = desc0 + di * size_of::<ImageImportDescriptor>();
+                let Some(d) = structs::read::<ImageImportDescriptor>(buf, dfo) else {
+                    break;
+                };
+                if d.original_first_thunk.get() == 0
+                    && d.name.get() == 0
+                    && d.first_thunk.get() == 0
+                {
+                    break; // null-terminator descriptor
+                }
+                if d.time_date_stamp.get() == 0 {
+                    continue; // not bound
+                }
+                if let Some(m) = structs::view_mut::<ImageImportDescriptor>(buf, dfo) {
+                    m.time_date_stamp.set(0);
+                    m.forwarder_chain.set(0);
+                }
+                let (Some(ilt), Some(iat)) = (
+                    rva_to_file_off(pe, d.original_first_thunk.get() as i64),
+                    rva_to_file_off(pe, d.first_thunk.get() as i64),
+                ) else {
+                    continue;
+                };
+                let mut k = 0usize;
                 loop {
-                    let dfo = desc0 + di * 0x14;
-                    if dfo + 0x14 > buf.len() {
+                    let (s, dst) = (ilt + k * ptr, iat + k * ptr);
+                    if s + ptr > buf.len() || dst + ptr > buf.len() {
                         break;
                     }
-                    let oft = rd(buf, dfo);
-                    let name = rd(buf, dfo + 0xc);
-                    let ft = rd(buf, dfo + 0x10);
-                    if oft == 0 && name == 0 && ft == 0 {
-                        break;
+                    let thunk = if pe.is_64bit {
+                        structs::read_u64(buf, s)
+                    } else {
+                        structs::read_u32(buf, s) as u64
+                    };
+                    if thunk == 0 {
+                        break; // end of thunk array
                     }
-                    if rd(buf, dfo + 4) != 0 {
-                        buf[dfo + 4..dfo + 8].fill(0); // TimeDateStamp
-                        buf[dfo + 8..dfo + 0xc].fill(0); // ForwarderChain
-                        if let (Some(ilt), Some(iat)) = (
-                            rva_to_file_off(pe, oft as i64),
-                            rva_to_file_off(pe, ft as i64),
-                        ) {
-                            let mut k = 0usize;
-                            loop {
-                                let (s, d) = (ilt + k * ptr, iat + k * ptr);
-                                if s + ptr > buf.len() || d + ptr > buf.len() {
-                                    break;
-                                }
-                                let v: u64 = if ptr == 8 {
-                                    u64::from_le_bytes(buf[s..s + 8].try_into().unwrap())
-                                } else {
-                                    rd(buf, s) as u64
-                                };
-                                if v == 0 {
-                                    break;
-                                }
-                                buf.copy_within(s..s + ptr, d);
-                                k += 1;
-                            }
-                        }
-                    }
-                    di += 1;
-                    if di > 4096 {
-                        break;
-                    }
+                    buf.copy_within(s..s + ptr, dst);
+                    k += 1;
                 }
             }
         }
     }
 
-    // Mark the .idata section writable (Characteristics |= 0xC0000000).
-    let Some(e) = buf
-        .get(0x3c..0x40)
-        .map(|b| u32::from_le_bytes(b.try_into().unwrap()) as usize)
-    else {
-        return;
-    };
-    if buf.get(e..e + 4) != Some(b"PE\0\0") {
-        return;
-    }
-    let nsec = u16::from_le_bytes(buf[e + 6..e + 8].try_into().unwrap()) as usize;
-    let optsz = u16::from_le_bytes(buf[e + 20..e + 22].try_into().unwrap()) as usize;
-    let sb = e + 24 + optsz;
-    for i in 0..nsec {
-        let sh = sb + i * 40;
-        if sh + 40 > buf.len() {
-            break;
-        }
-        let lname: Vec<u8> = buf[sh..sh + 8]
-            .iter()
-            .take_while(|&&c| c != 0)
-            .map(u8::to_ascii_lowercase)
-            .collect();
-        if lname == b".idata" {
-            let cf = sh + 0x24;
-            let v = u32::from_le_bytes(buf[cf..cf + 4].try_into().unwrap()) | 0xC000_0000;
-            buf[cf..cf + 4].copy_from_slice(&v.to_le_bytes());
+    // Mark the .idata section writable (Characteristics |= MEM_WRITE|MEM_READ).
+    if let Some((table, count)) = structs::section_table(buf) {
+        for i in 0..count {
+            let sh = table + i * ImageSectionHeader::SIZE;
+            if let Some(hdr) = structs::view_mut::<ImageSectionHeader>(buf, sh) {
+                if hdr.name_eq(b".idata") {
+                    let c = hdr.characteristics.get() | structs::SCN_MEM_WRITE_READ;
+                    hdr.characteristics.set(c);
+                }
+            }
         }
     }
 }

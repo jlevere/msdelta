@@ -43,6 +43,7 @@ anyhow = { version = "1", optional = true }
 dirs = { version = "6", optional = true }
 memchr = { version = "2", optional = true }
 sha1 = "0.11"
+zerocopy = { version = "0.8.50", features = ["derive"] }
 
 [[bin]]
 name = "msdelta"
