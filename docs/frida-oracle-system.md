@@ -462,3 +462,11 @@ The first milestone after this scaffold is the smallest export-capture loop:
 After that, hook `CliMetadata::FromBitReader`, `CliMap::FromBitReader`, and
 `CompressionRiftTableCli[4]::FromCliMap` so the first real managed rift oracle
 exists before any IL or metadata rewriting work begins.
+
+For managed work, start the internal-hook lane with
+`CliMetadata::FromBitReader`. It is the earliest missing managed parser after
+PE info and the preprocess rift, and its normalized object gives
+`CliMapBitstream`, heap/table rifts, IL token remapping, and metadata-table
+rewriting a stable source/target metadata contract. The hook should emit a
+logical `CliMetadata` object on return; do not promote captures that only dump
+raw native object memory.

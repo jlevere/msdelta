@@ -176,6 +176,14 @@ else:
     RiftTable table_map using table formats
 ```
 
+These are shared-format rift maps, not full standalone `RiftTable` records.
+The four `IntFormat` values are read once and reused for every heap/table map.
+Each individual map is then a signed entry count followed by
+source-delta/offset-delta pairs. The semantic entry is
+`source_acc -> source_acc + offset_acc`. A populated `CliMap` can still contain
+empty individual maps; those are represented as count `0`, not as nested
+present bits.
+
 `CliMap::MapCoded(kind, value)` uses a native coded-token descriptor table:
 
 ```text
@@ -343,6 +351,15 @@ Outputs: mapped token value, or `0xffffffff` for exact-map miss.
 Done when: unit tests cover every coded-token kind and every sentinel table id
 `0x40`.
 
+Current state: `src/pe/cli_map.rs` implements the pure coded-token algebra
+against the static schema. It covers tag/RID split and reassembly, sentinel
+table identity, null RID handling, identity when no table map is present,
+piecewise non-exact RID mapping, exact RID lookup with the `0xffffffff` miss
+sentinel, and mapped-RID overflow/zero checks. The current RID map type is a
+semantic source-RID to target-RID model; the next step is to feed it from the
+`CliMapBitstream` shared-format rift parser and confirm sentinel/exact behavior
+against a native object oracle.
+
 ### TransformContextManaged
 
 Native reference: `TransformExecutor::Run`, `TransformBase::SetCliMetadata`,
@@ -467,7 +484,9 @@ Transition: add a base mapping when the heap map is empty; otherwise convert
 each heap-map entry into a file-offset rift contribution. Stop at the native
 sentinel behavior for entries whose source exceeds `0xffffffff`.
 
-Outputs: rift entries for `#Strings`, `#US`, and `#Blob`.
+Outputs: rift entries for `#Strings`, `#US`, and `#Blob`. Treat `#GUID` as
+table-like for rift production even though it is exposed as a dedicated
+`CliMap` slot.
 
 Done when: unit tests cover empty heap map, leading zero entries, multiple
 entries, and sentinel termination.
@@ -484,7 +503,8 @@ Transition: add row-start mappings using the table map. If source and target
 column widths differ, add extra rift entries around widened or narrowed column
 positions so copy placement follows the rewritten metadata row layout.
 
-Outputs: rift entries for metadata table rows and width-change holes.
+Outputs: rift entries for metadata table rows, `#GUID` pseudo-table rows, and
+width-change holes.
 
 Done when: tests cover row-count changes, row-size changes, 2-byte to 4-byte
 index widening, 4-byte to 2-byte narrowing, and empty table maps.
@@ -538,21 +558,24 @@ apply-side models are stable.
 
 1. Implement `ManagedFileTypeBranch` as a pure classifier and use it in the
    fail-loud managed rejection path.
-2. Add pure data models for `CliMetadataModel` and `CliMapModel`.
-3. Implement `CliMetadataStaticSchema` with self-check tests.
-4. Implement `CliMetadataFromPe` for real managed PE bytes.
-5. Implement `CliMetadataBitstream` and `ManagedPeInfoBitstream` parser
+2. Implement pure schema/model atoms first: `CliMetadataStaticSchema`,
+   `CliMetadataFromPe`, `CliBlobCompressedInteger`, and `CliCodedTokenMap`.
+3. Add `CliMapModel` and the shared-format rift reader needed by
+   `CliMapBitstream`.
+4. Implement `CliMetadataBitstream` and `ManagedPeInfoBitstream` parser
    round-trips.
-6. Implement `CliMapBitstream` parser round-trips.
-7. Implement `CliCodedTokenMap`.
-8. Implement `CliHeapRift`, then `CliTableRift`, then `CliCompressionRift`.
-9. Add native stage fixtures for `FinalPeCopyRiftManaged`.
-10. Implement `MarkNonExeCliMethods`.
-11. Implement `TransformCliDisasm`.
-12. Implement `CliBlobCompressedInteger` and `CliBlobTypeTokenRemap`.
-13. Implement `TransformCliMetadata`.
-14. Only then remove the managed `Error::Unsupported` gate for covered
+5. Implement `CliMapBitstream` parser round-trips.
+6. Implement `CliHeapRift`, then `CliTableRift`, then `CliCompressionRift`.
+7. Add native stage fixtures for `CliMetadataBitstream`, `CliMapBitstream`,
+   `CliCompressionRift`, and `FinalPeCopyRiftManaged`.
+8. Implement `MarkNonExeCliMethods`.
+9. Implement `TransformCliDisasm`.
+10. Implement `CliBlobTypeTokenRemap`.
+11. Implement `TransformCliMetadata`.
+12. Only then remove the managed `Error::Unsupported` gate for covered
     branches.
 
-This order keeps the first seven atoms almost pure: they do not need to run
-LZX, apply a full delta, or mutate a PE image.
+This order keeps the early atoms almost pure: they do not need to run LZX,
+apply a full delta, or mutate a PE image. Native Frida work should run in
+parallel starting with `CliMetadata::FromBitReader` object normalization, then
+`CliMap::FromBitReader`, then `CompressionRiftTableCli[4]::FromCliMap`.
