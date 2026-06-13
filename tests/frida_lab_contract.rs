@@ -7,6 +7,10 @@ const INJECT_IMPORTER: &str = include_str!("../lab/frida/import-inject-capture.m
 const MANAGED_CAPTURE: &str = include_str!("../lab/frida/capture-managed-corpus.sh");
 const MANAGED_CORPUS: &str = include_str!("../lab/frida/managed-corpus.ps1");
 const AGENT: &str = include_str!("../lab/frida/agent/export-oracle.js");
+const STAGE_AGENT: &str = include_str!("../lab/frida/agent/stage-oracle.js");
+const WIN26100_MSDELTA_STAGE_MAP: &str = include_str!(
+    "../lab/frida/symbol-maps/msdelta/ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb.json"
+);
 const CAPTURE_SCHEMA: &str = include_str!("../lab/frida/schemas/export-capture.schema.json");
 const RUN_SCHEMA: &str = include_str!("../lab/frida/schemas/run.schema.json");
 const FRIDA_SYSTEM_DOC: &str = include_str!("../docs/frida-oracle-system.md");
@@ -54,6 +58,7 @@ fn frida_export_oracle_scaffold_has_expected_entrypoints() {
         "node --check ./capture-export-oracle.mjs",
         "node --check ./import-inject-capture.mjs",
         "node --check ./agent/export-oracle.js",
+        "node --check ./agent/stage-oracle.js",
         "\"frida\"",
         "\"packageManager\": \"pnpm@11.1.2\"",
     ] {
@@ -87,6 +92,12 @@ fn frida_inject_importer_normalizes_file_sink_output() {
         "frida-inject.exe",
         "MSDELTA_EXPORT_ORACLE_BLOB_DIR",
         "file_sink_path",
+        "--object-dir",
+        "MSDELTA_STAGE_ORACLE_OBJECT_DIR",
+        "importObject",
+        "object_json_invalid",
+        "object_size_mismatch",
+        "objects: []",
         "sha256Bytes",
         "readTextFile",
         "utf16le",
@@ -136,6 +147,14 @@ fn managed_corpus_capture_wrapper_runs_full_lab_loop() {
         "managed-corpus.ps1",
         "oracle_harness.ps1",
         "export-oracle.js",
+        "stage-oracle.js",
+        "symbol-maps",
+        "Get-FileHash",
+        "MSDELTA_STAGE_ORACLE_SYMBOL_MAP",
+        "MSDELTA_STAGE_ORACLE_OBJECT_DIR",
+        "MSDELTA_STAGE_ORACLE_READY_FILE",
+        "stage-agent-ready.txt",
+        "--object-dir",
         "frida-inject.exe",
         "agent-ready.txt",
         "LoadLibrary(\"msdelta.dll\")",
@@ -147,6 +166,71 @@ fn managed_corpus_capture_wrapper_runs_full_lab_loop() {
         assert!(
             MANAGED_CAPTURE.contains(required) || LAB_README.contains(required),
             "managed capture wrapper should document or contain {required}"
+        );
+    }
+}
+
+#[test]
+fn frida_stage_oracle_fails_closed_and_normalizes_cli_metadata() {
+    for required in [
+        "FridaStageCapture",
+        "MSDELTA_STAGE_ORACLE_SYMBOL_MAP",
+        "MSDELTA_STAGE_ORACLE_SELECTED_SHA256",
+        "MSDELTA_STAGE_ORACLE_OBJECT_DIR",
+        "MSDELTA_STAGE_ORACLE_READY_FILE",
+        "stage capture disabled",
+        "selected module hash does not match symbol map",
+        "mapped image size does not match symbol map",
+        "cli_metadata_internal_from_bitreader",
+        "CliMetadataBitstreamRecord",
+        "metadata_file_offset",
+        "metadata_size",
+        "metadata_rva",
+        "stream_count",
+        "stream_headers_end",
+        "heap_widths",
+        "valid_table_mask",
+        "row_counts",
+        "type: \"object\"",
+        "file_sink_path",
+    ] {
+        assert!(
+            STAGE_AGENT.contains(required),
+            "stage agent should contain {required}"
+        );
+    }
+
+    assert!(
+        !STAGE_AGENT.contains("readByteArray"),
+        "stage normalizer must not promote raw native object memory"
+    );
+}
+
+#[test]
+fn win26100_msdelta_symbol_map_names_first_managed_atom() {
+    for required in [
+        "\"schema\": 1",
+        "\"module\": \"msdelta.dll\"",
+        "\"sha256\": \"ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb\"",
+        "\"file_size\": 595360",
+        "\"image_size\": 585728",
+        "\"atom\": \"CliMetadataBitstream\"",
+        "\"name\": \"compo::CliMetadata::InternalFromBitReader\"",
+        "\"legacy_name\": \"CliMetadata::FromBitReader\"",
+        "\"rva\": \"0x1cba0\"",
+        "\"abi\": \"ms-x64-thiscall\"",
+        "\"capture\": \"cli_metadata_internal_from_bitreader\"",
+        "\"name\": \"msdelta-win26100-compo-cli-metadata-v1\"",
+        "\"base_offset\": 16",
+        "\"valid_table_mask_offset\": 80",
+        "\"row_counts_offset\": 88",
+        "\"strings\": 76",
+        "\"guid\": 77",
+        "\"blob\": 78",
+    ] {
+        assert!(
+            WIN26100_MSDELTA_STAGE_MAP.contains(required),
+            "stage symbol map should contain {required}"
         );
     }
 }
@@ -199,19 +283,30 @@ fn frida_agent_locks_x64_export_abi_assumptions() {
 
 #[test]
 fn frida_capture_schemas_are_tied_to_export_atom() {
-    for schema in [CAPTURE_SCHEMA, RUN_SCHEMA] {
-        for required in [
-            "\"schema\"",
-            "\"FridaExportOracle\"",
-            "\"ApplyDeltaB\"",
-            "\"ApplyDeltaGetReverseB\"",
-            "\"CreateDeltaB\"",
-        ] {
-            assert!(
-                schema.contains(required),
-                "schema should contain {required}"
-            );
-        }
+    for required in [
+        "\"schema\"",
+        "\"FridaExportOracle\"",
+        "\"FridaStageCapture\"",
+        "\"target_atom\"",
+        "\"objects\"",
+    ] {
+        assert!(
+            CAPTURE_SCHEMA.contains(required),
+            "capture schema should contain {required}"
+        );
+    }
+
+    for required in [
+        "\"schema\"",
+        "\"FridaExportOracle\"",
+        "\"ApplyDeltaB\"",
+        "\"ApplyDeltaGetReverseB\"",
+        "\"CreateDeltaB\"",
+    ] {
+        assert!(
+            RUN_SCHEMA.contains(required),
+            "run schema should contain {required}"
+        );
     }
 
     for required in [
@@ -232,6 +327,9 @@ fn frida_capture_schemas_are_tied_to_export_atom() {
     for required in [
         "\"events\"",
         "\"blobs\"",
+        "\"objects\"",
+        "\"FridaStageCapture\"",
+        "\"target_atom\"",
         "\"path\"",
         "\"sha256\"",
         "\"file_sink_path\"",

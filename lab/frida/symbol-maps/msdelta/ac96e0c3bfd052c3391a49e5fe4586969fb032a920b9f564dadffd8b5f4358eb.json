@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "module": "msdelta.dll",
+  "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb",
+  "file_size": 595360,
+  "image_size": 585728,
+  "functions": [
+    {
+      "atom": "CliMetadataBitstream",
+      "name": "compo::CliMetadata::InternalFromBitReader",
+      "legacy_name": "CliMetadata::FromBitReader",
+      "rva": "0x1cba0",
+      "abi": "ms-x64-thiscall",
+      "capture": "cli_metadata_internal_from_bitreader",
+      "object_layout": {
+        "name": "msdelta-win26100-compo-cli-metadata-v1",
+        "base_offset": 16,
+        "valid_table_mask_offset": 80,
+        "row_counts_offset": 88,
+        "heap_widths": {
+          "strings": 76,
+          "guid": 77,
+          "blob": 78
+        },
+        "fields": [
+          { "name": "metadata_file_offset", "offset": 0 },
+          { "name": "metadata_size", "offset": 4 },
+          { "name": "metadata_rva", "offset": 8 },
+          { "name": "stream_count", "offset": 12 },
+          { "name": "stream_headers_end", "offset": 16 },
+          { "name": "strings_offset", "offset": 20 },
+          { "name": "strings_size", "offset": 24 },
+          { "name": "user_strings_offset", "offset": 28 },
+          { "name": "user_strings_size", "offset": 32 },
+          { "name": "blob_offset", "offset": 36 },
+          { "name": "blob_size", "offset": 40 },
+          { "name": "guid_offset", "offset": 44 },
+          { "name": "guid_size", "offset": 48 },
+          { "name": "tables_offset", "offset": 52 },
+          { "name": "tables_size", "offset": 56 }
+        ]
+      }
+    }
+  ]
+}

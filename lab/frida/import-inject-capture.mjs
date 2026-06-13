@@ -11,17 +11,19 @@ const ANSI_ESCAPE = /\x1b\[[0-9;]*m/g;
 
 function usage() {
   return `usage:
-  node import-inject-capture.mjs --stdout <frida-out.txt> --blob-dir <dir> --out <dir> --case-id <id>
+  node import-inject-capture.mjs --stdout <frida-out.txt> --blob-dir <dir> [--object-dir <dir>] --out <dir> --case-id <id>
 
 The input stdout file should be the line-oriented JSON output from
 frida-inject.exe. The blob directory should contain files written by
-MSDELTA_EXPORT_ORACLE_BLOB_DIR.`;
+MSDELTA_EXPORT_ORACLE_BLOB_DIR. The optional object directory should contain
+JSON objects written by MSDELTA_STAGE_ORACLE_OBJECT_DIR.`;
 }
 
 function parseArgs(argv) {
   const options = {
     stdoutPath: null,
     blobDir: null,
+    objectDir: null,
     outDir: null,
     caseId: "export-capture",
   };
@@ -37,6 +39,8 @@ function parseArgs(argv) {
       options.stdoutPath = argv[++i];
     } else if (arg === "--blob-dir") {
       options.blobDir = argv[++i];
+    } else if (arg === "--object-dir") {
+      options.objectDir = argv[++i];
     } else if (arg === "--out") {
       options.outDir = argv[++i];
     } else if (arg === "--case-id") {
@@ -51,6 +55,9 @@ function parseArgs(argv) {
   }
 
   for (const [name, value] of Object.entries(options)) {
+    if (name === "objectDir") {
+      continue;
+    }
     if (!value) {
       throw new Error(`--${name.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`)} is required\n${usage()}`);
     }
@@ -226,15 +233,94 @@ async function importBlob(options, ctx, payload) {
   });
 }
 
+async function importObject(options, ctx, payload) {
+  const event = ctx.eventById.get(payload.event_id);
+  if (!event) {
+    ctx.errors.push({
+      type: "orphan_object",
+      event_id: payload.event_id,
+      slot: payload.slot,
+    });
+    return;
+  }
+
+  if (!payload.file_sink_path) {
+    ctx.errors.push({
+      type: "object_not_captured",
+      event_id: payload.event_id,
+      slot: payload.slot,
+      note: payload.note || "",
+    });
+    return;
+  }
+
+  if (!options.resolvedObjectDir) {
+    ctx.errors.push({
+      type: "object_dir_missing",
+      event_id: payload.event_id,
+      slot: payload.slot,
+      file_sink_path: payload.file_sink_path,
+    });
+    return;
+  }
+
+  const sourceName = fileSinkBasename(payload.file_sink_path);
+  const sourcePath = path.join(options.resolvedObjectDir, sourceName);
+  const bytes = await fs.readFile(sourcePath);
+  let parsed;
+  try {
+    parsed = JSON.parse(bytes.toString("utf8"));
+  } catch (error) {
+    ctx.errors.push({
+      type: "object_json_invalid",
+      event_id: payload.event_id,
+      slot: payload.slot,
+      file_sink_path: payload.file_sink_path,
+      message: String(error),
+    });
+    return;
+  }
+
+  const slot = sanitizePart(payload.slot);
+  const eventId = sanitizePart(payload.event_id);
+  const rel = path.join("objects", `${eventId}-${slot}.json`).replaceAll("\\", "/");
+  const abs = path.join(ctx.objectDir, `${eventId}-${slot}.json`);
+  await fs.writeFile(abs, bytes);
+
+  if (Number.isInteger(payload.size) && payload.size !== bytes.length) {
+    ctx.errors.push({
+      type: "object_size_mismatch",
+      event_id: payload.event_id,
+      slot: payload.slot,
+      requested_size: payload.size,
+      actual_size: bytes.length,
+      file_sink_path: payload.file_sink_path || null,
+    });
+  }
+
+  event.objects.push({
+    slot: payload.slot,
+    path: rel,
+    size: bytes.length,
+    sha256: sha256Bytes(bytes),
+    file_sink_path: payload.file_sink_path || "",
+    note: payload.note || "",
+    type: parsed && typeof parsed.type === "string" ? parsed.type : null,
+  });
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   options.resolvedStdoutPath = resolveExistingPath(options.stdoutPath);
   options.resolvedBlobDir = resolveExistingPath(options.blobDir);
+  options.resolvedObjectDir = options.objectDir ? resolveExistingPath(options.objectDir) : null;
 
   const outDir = resolveOutputPath(options.outDir);
   const caseDir = path.join(outDir, "cases", options.caseId);
   const blobDir = path.join(caseDir, "blobs");
+  const objectDir = path.join(caseDir, "objects");
   await fs.mkdir(blobDir, { recursive: true });
+  await fs.mkdir(objectDir, { recursive: true });
 
   const events = [];
   const eventById = new Map();
@@ -268,11 +354,13 @@ async function main() {
     }
 
     if (payload.type === "event") {
-      const event = { ...payload.event, blobs: [] };
+      const event = { ...payload.event, blobs: [], objects: [] };
       events.push(event);
       eventById.set(event.event_id, event);
     } else if (payload.type === "blob") {
       await importBlob(options, { blobDir, eventById, errors }, payload);
+    } else if (payload.type === "object") {
+      await importObject(options, { objectDir, eventById, errors }, payload);
     } else if (payload.type === "module") {
       const key = `${payload.module.name}:${payload.module.path}`;
       modules.set(key, payload.module);
@@ -331,6 +419,7 @@ async function main() {
     import: {
       stdout: options.resolvedStdoutPath,
       blob_dir: options.resolvedBlobDir,
+      object_dir: options.resolvedObjectDir,
       ignored_lines: ignoredLines,
     },
   };

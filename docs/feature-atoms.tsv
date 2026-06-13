@@ -42,7 +42,7 @@ PdataARM64	arm64	source_transform	0x80	0x1000000	TransformPdataARM64::Run	missin
 CliMetadataStaticSchema	cli	parser	pe,cli	-	CliMetadata::CheckStaticData and Cli4Metadata::CheckStaticData	partial	reject	unit	Add native object-normalizer check for CheckStaticData schema parity
 CliMetadataFromPe	cli	parser	0x2,0x4,0x8	-	CliMetadata::Init	partial	reject	unit	Add curated managed fixture and native CliMetadata::Init object oracle
 Cli4MetadataFromPe	cli	parser	0x10,0x20,0x40,0x80	-	Cli4Metadata::Init	missing	reject	needs_fixture	Build source CLI4 metadata model from CLR metadata root
-CliMetadataBitstream	cli	parser	0x2,0x4,0x8	0x8000	CliMetadata::FromBitReader	missing	reject	needs_fixture	Parse classic target metadata record from preprocess bitstream
+CliMetadataBitstream	cli	parser	0x2,0x4,0x8	0x8000	CliMetadata::FromBitReader / compo::CliMetadata::InternalFromBitReader	missing	reject	curated	Parse classic target metadata record using the Win26100 stage fixture
 Cli4MetadataBitstream	cli	parser	0x10,0x20,0x40,0x80	0x400000	PortableExecutableInfoCli4::FromBitReader and CliMetadata::FromBitReader	missing	reject	needs_fixture	Parse CLI4 target metadata record from preprocess bitstream
 CliMapBitstream	cli	parser	pe,cli	-	CliMap::FromBitReader	partial	reject	unit	Validate shared-format heap/table maps with native CliMap::FromBitReader object oracle
 CliCodedTokenMap	cli	algebra	pe,cli	-	CliMap::MapCoded and CliMap::MapCodedExact	partial	reject	unit	Wire to CliMapBitstream table maps and confirm sentinel/exact-miss behavior with native oracle
@@ -71,9 +71,9 @@ CreateCli4	create	create	0x10,0x20,0x40,0x80	-	CreateDeltaB managed CLI4 graph	m
 CreateArm64	create	create	0x80	-	CreateDeltaB file_type_set 0xf5 path	missing	reject	needs_fixture	Do not start until ARM64 apply atoms pass
 UnsupportedFeatureGate	pipeline	gate	all	-	apply feature dispatch policy	partial	allow	unit	Generate fail-loud diagnostics from this registry
 FridaExportOracle	lab	fixture	all	-	ApplyDeltaB ApplyDeltaGetReverseB CreateDeltaB exports	partial	lab_only	curated	Add reverse/CreateDeltaB smoke captures after RAW ApplyDeltaB fixture
-FridaSymbolMap	lab	fixture	all	-	module hash plus internal RVA hook map	missing	lab_only	none	Define per-DLL hash symbol maps with ABI and capture adapter names
-FridaStageCapture	lab	fixture	pe,cli	-	internal function entry and exit hooks	missing	lab_only	none	Hook preprocess metadata map rift and transform boundaries with fail-closed checks
-FridaObjectNormalizer	lab	fixture	pe,cli	-	Frida logical object readers	missing	lab_only	none	Normalize RiftTable CliMetadata CliMap and PE info objects into stable JSON
+FridaSymbolMap	lab	fixture	all	-	module hash plus internal RVA hook map	partial	lab_only	curated	Add maps for CliMap and compression-rift functions across DLL builds
+FridaStageCapture	lab	fixture	pe,cli	-	internal function entry and exit hooks	partial	lab_only	curated	Add CliMap and compression-rift stage hooks after CliMetadata
+FridaObjectNormalizer	lab	fixture	pe,cli	-	Frida logical object readers	partial	lab_only	curated	Add RiftTable CliMap and PE info object normalizers
 FridaFixturePromotion	lab	fixture	all	-	capture to atom fixture promotion	partial	lab_only	curated	Generalize first promoted export packet into a reusable promotion tool
 WindowsVersionMatrix	lab	fixture	all	-	Windows build and DLL hash matrix	missing	lab_only	none	Run the same capture set across builds and group drift by atom
 NativeOracleDiff	lab	fixture	all	-	normalized native capture comparator	missing	lab_only	none	Compare Rust stage outputs against normalized native capture objects

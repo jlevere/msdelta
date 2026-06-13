@@ -309,6 +309,12 @@ or a direct object-normalizer comparison.
 
 Native reference: `CliMetadata::FromBitReader`
 
+Win26100 `msdelta.dll` names the active stage boundary
+`compo::CliMetadata::InternalFromBitReader`; older DPX/
+`UpdateCompression.dll` material uses `CliMetadata::FromBitReader`. Treat both
+as the same logical atom only when the symbol map also records the native object
+layout.
+
 Inputs: preprocess bitstream at the metadata record.
 
 Transition: parse the metadata record wire layout above and run dependent

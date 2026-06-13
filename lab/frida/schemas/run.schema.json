@@ -51,6 +51,15 @@
       }
     },
     "cases": { "type": "array", "items": { "type": "string" } },
-    "errors": { "type": "array" }
+    "errors": { "type": "array" },
+    "import": {
+      "type": "object",
+      "properties": {
+        "stdout": { "type": "string" },
+        "blob_dir": { "type": "string" },
+        "object_dir": { "type": ["string", "null"] },
+        "ignored_lines": { "type": "integer" }
+      }
+    }
   }
 }

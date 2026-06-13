@@ -121,8 +121,9 @@ For normal lab use, run the host-side wrapper from the repo's Nix shell:
 nix develop -c lab/frida/capture-managed-corpus.sh
 ```
 
-The wrapper stages the generator, oracle harness, and Frida agent on
-`jackson-dev`; runs native `CreateDeltaB`/`ApplyDeltaB` controls; pulls the
+The wrapper stages the generator, oracle harness, export agent, stage agent, and
+symbol maps on `jackson-dev`; selects the `msdelta.dll` stage map with
+`Get-FileHash`; runs native `CreateDeltaB`/`ApplyDeltaB` controls; pulls the
 corpus back under `lab/frida/out/managed-corpus`; and normalizes the Frida
 file-sink capture. Override `SSH_HOST`, `REMOTE_ROOT`, `OUT_DIR`, or `CASE_ID`
 when using another lab host or output directory.
@@ -171,14 +172,19 @@ Supported now:
   `run.json`, `capture.json`, and `blobs/*.bin`.
 - Repeatable Windows-side managed corpus generation for native executable
   delta controls.
+- Internal stage hooks: hash-selected, module-specific Frida hooks from
+  `lab/frida/symbol-maps`.
+- Logical object normalization for the first managed metadata bitstream record.
+- `CliMetadataBitstream` object capture for Win26100 `msdelta.dll`
+  (`compo::CliMetadata::InternalFromBitReader`, RVA `0x1cba0` for
+  `ac96e0c3...f4358eb`).
+- Local import of stage object JSON into `objects/*.json`.
 
 Not supported yet:
 
 - x86 process ABI.
-- Internal stage hooks.
-- Logical object normalization.
 - Automatic fixture promotion.
-- Symbol-map selection.
+- `CliMap` and CLI compression-rift object normalization.
 
 ## Contract Notes
 

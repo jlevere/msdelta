@@ -42,7 +42,9 @@ scp -q \
   "$ROOT/lab/frida/managed-corpus.ps1" \
   "$ROOT/crates/oracle/lab/oracle_harness.ps1" \
   "$ROOT/lab/frida/agent/export-oracle.js" \
+  "$ROOT/lab/frida/agent/stage-oracle.js" \
   "$SSH_HOST:$REMOTE_ROOT/"
+scp -q -r "$ROOT/lab/frida/symbol-maps" "$SSH_HOST:$REMOTE_ROOT/"
 
 log "building managed source/target pairs and native gold deltas"
 run_ps <<'PS'
@@ -59,18 +61,38 @@ $ErrorActionPreference = "Continue"
 $root = "__REMOTE_ROOT__"
 $runRoot = Join-Path $root "frida"
 $blobDir = Join-Path $runRoot "blobs"
+$objectDir = Join-Path $runRoot "objects"
 $readyPath = Join-Path $runRoot "agent-ready.txt"
+$stageReadyPath = Join-Path $runRoot "stage-agent-ready.txt"
 Remove-Item -LiteralPath $runRoot -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $blobDir | Out-Null
+New-Item -ItemType Directory -Force $objectDir | Out-Null
+
+$modulePath = Join-Path $env:WINDIR "System32\msdelta.dll"
+$moduleHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $modulePath).Hash.ToLowerInvariant()
+$symbolMapPath = Join-Path $root "symbol-maps\msdelta\$moduleHash.json"
+if (-not (Test-Path -LiteralPath $symbolMapPath)) {
+    throw "missing Frida stage symbol map for $modulePath hash $moduleHash at $symbolMapPath"
+}
+$symbolMapJson = Get-Content -LiteralPath $symbolMapPath -Raw
 
 $agentPath = Join-Path $root "agent-combined.js"
 $blobLiteral = $blobDir.Replace('\', '\\')
+$objectLiteral = $objectDir.Replace('\', '\\')
 $readyLiteral = $readyPath.Replace('\', '\\')
+$stageReadyLiteral = $stageReadyPath.Replace('\', '\\')
 $prelude = @"
 globalThis.MSDELTA_EXPORT_ORACLE_BLOB_DIR = "$blobLiteral";
 globalThis.MSDELTA_EXPORT_ORACLE_READY_FILE = "$readyLiteral";
+globalThis.MSDELTA_STAGE_ORACLE_OBJECT_DIR = "$objectLiteral";
+globalThis.MSDELTA_STAGE_ORACLE_READY_FILE = "$stageReadyLiteral";
+globalThis.MSDELTA_STAGE_ORACLE_SELECTED_SHA256 = "$moduleHash";
+globalThis.MSDELTA_STAGE_ORACLE_SYMBOL_MAP = $symbolMapJson;
 "@
-$agent = Get-Content -LiteralPath (Join-Path $root "export-oracle.js") -Raw
+$agent = @(
+    Get-Content -LiteralPath (Join-Path $root "export-oracle.js") -Raw
+    Get-Content -LiteralPath (Join-Path $root "stage-oracle.js") -Raw
+) -join ([Environment]::NewLine)
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($agentPath, $prelude + [Environment]::NewLine + $agent, $utf8NoBom)
 
@@ -96,10 +118,13 @@ if ([NativeLoader]::LoadLibrary("msdelta.dll") -eq [IntPtr]::Zero) {
     throw "LoadLibrary(msdelta.dll) failed"
 }
 `$readyPath = "$readyPath"
+`$stageReadyPath = "$stageReadyPath"
 `$deadline = (Get-Date).AddSeconds(60)
-while (-not (Test-Path -LiteralPath `$readyPath)) {
-    if ((Get-Date) -gt `$deadline) { throw "timed out waiting for Frida agent readiness marker: `$readyPath" }
-    Start-Sleep -Milliseconds 100
+foreach (`$path in @(`$readyPath, `$stageReadyPath)) {
+    while (-not (Test-Path -LiteralPath `$path)) {
+        if ((Get-Date) -gt `$deadline) { throw "timed out waiting for Frida agent readiness marker: `$path" }
+        Start-Sleep -Milliseconds 100
+    }
 }
 Start-Sleep -Milliseconds 500
 & "$harness" -Dir "$corpus" -Dll msdelta.dll -Out "$fridaResult"
@@ -128,6 +153,7 @@ log "normalizing frida-inject stdout and file-sink blobs"
 pnpm --dir "$ROOT/lab/frida" import:inject -- \
   --stdout "$OUT_DIR/remote/frida/frida-out.txt" \
   --blob-dir "$OUT_DIR/remote/frida/blobs" \
+  --object-dir "$OUT_DIR/remote/frida/objects" \
   --out "$OUT_DIR/normalized" \
   --case-id "$CASE_ID"
 

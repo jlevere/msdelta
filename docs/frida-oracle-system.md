@@ -194,20 +194,18 @@ for the loaded module hash.
   "schema": 1,
   "module": "msdelta.dll",
   "sha256": "<hex>",
+  "image_size": 585728,
   "functions": [
     {
       "atom": "CliMetadataBitstream",
-      "name": "CliMetadata::FromBitReader",
-      "rva": "0x4aa1c",
+      "name": "compo::CliMetadata::InternalFromBitReader",
+      "legacy_name": "CliMetadata::FromBitReader",
+      "rva": "0x1cba0",
       "abi": "ms-x64-thiscall",
-      "capture": "cli_metadata_from_bitreader"
-    },
-    {
-      "atom": "CliCompressionRift",
-      "name": "CompressionRiftTableCli::FromCliMap",
-      "rva": "0x5d400",
-      "abi": "ms-x64-thiscall",
-      "capture": "rift_table_return"
+      "capture": "cli_metadata_internal_from_bitreader",
+      "object_layout": {
+        "name": "msdelta-win26100-compo-cli-metadata-v1"
+      }
     }
   ]
 }
@@ -216,6 +214,14 @@ for the loaded module hash.
 The `name` is a local label for humans. The hook is keyed by module hash plus
 RVA. If a build changes enough that the RVA or object layout no longer matches,
 the lab should fail closed and mark the capture as unmapped.
+
+There are two managed metadata implementations in the research corpus. The
+older DPX/`UpdateCompression.dll` path exposes labels like
+`CliMetadata::FromBitReader`. The Win26100 `msdelta.dll` loaded by the managed
+corpus uses the `compo::*` object model; its equivalent first metadata
+bitstream boundary is `compo::CliMetadata::InternalFromBitReader` at RVA
+`0x1cba0` for SHA-256
+`ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb`.
 
 ## Capture Format
 
@@ -428,7 +434,10 @@ objects on leave.
 The lab should fail closed:
 
 - Unknown module hash: no internal hooks.
-- Missing symbol map: export-only capture allowed, stage capture disabled.
+- Missing symbol map in export-only mode: export capture allowed, stage capture
+  disabled.
+- Missing symbol map in managed-corpus mode: wrapper failure before the oracle
+  run starts.
 - Object layout mismatch: capture error, no fixture promotion.
 - Truncated or incoherent object: capture error, no fixture promotion.
 - Final native API failure: preserve error code and inputs for triage.
@@ -459,9 +468,14 @@ The first milestone after this scaffold is the smallest export-capture loop:
 4. Add one native PE x64 export fixture.
 5. Add module hash detection and symbol-map selection for internal hooks.
 
-After that, hook `CliMetadata::FromBitReader`, `CliMap::FromBitReader`, and
-`CompressionRiftTableCli[4]::FromCliMap` so the first real managed rift oracle
-exists before any IL or metadata rewriting work begins.
+The managed corpus wrapper now starts that internal-hook lane by selecting the
+Win26100 `msdelta.dll` symbol map with `Get-FileHash`, waiting for both export
+and stage Frida agents, and capturing normalized
+`CliMetadataBitstream` objects from
+`compo::CliMetadata::InternalFromBitReader`. Next hooks should be
+`CliMap::FromBitReader`/`compo::Cli4Map::InternalFromBitReader` and the CLI
+compression-rift builders, so the first real managed rift oracle exists before
+any IL or metadata rewriting work begins.
 
 ## Managed Corpus
 
@@ -472,9 +486,10 @@ compiler, writes a normal oracle `job.json`, and requests both
 `native_to_ours` and `native_to_native`.
 
 Use `lab/frida/capture-managed-corpus.sh` from the repo's Nix shell to run the
-full loop against `jackson-dev`: stage the corpus generator, run native
-`msdelta.dll` controls, attach `frida-inject.exe`, pull the raw artifacts, and
-normalize the export capture.
+full loop against `jackson-dev`: stage the corpus generator, symbol maps, export
+agent, and stage agent; run native `msdelta.dll` controls; attach
+`frida-inject.exe`; pull the raw artifacts; and normalize export buffers plus
+stage object JSON.
 
 The first corpus intentionally covers different metadata surfaces instead of
 many copies of one shape:
@@ -496,10 +511,13 @@ Roslyn deterministic-output flags. Regenerated managed PE bytes can differ from
 the committed fixture snapshot; the native `native_to_native` control is the
 validity signal for each fresh run.
 
-For managed work, start the internal-hook lane with
+For managed work, start the internal-hook lane with the current module's
+metadata bitstream boundary. On Win26100 `msdelta.dll` that is
+`compo::CliMetadata::InternalFromBitReader`; on older DPX/
+`UpdateCompression.dll` research material it is labeled
 `CliMetadata::FromBitReader`. It is the earliest missing managed parser after
 PE info and the preprocess rift, and its normalized object gives
 `CliMapBitstream`, heap/table rifts, IL token remapping, and metadata-table
 rewriting a stable source/target metadata contract. The hook should emit a
-logical `CliMetadata` object on return; do not promote captures that only dump
+logical metadata-record object on return; do not promote captures that only dump
 raw native object memory.

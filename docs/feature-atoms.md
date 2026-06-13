@@ -236,10 +236,15 @@ or native oracle captures.
 
 ## First Oracle Pattern
 
-The first lab atom implemented with this workflow is `FridaExportOracle`. It is
-not a transform atom; it is a proof that the project can repeatedly ask Windows
+The first lab atom implemented with this workflow was `FridaExportOracle`. It
+is not a transform atom; it proves that the project can repeatedly ask Windows
 what buffers crossed a native API boundary and normalize that answer into
 fixture-shaped data.
+
+The first internal stage capture is
+`FridaStageCapture/cli-metadata-win26100`: a hash-selected
+`msdelta.dll` hook for `compo::CliMetadata::InternalFromBitReader` that emits
+logical `CliMetadataBitstream` records instead of raw native object memory.
 
 Use this shape for future oracle atoms:
 
@@ -252,6 +257,8 @@ Use this shape for future oracle atoms:
 4. Compare captured blob hashes to known inputs and expected outputs before
    promoting anything.
 5. Promote only the smallest capture that proves the behavior.
+6. For stage captures, commit normalized logical objects and strip volatile
+   file-sink paths before adding fixtures.
 
 ## Near-Term Milestones
 

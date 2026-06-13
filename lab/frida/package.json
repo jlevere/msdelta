@@ -5,7 +5,7 @@
   "scripts": {
     "capture:export": "node ./capture-export-oracle.mjs",
     "import:inject": "node ./import-inject-capture.mjs",
-    "check": "node --check ./capture-export-oracle.mjs && node --check ./import-inject-capture.mjs && node --check ./agent/export-oracle.js"
+    "check": "node --check ./capture-export-oracle.mjs && node --check ./import-inject-capture.mjs && node --check ./agent/export-oracle.js && node --check ./agent/stage-oracle.js"
   },
   "dependencies": {
     "frida": "17.12.0"

@@ -1,0 +1,3260 @@
+{
+  "schema": 1,
+  "atom": "FridaStageCapture",
+  "case_id": "cli-metadata-win26100",
+  "source_case_id": "managed-corpus-msdelta",
+  "module_sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb",
+  "target_atom": "CliMetadataBitstream",
+  "events": [
+    {
+      "event_id": "1781392221258-2560-stage-1-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221258-2560-stage-1-compo__CliMetadata__InternalFromBitReader",
+      "seq": 1,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221258,
+      "inputs": {
+        "this_ptr": "0x2524e0ec7b0",
+        "reader_ptr": "0x2523481c480"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221258-2560-stage-1-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221258-2560-stage-1-compo__CliMetadata__InternalFromBitReader",
+      "seq": 1,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221258,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e0ec7b0"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-001.json",
+          "size": 1178,
+          "sha256": "8d2620db4fe4c6276d2bc192529e0c7124d76187a47dd93d29be7bc486503371",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221260-2560-stage-2-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221260-2560-stage-2-compo__CliMetadata__InternalFromBitReader",
+      "seq": 2,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221260,
+      "inputs": {
+        "this_ptr": "0x2524e010440",
+        "reader_ptr": "0x2524d658620"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221260-2560-stage-2-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221260-2560-stage-2-compo__CliMetadata__InternalFromBitReader",
+      "seq": 2,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221262,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e010440"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-002.json",
+          "size": 1178,
+          "sha256": "8d2620db4fe4c6276d2bc192529e0c7124d76187a47dd93d29be7bc486503371",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221266-2560-stage-3-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221266-2560-stage-3-compo__CliMetadata__InternalFromBitReader",
+      "seq": 3,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221266,
+      "inputs": {
+        "this_ptr": "0x2524e043130",
+        "reader_ptr": "0x2523481c480"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221266-2560-stage-3-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221266-2560-stage-3-compo__CliMetadata__InternalFromBitReader",
+      "seq": 3,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221268,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e043130"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-003.json",
+          "size": 1178,
+          "sha256": "8d2620db4fe4c6276d2bc192529e0c7124d76187a47dd93d29be7bc486503371",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221270-2560-stage-4-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221270-2560-stage-4-compo__CliMetadata__InternalFromBitReader",
+      "seq": 4,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221270,
+      "inputs": {
+        "this_ptr": "0x2524e008430",
+        "reader_ptr": "0x2524d6579f0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221270-2560-stage-4-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221270-2560-stage-4-compo__CliMetadata__InternalFromBitReader",
+      "seq": 4,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221270,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e008430"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-004.json",
+          "size": 1178,
+          "sha256": "8d2620db4fe4c6276d2bc192529e0c7124d76187a47dd93d29be7bc486503371",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221331-2560-stage-5-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221331-2560-stage-5-compo__CliMetadata__InternalFromBitReader",
+      "seq": 5,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221331,
+      "inputs": {
+        "this_ptr": "0x2524e097a10",
+        "reader_ptr": "0x2524d693eb0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221331-2560-stage-5-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221331-2560-stage-5-compo__CliMetadata__InternalFromBitReader",
+      "seq": 5,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221331,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e097a10"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-005.json",
+          "size": 1178,
+          "sha256": "8d2620db4fe4c6276d2bc192529e0c7124d76187a47dd93d29be7bc486503371",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221335-2560-stage-6-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221335-2560-stage-6-compo__CliMetadata__InternalFromBitReader",
+      "seq": 6,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221335,
+      "inputs": {
+        "this_ptr": "0x2524e010440",
+        "reader_ptr": "0x2524d6585d0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221335-2560-stage-6-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221335-2560-stage-6-compo__CliMetadata__InternalFromBitReader",
+      "seq": 6,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221335,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e010440"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-006.json",
+          "size": 1178,
+          "sha256": "8d2620db4fe4c6276d2bc192529e0c7124d76187a47dd93d29be7bc486503371",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221337-2560-stage-7-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221337-2560-stage-7-compo__CliMetadata__InternalFromBitReader",
+      "seq": 7,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221337,
+      "inputs": {
+        "this_ptr": "0x2524e018450",
+        "reader_ptr": "0x2524d6585d0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221337-2560-stage-7-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221337-2560-stage-7-compo__CliMetadata__InternalFromBitReader",
+      "seq": 7,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221339,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e018450"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-007.json",
+          "size": 1178,
+          "sha256": "8d2620db4fe4c6276d2bc192529e0c7124d76187a47dd93d29be7bc486503371",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221341-2560-stage-8-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221341-2560-stage-8-compo__CliMetadata__InternalFromBitReader",
+      "seq": 8,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221341,
+      "inputs": {
+        "this_ptr": "0x2524e018450",
+        "reader_ptr": "0x2524d6585d0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221341-2560-stage-8-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221341-2560-stage-8-compo__CliMetadata__InternalFromBitReader",
+      "seq": 8,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221341,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e018450"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-008.json",
+          "size": 1178,
+          "sha256": "8d2620db4fe4c6276d2bc192529e0c7124d76187a47dd93d29be7bc486503371",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221363-2560-stage-9-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221363-2560-stage-9-compo__CliMetadata__InternalFromBitReader",
+      "seq": 9,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221363,
+      "inputs": {
+        "this_ptr": "0x2524e010440",
+        "reader_ptr": "0x2524d6585d0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221363-2560-stage-9-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221363-2560-stage-9-compo__CliMetadata__InternalFromBitReader",
+      "seq": 9,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221363,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e010440"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-009.json",
+          "size": 1178,
+          "sha256": "8d2620db4fe4c6276d2bc192529e0c7124d76187a47dd93d29be7bc486503371",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221405-2560-stage-10-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221405-2560-stage-10-compo__CliMetadata__InternalFromBitReader",
+      "seq": 10,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221405,
+      "inputs": {
+        "this_ptr": "0x2524e016550",
+        "reader_ptr": "0x2524e001cf0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221405-2560-stage-10-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221405-2560-stage-10-compo__CliMetadata__InternalFromBitReader",
+      "seq": 10,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221405,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e016550"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-010.json",
+          "size": 1178,
+          "sha256": "d4a807ad6718aa2f4fe64933a2a515922bb2d664f7c1e1edd569007bfb93ff3f",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221408-2560-stage-11-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221408-2560-stage-11-compo__CliMetadata__InternalFromBitReader",
+      "seq": 11,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221408,
+      "inputs": {
+        "this_ptr": "0x2524e04d820",
+        "reader_ptr": "0x2524e001480"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221408-2560-stage-11-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221408-2560-stage-11-compo__CliMetadata__InternalFromBitReader",
+      "seq": 11,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221408,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e04d820"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-011.json",
+          "size": 1178,
+          "sha256": "d4a807ad6718aa2f4fe64933a2a515922bb2d664f7c1e1edd569007bfb93ff3f",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221414-2560-stage-12-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221414-2560-stage-12-compo__CliMetadata__InternalFromBitReader",
+      "seq": 12,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221414,
+      "inputs": {
+        "this_ptr": "0x2524e09a280",
+        "reader_ptr": "0x2524e0012a0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221414-2560-stage-12-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221414-2560-stage-12-compo__CliMetadata__InternalFromBitReader",
+      "seq": 12,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221414,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e09a280"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-012.json",
+          "size": 1178,
+          "sha256": "d4a807ad6718aa2f4fe64933a2a515922bb2d664f7c1e1edd569007bfb93ff3f",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221418-2560-stage-13-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221418-2560-stage-13-compo__CliMetadata__InternalFromBitReader",
+      "seq": 13,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221418,
+      "inputs": {
+        "this_ptr": "0x2524e09a280",
+        "reader_ptr": "0x2524e001160"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221418-2560-stage-13-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221418-2560-stage-13-compo__CliMetadata__InternalFromBitReader",
+      "seq": 13,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221418,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e09a280"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-013.json",
+          "size": 1178,
+          "sha256": "d4a807ad6718aa2f4fe64933a2a515922bb2d664f7c1e1edd569007bfb93ff3f",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221444-2560-stage-14-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221444-2560-stage-14-compo__CliMetadata__InternalFromBitReader",
+      "seq": 14,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221444,
+      "inputs": {
+        "this_ptr": "0x2524e038de0",
+        "reader_ptr": "0x2524e0018e0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221444-2560-stage-14-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221444-2560-stage-14-compo__CliMetadata__InternalFromBitReader",
+      "seq": 14,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221446,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e038de0"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-014.json",
+          "size": 1178,
+          "sha256": "d4a807ad6718aa2f4fe64933a2a515922bb2d664f7c1e1edd569007bfb93ff3f",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221448-2560-stage-15-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221448-2560-stage-15-compo__CliMetadata__InternalFromBitReader",
+      "seq": 15,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221448,
+      "inputs": {
+        "this_ptr": "0x2524e04e170",
+        "reader_ptr": "0x2524e002150"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221448-2560-stage-15-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221448-2560-stage-15-compo__CliMetadata__InternalFromBitReader",
+      "seq": 15,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221448,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e04e170"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-015.json",
+          "size": 1178,
+          "sha256": "d4a807ad6718aa2f4fe64933a2a515922bb2d664f7c1e1edd569007bfb93ff3f",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221452-2560-stage-16-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221452-2560-stage-16-compo__CliMetadata__InternalFromBitReader",
+      "seq": 16,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221452,
+      "inputs": {
+        "this_ptr": "0x2524e094360",
+        "reader_ptr": "0x2524e001110"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221452-2560-stage-16-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221452-2560-stage-16-compo__CliMetadata__InternalFromBitReader",
+      "seq": 16,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221452,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e094360"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-016.json",
+          "size": 1178,
+          "sha256": "d4a807ad6718aa2f4fe64933a2a515922bb2d664f7c1e1edd569007bfb93ff3f",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221456-2560-stage-17-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221456-2560-stage-17-compo__CliMetadata__InternalFromBitReader",
+      "seq": 17,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221456,
+      "inputs": {
+        "this_ptr": "0x2524e04c080",
+        "reader_ptr": "0x2524e001110"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221456-2560-stage-17-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221456-2560-stage-17-compo__CliMetadata__InternalFromBitReader",
+      "seq": 17,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221456,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e04c080"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-017.json",
+          "size": 1178,
+          "sha256": "d4a807ad6718aa2f4fe64933a2a515922bb2d664f7c1e1edd569007bfb93ff3f",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221464-2560-stage-18-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221464-2560-stage-18-compo__CliMetadata__InternalFromBitReader",
+      "seq": 18,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221464,
+      "inputs": {
+        "this_ptr": "0x2524e094360",
+        "reader_ptr": "0x2524e001520"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221464-2560-stage-18-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221464-2560-stage-18-compo__CliMetadata__InternalFromBitReader",
+      "seq": 18,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221466,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e094360"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-018.json",
+          "size": 1178,
+          "sha256": "d4a807ad6718aa2f4fe64933a2a515922bb2d664f7c1e1edd569007bfb93ff3f",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221493-2560-stage-19-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221493-2560-stage-19-compo__CliMetadata__InternalFromBitReader",
+      "seq": 19,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221493,
+      "inputs": {
+        "this_ptr": "0x2524e034dc0",
+        "reader_ptr": "0x2524e001160"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221493-2560-stage-19-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221493-2560-stage-19-compo__CliMetadata__InternalFromBitReader",
+      "seq": 19,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221493,
+      "retval": "0x2524e036454",
+      "outputs": {
+        "this_ptr": "0x2524e034dc0"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-019.json",
+          "size": 1153,
+          "sha256": "0530dc35475ea1211907cb804426312079c551cf0bf5321b972c36cc59dc2dd5",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221499-2560-stage-20-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221499-2560-stage-20-compo__CliMetadata__InternalFromBitReader",
+      "seq": 20,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221499,
+      "inputs": {
+        "this_ptr": "0x2524e0a22a0",
+        "reader_ptr": "0x2524e001070"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221499-2560-stage-20-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221499-2560-stage-20-compo__CliMetadata__InternalFromBitReader",
+      "seq": 20,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221499,
+      "retval": "0x2524e0a3934",
+      "outputs": {
+        "this_ptr": "0x2524e0a22a0"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-020.json",
+          "size": 1153,
+          "sha256": "0530dc35475ea1211907cb804426312079c551cf0bf5321b972c36cc59dc2dd5",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221501-2560-stage-21-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221501-2560-stage-21-compo__CliMetadata__InternalFromBitReader",
+      "seq": 21,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221501,
+      "inputs": {
+        "this_ptr": "0x2524e03ace0",
+        "reader_ptr": "0x2524e001340"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221501-2560-stage-21-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221501-2560-stage-21-compo__CliMetadata__InternalFromBitReader",
+      "seq": 21,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221501,
+      "retval": "0x2524e03c374",
+      "outputs": {
+        "this_ptr": "0x2524e03ace0"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-021.json",
+          "size": 1153,
+          "sha256": "0530dc35475ea1211907cb804426312079c551cf0bf5321b972c36cc59dc2dd5",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221505-2560-stage-22-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221505-2560-stage-22-compo__CliMetadata__InternalFromBitReader",
+      "seq": 22,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221505,
+      "inputs": {
+        "this_ptr": "0x2524e094360",
+        "reader_ptr": "0x2524e0011b0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221505-2560-stage-22-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221505-2560-stage-22-compo__CliMetadata__InternalFromBitReader",
+      "seq": 22,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221505,
+      "retval": "0x2524e0959f4",
+      "outputs": {
+        "this_ptr": "0x2524e094360"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-022.json",
+          "size": 1153,
+          "sha256": "0530dc35475ea1211907cb804426312079c551cf0bf5321b972c36cc59dc2dd5",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221527-2560-stage-23-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221527-2560-stage-23-compo__CliMetadata__InternalFromBitReader",
+      "seq": 23,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221527,
+      "inputs": {
+        "this_ptr": "0x2524e094360",
+        "reader_ptr": "0x2524e001b60"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221527-2560-stage-23-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221527-2560-stage-23-compo__CliMetadata__InternalFromBitReader",
+      "seq": 23,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221527,
+      "retval": "0x2524e0959f4",
+      "outputs": {
+        "this_ptr": "0x2524e094360"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-023.json",
+          "size": 1153,
+          "sha256": "0530dc35475ea1211907cb804426312079c551cf0bf5321b972c36cc59dc2dd5",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221529-2560-stage-24-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221529-2560-stage-24-compo__CliMetadata__InternalFromBitReader",
+      "seq": 24,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221529,
+      "inputs": {
+        "this_ptr": "0x2524e094360",
+        "reader_ptr": "0x2524e000f30"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221529-2560-stage-24-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221529-2560-stage-24-compo__CliMetadata__InternalFromBitReader",
+      "seq": 24,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221531,
+      "retval": "0x2524e0959f4",
+      "outputs": {
+        "this_ptr": "0x2524e094360"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-024.json",
+          "size": 1153,
+          "sha256": "0530dc35475ea1211907cb804426312079c551cf0bf5321b972c36cc59dc2dd5",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221533-2560-stage-25-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221533-2560-stage-25-compo__CliMetadata__InternalFromBitReader",
+      "seq": 25,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221533,
+      "inputs": {
+        "this_ptr": "0x2524e0a22a0",
+        "reader_ptr": "0x2524e001d90"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221533-2560-stage-25-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221533-2560-stage-25-compo__CliMetadata__InternalFromBitReader",
+      "seq": 25,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221533,
+      "retval": "0x2524e0a3934",
+      "outputs": {
+        "this_ptr": "0x2524e0a22a0"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-025.json",
+          "size": 1153,
+          "sha256": "0530dc35475ea1211907cb804426312079c551cf0bf5321b972c36cc59dc2dd5",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221537-2560-stage-26-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221537-2560-stage-26-compo__CliMetadata__InternalFromBitReader",
+      "seq": 26,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221537,
+      "inputs": {
+        "this_ptr": "0x2524e04e170",
+        "reader_ptr": "0x2524e001bb0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221537-2560-stage-26-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221537-2560-stage-26-compo__CliMetadata__InternalFromBitReader",
+      "seq": 26,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221537,
+      "retval": "0x2524e04f804",
+      "outputs": {
+        "this_ptr": "0x2524e04e170"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-026.json",
+          "size": 1153,
+          "sha256": "0530dc35475ea1211907cb804426312079c551cf0bf5321b972c36cc59dc2dd5",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221552-2560-stage-27-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221552-2560-stage-27-compo__CliMetadata__InternalFromBitReader",
+      "seq": 27,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221552,
+      "inputs": {
+        "this_ptr": "0x2524e04e170",
+        "reader_ptr": "0x2524e001a70"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221552-2560-stage-27-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221552-2560-stage-27-compo__CliMetadata__InternalFromBitReader",
+      "seq": 27,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221552,
+      "retval": "0x2524e04f804",
+      "outputs": {
+        "this_ptr": "0x2524e04e170"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-027.json",
+          "size": 1153,
+          "sha256": "0530dc35475ea1211907cb804426312079c551cf0bf5321b972c36cc59dc2dd5",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221582-2560-stage-28-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221582-2560-stage-28-compo__CliMetadata__InternalFromBitReader",
+      "seq": 28,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221582,
+      "inputs": {
+        "this_ptr": "0x2524e04e170",
+        "reader_ptr": "0x2524e001520"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221582-2560-stage-28-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221582-2560-stage-28-compo__CliMetadata__InternalFromBitReader",
+      "seq": 28,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221582,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e04e170"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-028.json",
+          "size": 1180,
+          "sha256": "71a6848fe919ebcbc9c7e86ad799f353d30fbb0381879543c5955dfcc5ab46ba",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221584-2560-stage-29-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221584-2560-stage-29-compo__CliMetadata__InternalFromBitReader",
+      "seq": 29,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221584,
+      "inputs": {
+        "this_ptr": "0x2524e04e170",
+        "reader_ptr": "0x2524e002150"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221584-2560-stage-29-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221584-2560-stage-29-compo__CliMetadata__InternalFromBitReader",
+      "seq": 29,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221586,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e04e170"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-029.json",
+          "size": 1180,
+          "sha256": "71a6848fe919ebcbc9c7e86ad799f353d30fbb0381879543c5955dfcc5ab46ba",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221588-2560-stage-30-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221588-2560-stage-30-compo__CliMetadata__InternalFromBitReader",
+      "seq": 30,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221588,
+      "inputs": {
+        "this_ptr": "0x2524e098370",
+        "reader_ptr": "0x2524e001d90"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221588-2560-stage-30-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221588-2560-stage-30-compo__CliMetadata__InternalFromBitReader",
+      "seq": 30,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221590,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e098370"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-030.json",
+          "size": 1180,
+          "sha256": "71a6848fe919ebcbc9c7e86ad799f353d30fbb0381879543c5955dfcc5ab46ba",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221592-2560-stage-31-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221592-2560-stage-31-compo__CliMetadata__InternalFromBitReader",
+      "seq": 31,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221592,
+      "inputs": {
+        "this_ptr": "0x2524e098370",
+        "reader_ptr": "0x2524e001bb0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221592-2560-stage-31-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221592-2560-stage-31-compo__CliMetadata__InternalFromBitReader",
+      "seq": 31,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221592,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e098370"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-031.json",
+          "size": 1180,
+          "sha256": "71a6848fe919ebcbc9c7e86ad799f353d30fbb0381879543c5955dfcc5ab46ba",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221614-2560-stage-32-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221614-2560-stage-32-compo__CliMetadata__InternalFromBitReader",
+      "seq": 32,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221614,
+      "inputs": {
+        "this_ptr": "0x2524e098370",
+        "reader_ptr": "0x2524e001020"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221614-2560-stage-32-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221614-2560-stage-32-compo__CliMetadata__InternalFromBitReader",
+      "seq": 32,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221616,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e098370"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-032.json",
+          "size": 1180,
+          "sha256": "71a6848fe919ebcbc9c7e86ad799f353d30fbb0381879543c5955dfcc5ab46ba",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221620-2560-stage-33-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221620-2560-stage-33-compo__CliMetadata__InternalFromBitReader",
+      "seq": 33,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221620,
+      "inputs": {
+        "this_ptr": "0x2524e098370",
+        "reader_ptr": "0x2524e001b60"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221620-2560-stage-33-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221620-2560-stage-33-compo__CliMetadata__InternalFromBitReader",
+      "seq": 33,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221620,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e098370"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-033.json",
+          "size": 1180,
+          "sha256": "71a6848fe919ebcbc9c7e86ad799f353d30fbb0381879543c5955dfcc5ab46ba",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221624-2560-stage-34-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221624-2560-stage-34-compo__CliMetadata__InternalFromBitReader",
+      "seq": 34,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221624,
+      "inputs": {
+        "this_ptr": "0x2524e0a41b0",
+        "reader_ptr": "0x2524e0021a0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221624-2560-stage-34-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221624-2560-stage-34-compo__CliMetadata__InternalFromBitReader",
+      "seq": 34,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221624,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e0a41b0"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-034.json",
+          "size": 1180,
+          "sha256": "71a6848fe919ebcbc9c7e86ad799f353d30fbb0381879543c5955dfcc5ab46ba",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221627-2560-stage-35-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221627-2560-stage-35-compo__CliMetadata__InternalFromBitReader",
+      "seq": 35,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221627,
+      "inputs": {
+        "this_ptr": "0x2524e04e170",
+        "reader_ptr": "0x2524e002010"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221627-2560-stage-35-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221627-2560-stage-35-compo__CliMetadata__InternalFromBitReader",
+      "seq": 35,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221627,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e04e170"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-035.json",
+          "size": 1180,
+          "sha256": "71a6848fe919ebcbc9c7e86ad799f353d30fbb0381879543c5955dfcc5ab46ba",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221645-2560-stage-36-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221645-2560-stage-36-compo__CliMetadata__InternalFromBitReader",
+      "seq": 36,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221645,
+      "inputs": {
+        "this_ptr": "0x2524e098370",
+        "reader_ptr": "0x2524e0014d0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221645-2560-stage-36-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221645-2560-stage-36-compo__CliMetadata__InternalFromBitReader",
+      "seq": 36,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221645,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e098370"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-036.json",
+          "size": 1180,
+          "sha256": "71a6848fe919ebcbc9c7e86ad799f353d30fbb0381879543c5955dfcc5ab46ba",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221671-2560-stage-37-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221671-2560-stage-37-compo__CliMetadata__InternalFromBitReader",
+      "seq": 37,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221671,
+      "inputs": {
+        "this_ptr": "0x2524e03de10",
+        "reader_ptr": "0x2524e0011b0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221671-2560-stage-37-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221671-2560-stage-37-compo__CliMetadata__InternalFromBitReader",
+      "seq": 37,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221671,
+      "retval": "0x2",
+      "outputs": {
+        "this_ptr": "0x2524e03de10"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-037.json",
+          "size": 1178,
+          "sha256": "2c19d95a35eb9ed3fb6307f5b3b608e1fe4a2fdbfd3b2bedc5c4328f54a1b953",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221673-2560-stage-38-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221673-2560-stage-38-compo__CliMetadata__InternalFromBitReader",
+      "seq": 38,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221673,
+      "inputs": {
+        "this_ptr": "0x2524e04e170",
+        "reader_ptr": "0x2524e001020"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221673-2560-stage-38-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221673-2560-stage-38-compo__CliMetadata__InternalFromBitReader",
+      "seq": 38,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221673,
+      "retval": "0x2",
+      "outputs": {
+        "this_ptr": "0x2524e04e170"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-038.json",
+          "size": 1178,
+          "sha256": "2c19d95a35eb9ed3fb6307f5b3b608e1fe4a2fdbfd3b2bedc5c4328f54a1b953",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221681-2560-stage-39-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221681-2560-stage-39-compo__CliMetadata__InternalFromBitReader",
+      "seq": 39,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221681,
+      "inputs": {
+        "this_ptr": "0x2524e0a22a0",
+        "reader_ptr": "0x2524e000e40"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221681-2560-stage-39-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221681-2560-stage-39-compo__CliMetadata__InternalFromBitReader",
+      "seq": 39,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221683,
+      "retval": "0x2",
+      "outputs": {
+        "this_ptr": "0x2524e0a22a0"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-039.json",
+          "size": 1178,
+          "sha256": "2c19d95a35eb9ed3fb6307f5b3b608e1fe4a2fdbfd3b2bedc5c4328f54a1b953",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221685-2560-stage-40-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221685-2560-stage-40-compo__CliMetadata__InternalFromBitReader",
+      "seq": 40,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221685,
+      "inputs": {
+        "this_ptr": "0x2524e04e170",
+        "reader_ptr": "0x2524e001d40"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221685-2560-stage-40-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221685-2560-stage-40-compo__CliMetadata__InternalFromBitReader",
+      "seq": 40,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221685,
+      "retval": "0x2",
+      "outputs": {
+        "this_ptr": "0x2524e04e170"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-040.json",
+          "size": 1178,
+          "sha256": "2c19d95a35eb9ed3fb6307f5b3b608e1fe4a2fdbfd3b2bedc5c4328f54a1b953",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221710-2560-stage-41-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221710-2560-stage-41-compo__CliMetadata__InternalFromBitReader",
+      "seq": 41,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221710,
+      "inputs": {
+        "this_ptr": "0x2524e042630",
+        "reader_ptr": "0x2524e001ed0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221710-2560-stage-41-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221710-2560-stage-41-compo__CliMetadata__InternalFromBitReader",
+      "seq": 41,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221710,
+      "retval": "0x2",
+      "outputs": {
+        "this_ptr": "0x2524e042630"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-041.json",
+          "size": 1178,
+          "sha256": "2c19d95a35eb9ed3fb6307f5b3b608e1fe4a2fdbfd3b2bedc5c4328f54a1b953",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221712-2560-stage-42-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221712-2560-stage-42-compo__CliMetadata__InternalFromBitReader",
+      "seq": 42,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221712,
+      "inputs": {
+        "this_ptr": "0x2524e042630",
+        "reader_ptr": "0x2524e001e30"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221712-2560-stage-42-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221712-2560-stage-42-compo__CliMetadata__InternalFromBitReader",
+      "seq": 42,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221712,
+      "retval": "0x2",
+      "outputs": {
+        "this_ptr": "0x2524e042630"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-042.json",
+          "size": 1178,
+          "sha256": "2c19d95a35eb9ed3fb6307f5b3b608e1fe4a2fdbfd3b2bedc5c4328f54a1b953",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221716-2560-stage-43-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221716-2560-stage-43-compo__CliMetadata__InternalFromBitReader",
+      "seq": 43,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221716,
+      "inputs": {
+        "this_ptr": "0x2524e042630",
+        "reader_ptr": "0x2524e0016b0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221716-2560-stage-43-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221716-2560-stage-43-compo__CliMetadata__InternalFromBitReader",
+      "seq": 43,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221716,
+      "retval": "0x2",
+      "outputs": {
+        "this_ptr": "0x2524e042630"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-043.json",
+          "size": 1178,
+          "sha256": "2c19d95a35eb9ed3fb6307f5b3b608e1fe4a2fdbfd3b2bedc5c4328f54a1b953",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221720-2560-stage-44-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221720-2560-stage-44-compo__CliMetadata__InternalFromBitReader",
+      "seq": 44,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221720,
+      "inputs": {
+        "this_ptr": "0x2524e042630",
+        "reader_ptr": "0x2524e001de0"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221720-2560-stage-44-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221720-2560-stage-44-compo__CliMetadata__InternalFromBitReader",
+      "seq": 44,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221720,
+      "retval": "0x2",
+      "outputs": {
+        "this_ptr": "0x2524e042630"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-044.json",
+          "size": 1178,
+          "sha256": "2c19d95a35eb9ed3fb6307f5b3b608e1fe4a2fdbfd3b2bedc5c4328f54a1b953",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221730-2560-stage-45-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221730-2560-stage-45-compo__CliMetadata__InternalFromBitReader",
+      "seq": 45,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221730,
+      "inputs": {
+        "this_ptr": "0x2524e08db30",
+        "reader_ptr": "0x2524e000f30"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221730-2560-stage-45-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221730-2560-stage-45-compo__CliMetadata__InternalFromBitReader",
+      "seq": 45,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221730,
+      "retval": "0x2",
+      "outputs": {
+        "this_ptr": "0x2524e08db30"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-045.json",
+          "size": 1178,
+          "sha256": "2c19d95a35eb9ed3fb6307f5b3b608e1fe4a2fdbfd3b2bedc5c4328f54a1b953",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221758-2560-stage-46-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221758-2560-stage-46-compo__CliMetadata__InternalFromBitReader",
+      "seq": 46,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221758,
+      "inputs": {
+        "this_ptr": "0x2524e050340",
+        "reader_ptr": "0x2524e001a20"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221758-2560-stage-46-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221758-2560-stage-46-compo__CliMetadata__InternalFromBitReader",
+      "seq": 46,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221758,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e050340"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-046.json",
+          "size": 1177,
+          "sha256": "f9d2f8b17bccf3165ed869092241eed269e51b172f5d57f641c19dac0e46f514",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221762-2560-stage-47-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221762-2560-stage-47-compo__CliMetadata__InternalFromBitReader",
+      "seq": 47,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221762,
+      "inputs": {
+        "this_ptr": "0x2524e050340",
+        "reader_ptr": "0x2524e001930"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221762-2560-stage-47-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221762-2560-stage-47-compo__CliMetadata__InternalFromBitReader",
+      "seq": 47,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221762,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e050340"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-047.json",
+          "size": 1177,
+          "sha256": "f9d2f8b17bccf3165ed869092241eed269e51b172f5d57f641c19dac0e46f514",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221791-2560-stage-48-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221791-2560-stage-48-compo__CliMetadata__InternalFromBitReader",
+      "seq": 48,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221791,
+      "inputs": {
+        "this_ptr": "0x2524e051ae0",
+        "reader_ptr": "0x2524e001750"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221791-2560-stage-48-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221791-2560-stage-48-compo__CliMetadata__InternalFromBitReader",
+      "seq": 48,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221791,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e051ae0"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-048.json",
+          "size": 1177,
+          "sha256": "f9d2f8b17bccf3165ed869092241eed269e51b172f5d57f641c19dac0e46f514",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221794-2560-stage-49-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221794-2560-stage-49-compo__CliMetadata__InternalFromBitReader",
+      "seq": 49,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221794,
+      "inputs": {
+        "this_ptr": "0x2524e051ae0",
+        "reader_ptr": "0x2524e001480"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221794-2560-stage-49-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221794-2560-stage-49-compo__CliMetadata__InternalFromBitReader",
+      "seq": 49,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221794,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e051ae0"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-049.json",
+          "size": 1177,
+          "sha256": "f9d2f8b17bccf3165ed869092241eed269e51b172f5d57f641c19dac0e46f514",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "1781392221807-2560-stage-50-compo__CliMetadata__InternalFromBitReader-enter",
+      "call_id": "1781392221807-2560-stage-50-compo__CliMetadata__InternalFromBitReader",
+      "seq": 50,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221809,
+      "inputs": {
+        "this_ptr": "0x2524e051ae0",
+        "reader_ptr": "0x2524e001e30"
+      },
+      "blobs": [],
+      "objects": []
+    },
+    {
+      "event_id": "1781392221807-2560-stage-50-compo__CliMetadata__InternalFromBitReader-leave",
+      "call_id": "1781392221807-2560-stage-50-compo__CliMetadata__InternalFromBitReader",
+      "seq": 50,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMetadataBitstream",
+      "symbol": "compo::CliMetadata::InternalFromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff2c610000",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1cba0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_metadata_internal_from_bitreader"
+      },
+      "thread_id": 6780,
+      "timestamp_ms": 1781392221809,
+      "retval": "0x1",
+      "outputs": {
+        "this_ptr": "0x2524e051ae0"
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-metadata-050.json",
+          "size": 1177,
+          "sha256": "f9d2f8b17bccf3165ed869092241eed269e51b172f5d57f641c19dac0e46f514",
+          "note": "",
+          "type": "CliMetadataBitstreamRecord"
+        }
+      ],
+      "blobs": []
+    }
+  ]
+}

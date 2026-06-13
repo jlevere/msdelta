@@ -12,13 +12,14 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["event_id", "call_id", "atom", "symbol", "phase", "module", "timestamp_ms", "blobs"],
+        "required": ["event_id", "call_id", "atom", "symbol", "phase", "module", "timestamp_ms", "blobs", "objects"],
         "properties": {
           "event_id": { "type": "string" },
           "call_id": { "type": "string" },
-          "atom": { "const": "FridaExportOracle" },
+          "atom": { "enum": ["FridaExportOracle", "FridaStageCapture"] },
+          "target_atom": { "type": "string" },
           "symbol": {
-            "enum": ["ApplyDeltaB", "ApplyDeltaGetReverseB", "CreateDeltaB"]
+            "type": "string"
           },
           "phase": { "enum": ["enter", "leave"] },
           "module": {
@@ -34,6 +35,8 @@
           "success": { "type": "boolean" },
           "inputs": { "type": "object" },
           "outputs": { "type": "object" },
+          "function": { "type": "object" },
+          "error": { "type": "object" },
           "blobs": {
             "type": "array",
             "items": {
@@ -48,6 +51,22 @@
                 "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
                 "file_sink_path": { "type": "string" },
                 "note": { "type": "string" }
+              }
+            }
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["slot", "path", "size", "sha256"],
+              "properties": {
+                "slot": { "type": "string" },
+                "path": { "type": "string" },
+                "size": { "type": "integer" },
+                "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "file_sink_path": { "type": "string" },
+                "note": { "type": "string" },
+                "type": { "type": ["string", "null"] }
               }
             }
           }
