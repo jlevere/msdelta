@@ -171,6 +171,20 @@ async function readSinkBlob(options, payload) {
   );
 }
 
+async function readTextFile(filePath) {
+  const bytes = await fs.readFile(filePath);
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return bytes.subarray(2).toString("utf16le");
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    throw new Error(`${filePath} is UTF-16BE; convert it to UTF-8 or UTF-16LE before import`);
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return bytes.subarray(3).toString("utf8");
+  }
+  return bytes.toString("utf8");
+}
+
 async function importBlob(options, ctx, payload) {
   const event = ctx.eventById.get(payload.event_id);
   if (!event) {
@@ -229,7 +243,7 @@ async function main() {
   const errors = [];
   let ignoredLines = 0;
 
-  const stdout = await fs.readFile(options.resolvedStdoutPath, "utf8");
+  const stdout = await readTextFile(options.resolvedStdoutPath);
   const messages = stdout.split(/\r?\n/).map(parseMessageLine);
 
   for (const message of messages) {

@@ -10,9 +10,14 @@ const FILE_SINK_DIR =
   typeof globalThis.MSDELTA_EXPORT_ORACLE_BLOB_DIR === "string"
     ? globalThis.MSDELTA_EXPORT_ORACLE_BLOB_DIR
     : null;
+const READY_FILE =
+  typeof globalThis.MSDELTA_EXPORT_ORACLE_READY_FILE === "string"
+    ? globalThis.MSDELTA_EXPORT_ORACLE_READY_FILE
+    : null;
 
 const hooked = new Set();
 const reportedModules = new Set();
+let readyReported = false;
 let sequence = 0;
 
 function log(level, message, detail) {
@@ -105,6 +110,40 @@ function writeBlobFile(eventId, slot, bytes) {
     file.close();
   }
   return filePath;
+}
+
+function writeTextFile(filePath, text) {
+  const file = new File(filePath, "w");
+  try {
+    file.write(text);
+  } finally {
+    file.close();
+  }
+}
+
+function hookedExportNames() {
+  const names = new Set();
+  for (const key of hooked) {
+    for (const exportName of EXPORTS) {
+      if (key.endsWith(`:${exportName}`)) {
+        names.add(exportName);
+      }
+    }
+  }
+  return names;
+}
+
+function maybeReportReady() {
+  if (!READY_FILE || readyReported) {
+    return;
+  }
+  const names = hookedExportNames();
+  if (!EXPORTS.every(exportName => names.has(exportName))) {
+    return;
+  }
+  writeTextFile(READY_FILE, "ready\n");
+  readyReported = true;
+  log("info", "ready file written", { path: READY_FILE, exports: Array.from(names).sort() });
 }
 
 function sendEvent(event) {
@@ -338,6 +377,7 @@ function installAvailableHooks() {
       installHook(moduleInfo, exportName);
     }
   }
+  maybeReportReady();
 }
 
 installAvailableHooks();

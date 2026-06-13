@@ -110,6 +110,50 @@ The importer also accepts repo-root-relative paths when invoked through pnpm;
 it resolves existing input files against the original shell directory when
 `INIT_CWD` is present.
 
+## Managed Corpus
+
+`managed-corpus.ps1` is the repeatable entry point for creating real managed
+PE source/target pairs on a Windows lab host. It uses the .NET Framework
+compiler already present on Windows and writes a normal oracle `job.json`.
+For normal lab use, run the host-side wrapper from the repo's Nix shell:
+
+```sh
+nix develop -c lab/frida/capture-managed-corpus.sh
+```
+
+The wrapper stages the generator, oracle harness, and Frida agent on
+`jackson-dev`; runs native `CreateDeltaB`/`ApplyDeltaB` controls; pulls the
+corpus back under `lab/frida/out/managed-corpus`; and normalizes the Frida
+file-sink capture. Override `SSH_HOST`, `REMOTE_ROOT`, `OUT_DIR`, or `CASE_ID`
+when using another lab host or output directory.
+
+The underlying Windows-side commands are:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File .\managed-corpus.ps1 `
+  -OutDir C:\msdelta-managed-corpus
+
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File .\oracle_harness.ps1 `
+  -Dir C:\msdelta-managed-corpus `
+  -Dll msdelta.dll `
+  -Out C:\msdelta-managed-corpus\result.msdelta.json
+```
+
+The initial corpus is deliberately small but diverse: string/user-string
+changes, metadata row growth, generic signature blobs, custom attributes,
+manifest resources, and one x64 managed PE. Each case requests
+`native_to_ours` and `native_to_native`, so the lab emits native `.gold` deltas
+and proves those deltas apply back to the expected target before we use them as
+fixtures.
+
+The .NET Framework compiler on the current lab host does not support Roslyn's
+deterministic-output flag, so rerunning the generator can produce different PE
+bytes and different native deltas. Treat `tests/fixtures/atoms/ManagedNativeCorpus`
+as a curated snapshot and treat fresh `lab/frida/out/managed-corpus` output as a
+new validated sample set.
+
 ## Current Scope
 
 Supported now:
@@ -125,6 +169,8 @@ Supported now:
   `frida-server` transport is unstable.
 - Local import of `frida-inject.exe` stdout plus file-sink blobs into
   `run.json`, `capture.json`, and `blobs/*.bin`.
+- Repeatable Windows-side managed corpus generation for native executable
+  delta controls.
 
 Not supported yet:
 

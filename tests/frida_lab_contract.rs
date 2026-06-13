@@ -4,6 +4,8 @@ const PNPM_LOCK: &str = include_str!("../lab/frida/pnpm-lock.yaml");
 const PNPM_WORKSPACE: &str = include_str!("../lab/frida/pnpm-workspace.yaml");
 const HOST_WRAPPER: &str = include_str!("../lab/frida/capture-export-oracle.mjs");
 const INJECT_IMPORTER: &str = include_str!("../lab/frida/import-inject-capture.mjs");
+const MANAGED_CAPTURE: &str = include_str!("../lab/frida/capture-managed-corpus.sh");
+const MANAGED_CORPUS: &str = include_str!("../lab/frida/managed-corpus.ps1");
 const AGENT: &str = include_str!("../lab/frida/agent/export-oracle.js");
 const CAPTURE_SCHEMA: &str = include_str!("../lab/frida/schemas/export-capture.schema.json");
 const RUN_SCHEMA: &str = include_str!("../lab/frida/schemas/run.schema.json");
@@ -86,6 +88,8 @@ fn frida_inject_importer_normalizes_file_sink_output() {
         "MSDELTA_EXPORT_ORACLE_BLOB_DIR",
         "file_sink_path",
         "sha256Bytes",
+        "readTextFile",
+        "utf16le",
         "\"inject\"",
         "run.json",
         "capture.json",
@@ -94,6 +98,55 @@ fn frida_inject_importer_normalizes_file_sink_output() {
         assert!(
             INJECT_IMPORTER.contains(required),
             "inject importer should contain {required}"
+        );
+    }
+}
+
+#[test]
+fn managed_corpus_generator_creates_native_oracle_jobs() {
+    for required in [
+        "managed-corpus.ps1",
+        "csc.exe",
+        "job.json",
+        "manifest.json",
+        "native_to_ours",
+        "native_to_native",
+        "file_type_set = 15",
+        "cli-const-string",
+        "cli-add-method",
+        "cli-generics-signature",
+        "cli-custom-attribute",
+        "cli-resource",
+        "cli-platform-x64",
+    ] {
+        assert!(
+            MANAGED_CORPUS.contains(required) || LAB_README.contains(required),
+            "managed corpus tooling should document or contain {required}"
+        );
+    }
+}
+
+#[test]
+fn managed_corpus_capture_wrapper_runs_full_lab_loop() {
+    for required in [
+        "capture-managed-corpus.sh",
+        "SSH_HOST",
+        "REMOTE_ROOT",
+        "OUT_DIR",
+        "managed-corpus.ps1",
+        "oracle_harness.ps1",
+        "export-oracle.js",
+        "frida-inject.exe",
+        "agent-ready.txt",
+        "LoadLibrary(\"msdelta.dll\")",
+        "MSDELTA_EXPORT_ORACLE_READY_FILE",
+        "import:inject",
+        "frida-out.txt",
+        "managed-corpus-msdelta",
+    ] {
+        assert!(
+            MANAGED_CAPTURE.contains(required) || LAB_README.contains(required),
+            "managed capture wrapper should document or contain {required}"
         );
     }
 }
@@ -127,6 +180,8 @@ fn frida_agent_locks_x64_export_abi_assumptions() {
         "readDeltaOutput",
         "stackArg",
         "MSDELTA_EXPORT_ORACLE_BLOB_DIR",
+        "MSDELTA_EXPORT_ORACLE_READY_FILE",
+        "ready file written",
         "file_sink_path",
         "UpdateCompression.dll",
         "mspatcha.dll",

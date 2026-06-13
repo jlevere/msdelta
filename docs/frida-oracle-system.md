@@ -463,6 +463,39 @@ After that, hook `CliMetadata::FromBitReader`, `CliMap::FromBitReader`, and
 `CompressionRiftTableCli[4]::FromCliMap` so the first real managed rift oracle
 exists before any IL or metadata rewriting work begins.
 
+## Managed Corpus
+
+The managed lane needs real .NET PE pairs before internal hooks are useful.
+`lab/frida/managed-corpus.ps1` is the Windows-side seed corpus generator. It
+compiles a small set of source/target assemblies with the .NET Framework
+compiler, writes a normal oracle `job.json`, and requests both
+`native_to_ours` and `native_to_native`.
+
+Use `lab/frida/capture-managed-corpus.sh` from the repo's Nix shell to run the
+full loop against `jackson-dev`: stage the corpus generator, run native
+`msdelta.dll` controls, attach `frida-inject.exe`, pull the raw artifacts, and
+normalize the export capture.
+
+The first corpus intentionally covers different metadata surfaces instead of
+many copies of one shape:
+
+- `cli-const-string`: user string and method body changes.
+- `cli-add-method`: metadata row growth and method-token pressure.
+- `cli-generics-signature`: generic signature blob and member reference changes.
+- `cli-custom-attribute`: custom attribute table and blob changes.
+- `cli-resource`: manifest resource plus method body changes.
+- `cli-platform-x64`: x64 managed PE coverage.
+
+This corpus is not a replacement for internal object fixtures. It gives the
+project repeatable native managed deltas and native apply controls, which are
+then reused as the input set for `CliMetadataBitstream`, `CliMapBitstream`, and
+CLI rift object capture.
+
+The current lab compiler is the .NET Framework `csc.exe`, which does not accept
+Roslyn deterministic-output flags. Regenerated managed PE bytes can differ from
+the committed fixture snapshot; the native `native_to_native` control is the
+validity signal for each fresh run.
+
 For managed work, start the internal-hook lane with
 `CliMetadata::FromBitReader`. It is the earliest missing managed parser after
 PE info and the preprocess rift, and its normalized object gives
