@@ -76,6 +76,41 @@ impl RiftTable {
         Ok(RiftTable { entries })
     }
 
+    /// Parse a rift map whose IntFormat records are owned by an outer
+    /// structure. CLI maps use this shape: one shared source and target format
+    /// pair is reused for a sequence of heap/table maps.
+    pub(crate) fn from_reader_with_formats(
+        reader: &mut BitReader,
+        fmt_src: &IntFormat,
+        fmt_dst: &IntFormat,
+    ) -> Result<Self> {
+        let count = reader.read_i64()?;
+        if count < 0 || count as u64 > u64::from(reader.remaining()) {
+            return Err(Error::Malformed(
+                "rift table entry count exceeds available input",
+            ));
+        }
+        let count = count as usize;
+
+        let mut entries = Vec::with_capacity(count);
+        let mut src_acc: i64 = 0;
+        let mut dst_acc: i64 = 0;
+
+        for _ in 0..count {
+            let src_delta = fmt_src.read_number(reader)?;
+            src_acc = src_acc.wrapping_add(src_delta);
+            let dst_delta = fmt_dst.read_number(reader)?;
+            dst_acc = dst_acc.wrapping_add(dst_delta);
+            entries.push(RiftEntry {
+                source: src_acc,
+                target: dst_acc.wrapping_add(src_acc),
+            });
+        }
+
+        entries.sort_by_key(|entry| entry.source);
+        Ok(RiftTable { entries })
+    }
+
     /// Serialize a rift table to the bitstream.
     pub fn to_writer(&self, writer: &mut BitWriter) {
         if self.entries.is_empty() {
@@ -107,6 +142,27 @@ impl RiftTable {
         for (sd, dd) in src_deltas.iter().zip(dst_deltas.iter()) {
             fmt_src.write_number(writer, *sd);
             fmt_dst.write_number(writer, *dd);
+        }
+    }
+
+    /// Serialize a shared-format rift map using caller-owned IntFormats.
+    pub(crate) fn to_writer_with_formats(
+        &self,
+        writer: &mut BitWriter,
+        fmt_src: &IntFormat,
+        fmt_dst: &IntFormat,
+    ) {
+        writer.write_i64(self.entries.len() as i64);
+
+        let mut src_acc: i64 = 0;
+        let mut dst_acc: i64 = 0;
+        for entry in &self.entries {
+            let src_delta = entry.source.wrapping_sub(src_acc);
+            src_acc = entry.source;
+            let target_delta = (entry.target.wrapping_sub(entry.source)).wrapping_sub(dst_acc);
+            dst_acc = entry.target.wrapping_sub(entry.source);
+            fmt_src.write_number(writer, src_delta);
+            fmt_dst.write_number(writer, target_delta);
         }
     }
 
@@ -705,7 +761,7 @@ impl IntFormat {
     ///   byte3: count of "default fill" symbols
     /// Then byte1 + byte2 code lengths (4 bits each), plus 1 default length.
     /// Remaining symbols are filled with the default length (decrementing).
-    fn from_reader(reader: &mut BitReader) -> Result<Self> {
+    pub(crate) fn from_reader(reader: &mut BitReader) -> Result<Self> {
         let num_pos = reader.read_bits(8)? as usize;
         let num_neg = reader.read_bits(8)? as usize;
         let num_default = reader.read_bits(8)? as usize;
@@ -824,7 +880,7 @@ impl IntFormat {
         (symbol, extra_val, extra_bits)
     }
 
-    fn from_values(values: &[i64]) -> Self {
+    pub(crate) fn from_values(values: &[i64]) -> Self {
         let mut freqs = vec![1u32; INT_FORMAT_SYMBOLS];
         for &v in values {
             let (sym, _, _) = Self::value_to_symbol(v);
@@ -844,7 +900,7 @@ impl IntFormat {
         }
     }
 
-    fn to_writer(&self, writer: &mut BitWriter) {
+    pub(crate) fn to_writer(&self, writer: &mut BitWriter) {
         writer.write_bits(INT_FORMAT_HALF as u64, 8); // num_pos = 126 (all explicit)
         writer.write_bits(INT_FORMAT_HALF as u64, 8); // num_neg = 126 (all explicit)
         writer.write_bits(0u64, 8); // num_default = 0
@@ -860,7 +916,7 @@ impl IntFormat {
         writer.write_bits(0u64, 4); // default_len (unused but required by format)
     }
 
-    fn write_number(&self, writer: &mut BitWriter, value: i64) {
+    pub(crate) fn write_number(&self, writer: &mut BitWriter, value: i64) {
         let (symbol, extra_val, extra_bits) = Self::value_to_symbol(value);
         self.table.write_symbol(writer, symbol as u16);
         if extra_bits > 0 {
@@ -975,6 +1031,38 @@ mod tests {
             assert_eq!(a.source, b.source);
             assert_eq!(a.target, b.target);
         }
+    }
+
+    #[test]
+    fn shared_format_rift_roundtrip_reuses_outer_formats() {
+        let table = RiftTable {
+            entries: vec![
+                RiftEntry {
+                    source: 10,
+                    target: 30,
+                },
+                RiftEntry {
+                    source: 15,
+                    target: 25,
+                },
+            ],
+        };
+        let source_format = IntFormat::from_values(&[10, 5]);
+        let target_format = IntFormat::from_values(&[20, -10]);
+        let mut writer = BitWriter::new();
+        table.to_writer_with_formats(&mut writer, &source_format, &target_format);
+        let data = writer.finish();
+        let mut reader = BitReader::new(&data).unwrap();
+
+        let decoded =
+            RiftTable::from_reader_with_formats(&mut reader, &source_format, &target_format)
+                .unwrap();
+
+        assert_eq!(decoded.entries.len(), 2);
+        assert_eq!(decoded.entries[0].source, 10);
+        assert_eq!(decoded.entries[0].target, 30);
+        assert_eq!(decoded.entries[1].source, 15);
+        assert_eq!(decoded.entries[1].target, 25);
     }
 
     #[test]

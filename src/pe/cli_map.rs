@@ -1,10 +1,14 @@
 //! CLI metadata coded-token RID remapping.
 
+use crate::bitstream::{BitReader, BitWriter};
+use crate::lzx::rift::{IntFormat, RiftTable};
 use crate::pe::cli_schema::{coded_index_schema, table_schema, CodedIndexKind, TABLE_SENTINEL};
+use crate::{Error as DeltaError, Result};
 use thiserror::Error;
 
 pub(crate) type CliMapResult<T> = std::result::Result<T, CliCodedTokenMapError>;
 pub(crate) const CLI_CODED_TOKEN_EXACT_MISS: u32 = u32::MAX;
+const CLI_TABLE_MAP_COUNT: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct CliCodedToken {
@@ -38,6 +42,15 @@ pub(crate) enum CliCodedTokenMapError {
         table_id: u8,
         source_rid: u32,
         mapped_rid: i64,
+    },
+
+    #[error(
+        "CLI coded token map: invalid RID map entry for table {table_id:#04x}: {map_source}->{map_target}"
+    )]
+    InvalidRidMapEntry {
+        table_id: u8,
+        map_source: i64,
+        map_target: i64,
     },
 
     #[error(
@@ -95,6 +108,28 @@ impl CliRidMap {
         Self { entries: deduped }
     }
 
+    fn from_rift_table(table_id: u8, rift: &RiftTable) -> CliMapResult<Self> {
+        let mut entries = Vec::with_capacity(rift.entries.len());
+        for entry in &rift.entries {
+            let source = u32::try_from(entry.source).map_err(|_| {
+                CliCodedTokenMapError::InvalidRidMapEntry {
+                    table_id,
+                    map_source: entry.source,
+                    map_target: entry.target,
+                }
+            })?;
+            let target = u32::try_from(entry.target).map_err(|_| {
+                CliCodedTokenMapError::InvalidRidMapEntry {
+                    table_id,
+                    map_source: entry.source,
+                    map_target: entry.target,
+                }
+            })?;
+            entries.push(CliRidMapEntry { source, target });
+        }
+        Ok(Self::from_entries(entries))
+    }
+
     fn map_rid(&self, table_id: u8, source_rid: u32) -> CliMapResult<u32> {
         if source_rid == 0 || self.entries.is_empty() {
             return Ok(source_rid);
@@ -125,6 +160,132 @@ impl CliRidMap {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CliCodedTokenMap {
     table_maps: [Option<CliRidMap>; 64],
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct CliMapModel {
+    pub(crate) strings: RiftTable,
+    pub(crate) user_strings: RiftTable,
+    pub(crate) blob: RiftTable,
+    pub(crate) guid: RiftTable,
+    pub(crate) tables: [RiftTable; CLI_TABLE_MAP_COUNT],
+}
+
+impl CliMapModel {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.strings.entries.is_empty()
+            && self.user_strings.entries.is_empty()
+            && self.blob.entries.is_empty()
+            && self.guid.entries.is_empty()
+            && self.tables.iter().all(|table| table.entries.is_empty())
+    }
+
+    pub(crate) fn coded_token_map(&self) -> CliMapResult<CliCodedTokenMap> {
+        let mut token_map = CliCodedTokenMap::new();
+        for (table_id, rift) in self.tables.iter().enumerate() {
+            if rift.entries.is_empty() {
+                continue;
+            }
+            let table_id = table_id as u8;
+            if table_schema(table_id).is_none() {
+                continue;
+            }
+            token_map.set_table_map(table_id, CliRidMap::from_rift_table(table_id, rift)?)?;
+        }
+        Ok(token_map)
+    }
+}
+
+impl Default for CliMapModel {
+    fn default() -> Self {
+        Self {
+            strings: empty_rift_table(),
+            user_strings: empty_rift_table(),
+            blob: empty_rift_table(),
+            guid: empty_rift_table(),
+            tables: std::array::from_fn(|_| empty_rift_table()),
+        }
+    }
+}
+
+pub(crate) fn read_cli_map_bitstream(reader: &mut BitReader<'_>) -> Result<CliMapModel> {
+    let present = reader.read_bits(1)? != 0;
+    if !present {
+        return Ok(CliMapModel::default());
+    }
+
+    let heap_source_format = IntFormat::from_reader(reader)?;
+    let heap_target_format = IntFormat::from_reader(reader)?;
+    let table_source_format = IntFormat::from_reader(reader)?;
+    let table_target_format = IntFormat::from_reader(reader)?;
+
+    let strings =
+        RiftTable::from_reader_with_formats(reader, &heap_source_format, &heap_target_format)?;
+    let user_strings =
+        RiftTable::from_reader_with_formats(reader, &heap_source_format, &heap_target_format)?;
+    let blob =
+        RiftTable::from_reader_with_formats(reader, &heap_source_format, &heap_target_format)?;
+    let guid =
+        RiftTable::from_reader_with_formats(reader, &table_source_format, &table_target_format)?;
+    let mut parsed_tables = Vec::with_capacity(CLI_TABLE_MAP_COUNT);
+    for _ in 0..CLI_TABLE_MAP_COUNT {
+        parsed_tables.push(RiftTable::from_reader_with_formats(
+            reader,
+            &table_source_format,
+            &table_target_format,
+        )?);
+    }
+    let tables = parsed_tables
+        .try_into()
+        .map_err(|_| DeltaError::Malformed("CLI map table count mismatch"))?;
+
+    Ok(CliMapModel {
+        strings,
+        user_strings,
+        blob,
+        guid,
+        tables,
+    })
+}
+
+pub(crate) fn write_cli_map_bitstream(writer: &mut BitWriter, model: &CliMapModel) {
+    if model.is_empty() {
+        writer.write_bits(0, 1);
+        return;
+    }
+
+    writer.write_bits(1, 1);
+
+    let (heap_source_values, heap_target_values) =
+        collect_rift_deltas([&model.strings, &model.user_strings, &model.blob]);
+    let (table_source_values, table_target_values) =
+        collect_rift_deltas(std::iter::once(&model.guid).chain(model.tables.iter()));
+
+    let heap_source_format = IntFormat::from_values(&heap_source_values);
+    let heap_target_format = IntFormat::from_values(&heap_target_values);
+    let table_source_format = IntFormat::from_values(&table_source_values);
+    let table_target_format = IntFormat::from_values(&table_target_values);
+
+    heap_source_format.to_writer(writer);
+    heap_target_format.to_writer(writer);
+    table_source_format.to_writer(writer);
+    table_target_format.to_writer(writer);
+
+    model
+        .strings
+        .to_writer_with_formats(writer, &heap_source_format, &heap_target_format);
+    model
+        .user_strings
+        .to_writer_with_formats(writer, &heap_source_format, &heap_target_format);
+    model
+        .blob
+        .to_writer_with_formats(writer, &heap_source_format, &heap_target_format);
+    model
+        .guid
+        .to_writer_with_formats(writer, &table_source_format, &table_target_format);
+    for table in &model.tables {
+        table.to_writer_with_formats(writer, &table_source_format, &table_target_format);
+    }
 }
 
 impl CliCodedTokenMap {
@@ -308,6 +469,34 @@ fn tag_mask(tag_bits: u8) -> u32 {
     (1u32 << tag_bits) - 1
 }
 
+fn empty_rift_table() -> RiftTable {
+    RiftTable {
+        entries: Vec::new(),
+    }
+}
+
+fn collect_rift_deltas<'a>(
+    tables: impl IntoIterator<Item = &'a RiftTable>,
+) -> (Vec<i64>, Vec<i64>) {
+    let mut source_deltas = Vec::new();
+    let mut target_deltas = Vec::new();
+
+    for table in tables {
+        let mut source_acc: i64 = 0;
+        let mut target_acc: i64 = 0;
+        for entry in &table.entries {
+            let source_delta = entry.source.wrapping_sub(source_acc);
+            source_acc = entry.source;
+            let target_delta = (entry.target.wrapping_sub(entry.source)).wrapping_sub(target_acc);
+            target_acc = entry.target.wrapping_sub(entry.source);
+            source_deltas.push(source_delta);
+            target_deltas.push(target_delta);
+        }
+    }
+
+    (source_deltas, target_deltas)
+}
+
 fn apply_rid_offset(table_id: u8, source_rid: u32, entry: CliRidMapEntry) -> CliMapResult<u32> {
     let mapped = i64::from(source_rid) + (i64::from(entry.target) - i64::from(entry.source));
     u32::try_from(mapped).map_err(|_| CliCodedTokenMapError::MappedRidOutOfRange {
@@ -320,12 +509,116 @@ fn apply_rid_offset(table_id: u8, source_rid: u32, entry: CliRidMapEntry) -> Cli
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lzx::rift::{IntFormat, RiftEntry, RiftTable};
     use crate::pe::cli_schema::CODED_INDEXES;
 
     const TYPE_DEF: u8 = 0x02;
     const TYPE_REF: u8 = 0x01;
     const PARAM: u8 = 0x08;
     const METHOD_DEF: u8 = 0x06;
+
+    #[test]
+    fn parses_absent_cli_map_as_empty_model() {
+        let mut writer = BitWriter::new();
+        writer.write_bits(0, 1);
+        let data = writer.finish();
+        let mut reader = BitReader::new(&data).unwrap();
+
+        let model = read_cli_map_bitstream(&mut reader).unwrap();
+
+        assert!(model.is_empty());
+    }
+
+    #[test]
+    fn parses_present_cli_map_with_all_empty_maps() {
+        let data = present_empty_cli_map();
+        let mut reader = BitReader::new(&data).unwrap();
+
+        let model = read_cli_map_bitstream(&mut reader).unwrap();
+
+        assert!(model.is_empty());
+    }
+
+    #[test]
+    fn roundtrips_heap_table_and_guid_maps() {
+        let mut model = CliMapModel::default();
+        model.strings = rift(&[(3, 7), (8, 9)]);
+        model.blob = rift(&[(0x20, 0x28)]);
+        model.guid = rift(&[(1, 3)]);
+        model.tables[TYPE_REF as usize] = rift(&[(5, 9), (10, 20)]);
+
+        let decoded = roundtrip_cli_map(&model);
+
+        assert_entries(&decoded.strings, &[(3, 7), (8, 9)]);
+        assert!(decoded.user_strings.entries.is_empty());
+        assert_entries(&decoded.blob, &[(0x20, 0x28)]);
+        assert_entries(&decoded.guid, &[(1, 3)]);
+        assert_entries(&decoded.tables[TYPE_REF as usize], &[(5, 9), (10, 20)]);
+    }
+
+    #[test]
+    fn parsed_table_maps_feed_coded_token_mapping() {
+        let mut model = CliMapModel::default();
+        model.tables[TYPE_REF as usize] = rift(&[(5, 9), (10, 20)]);
+
+        let token_map = roundtrip_cli_map(&model).coded_token_map().unwrap();
+
+        assert_eq!(
+            token_map
+                .map_coded_token((7 << 2) | 1, CodedIndexKind::TypeDefOrRef)
+                .unwrap(),
+            (11 << 2) | 1
+        );
+        assert_eq!(
+            token_map
+                .map_coded_token_exact((7 << 2) | 1, CodedIndexKind::TypeDefOrRef)
+                .unwrap(),
+            CLI_CODED_TOKEN_EXACT_MISS
+        );
+        assert_eq!(
+            token_map
+                .map_coded_token_exact((10 << 2) | 1, CodedIndexKind::TypeDefOrRef)
+                .unwrap(),
+            (20 << 2) | 1
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_cli_map_int_format() {
+        let mut writer = BitWriter::new();
+        writer.write_bits(1, 1);
+        writer.write_bits(127, 8);
+        writer.write_bits(0, 8);
+        writer.write_bits(0, 8);
+        let data = writer.finish();
+        let mut reader = BitReader::new(&data).unwrap();
+
+        assert!(matches!(
+            read_cli_map_bitstream(&mut reader),
+            Err(crate::Error::Malformed("IntFormat mode out of range"))
+        ));
+    }
+
+    #[test]
+    fn rejects_shared_map_count_larger_than_remaining_bits() {
+        let mut writer = BitWriter::new();
+        writer.write_bits(1, 1);
+        let format = IntFormat::from_values(&[]);
+        format.to_writer(&mut writer);
+        format.to_writer(&mut writer);
+        format.to_writer(&mut writer);
+        format.to_writer(&mut writer);
+        writer.write_i64(1000);
+        let data = writer.finish();
+        let mut reader = BitReader::new(&data).unwrap();
+
+        assert!(matches!(
+            read_cli_map_bitstream(&mut reader),
+            Err(crate::Error::Malformed(
+                "rift table entry count exceeds available input"
+            ))
+        ));
+    }
 
     #[test]
     fn splits_typedef_or_ref_tokens() {
@@ -556,5 +849,45 @@ mod tests {
                 tag_bits: 2,
             }) if rid == too_large
         ));
+    }
+
+    fn present_empty_cli_map() -> Vec<u8> {
+        let mut writer = BitWriter::new();
+        writer.write_bits(1, 1);
+        let format = IntFormat::from_values(&[]);
+        format.to_writer(&mut writer);
+        format.to_writer(&mut writer);
+        format.to_writer(&mut writer);
+        format.to_writer(&mut writer);
+        for _ in 0..68 {
+            writer.write_i64(0);
+        }
+        writer.finish()
+    }
+
+    fn roundtrip_cli_map(model: &CliMapModel) -> CliMapModel {
+        let mut writer = BitWriter::new();
+        write_cli_map_bitstream(&mut writer, model);
+        let data = writer.finish();
+        let mut reader = BitReader::new(&data).unwrap();
+        read_cli_map_bitstream(&mut reader).unwrap()
+    }
+
+    fn rift(entries: &[(i64, i64)]) -> RiftTable {
+        RiftTable {
+            entries: entries
+                .iter()
+                .map(|&(source, target)| RiftEntry { source, target })
+                .collect(),
+        }
+    }
+
+    fn assert_entries(table: &RiftTable, expected: &[(i64, i64)]) {
+        let actual = table
+            .entries
+            .iter()
+            .map(|entry| (entry.source, entry.target))
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected);
     }
 }

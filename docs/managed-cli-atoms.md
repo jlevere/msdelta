@@ -337,6 +337,18 @@ No-op conditions: `present == 0` yields empty rifts for all maps.
 Done when: parser round-trip tests cover empty maps, non-empty heap maps, and
 at least one table map.
 
+Current state: `src/pe/cli_map.rs` contains the semantic `CliMapModel` and
+`read_cli_map_bitstream` / `write_cli_map_bitstream` helpers. The parser reads
+the outer present bit, four shared `IntFormat` records, the three variable heap
+maps, the table-format GUID map, and 64 table RID maps. Individual maps use the
+shared-format rift adapter in `src/lzx/rift.rs`: signed entry count followed by
+source-delta and offset-delta numbers. Unit tests cover absent maps, populated
+all-empty maps, non-empty heap/blob/GUID/table maps, malformed `IntFormat`
+headers, oversized counts, and feeding table maps into `CliCodedTokenMap`.
+This is still not native-validated; keep managed apply rejected until
+`CliMetadataBitstream`, CLI rift production, and a native `CliMap::FromBitReader`
+object oracle are in place.
+
 ### CliCodedTokenMap
 
 Native reference: `CliMap::MapCoded`, `CliMap::MapCodedExact`
