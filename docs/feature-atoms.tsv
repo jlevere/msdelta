@@ -70,11 +70,11 @@ CreateCli	create	create	0x2,0x4,0x8	-	CreateDeltaB managed classic graph	missing
 CreateCli4	create	create	0x10,0x20,0x40,0x80	-	CreateDeltaB managed CLI4 graph	missing	reject	needs_fixture	Do not start until decode CLI4 atoms pass
 CreateArm64	create	create	0x80	-	CreateDeltaB file_type_set 0xf5 path	missing	reject	needs_fixture	Do not start until ARM64 apply atoms pass
 UnsupportedFeatureGate	pipeline	gate	all	-	apply feature dispatch policy	partial	allow	unit	Generate fail-loud diagnostics from this registry
-FridaExportOracle	lab	fixture	all	-	ApplyDeltaB ApplyDeltaGetReverseB CreateDeltaB exports	partial	lab_only	unit	Promote captured tiny RAW ApplyDeltaB fixture and add reverse/CreateDeltaB smoke captures
+FridaExportOracle	lab	fixture	all	-	ApplyDeltaB ApplyDeltaGetReverseB CreateDeltaB exports	partial	lab_only	curated	Add reverse/CreateDeltaB smoke captures after RAW ApplyDeltaB fixture
 FridaSymbolMap	lab	fixture	all	-	module hash plus internal RVA hook map	missing	lab_only	none	Define per-DLL hash symbol maps with ABI and capture adapter names
 FridaStageCapture	lab	fixture	pe,cli	-	internal function entry and exit hooks	missing	lab_only	none	Hook preprocess metadata map rift and transform boundaries with fail-closed checks
 FridaObjectNormalizer	lab	fixture	pe,cli	-	Frida logical object readers	missing	lab_only	none	Normalize RiftTable CliMetadata CliMap and PE info objects into stable JSON
-FridaFixturePromotion	lab	fixture	all	-	capture to atom fixture promotion	missing	lab_only	none	Promote curated captures into tests/fixtures/atoms case packets
+FridaFixturePromotion	lab	fixture	all	-	capture to atom fixture promotion	partial	lab_only	curated	Generalize first promoted export packet into a reusable promotion tool
 WindowsVersionMatrix	lab	fixture	all	-	Windows build and DLL hash matrix	missing	lab_only	none	Run the same capture set across builds and group drift by atom
 NativeOracleDiff	lab	fixture	all	-	normalized native capture comparator	missing	lab_only	none	Compare Rust stage outputs against normalized native capture objects
 BulkFailureClassifier	lab	fixture	all	-	corpus failure bucketing	missing	lab_only	none	Bucket native mismatches by atom, section, flags, and byte range

@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "atom": "FridaExportOracle",
+  "run_id": "raw-apply-delta-b-win26100-msdelta",
+  "started_at": "2026-06-13T20:08:41.391Z",
+  "ended_at": "2026-06-13T20:08:41.422Z",
+  "host": {
+    "role": "controller-importer",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "frida": {
+    "device": "inject",
+    "remote": null
+  },
+  "target": {
+    "pid": null,
+    "spawned": false,
+    "command": [],
+    "detach": {
+      "reason": "curated-frida-inject-capture"
+    }
+  },
+  "exports": [
+    "ApplyDeltaB",
+    "ApplyDeltaGetReverseB",
+    "CreateDeltaB"
+  ],
+  "modules": [
+    {
+      "name": "msdelta.dll",
+      "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+      "base": "0x7fff3d710000",
+      "size": 585728,
+      "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb",
+      "file_version": "5.00 (WinBuild.160101.0800)"
+    }
+  ],
+  "cases": [
+    "raw-apply-delta-b"
+  ],
+  "logs": [],
+  "errors": [],
+  "import": {
+    "source": "curated from frida-inject file-sink capture"
+  },
+  "target_host": {
+    "caption": "Microsoft Windows Server 2025 Standard Evaluation",
+    "version": "10.0.26100",
+    "build": "26100",
+    "arch": "x64"
+  }
+}

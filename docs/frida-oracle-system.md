@@ -91,6 +91,17 @@ fixtures, and the target blob matched the known `where.exe` hash. Promote that
 case only as an export oracle fixture. It should not be treated as proof for any
 internal feature atom.
 
+The first promoted packet is:
+
+```text
+tests/fixtures/atoms/FridaExportOracle/raw-apply-delta-b/
+```
+
+It proves only the export-level ABI and file-sink capture path for a RAW
+`ApplyDeltaB` call. Its `case.toml` explicitly lists what it does not prove so
+future work does not accidentally treat it as evidence for preprocess, rift, PE,
+or managed CLI atoms.
+
 Lessons from that run:
 
 1. Treat transport as part of the oracle contract. The remote Frida server path
@@ -323,6 +334,10 @@ tests/fixtures/atoms/<atom>/<case>/
   native/
     run.json
     capture.json
+    blobs/
+      <event-id>-source.bin
+      <event-id>-delta.bin
+      <event-id>-target.bin
     objects/
       target-cli-metadata.json
       cli-map.json
