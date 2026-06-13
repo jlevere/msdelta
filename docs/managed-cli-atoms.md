@@ -146,7 +146,9 @@ header bounds, duplicate stream names, `#~`, `#Strings`, `#US`, `#Blob`, and
 
 Implementation status: the classic target `CliMetadata` preprocess record is
 parsed by `read_cli_metadata_bitstream`. It consumes the native wire fields,
-derives table row sizes and first-row file offsets, and remains gated from full
+derives table row sizes and first-row file offsets, and is validated against
+Win26100 `msdelta.dll` stage fixtures that include both normalized native
+objects and replay-checked reader-window bitstreams. It remains gated from full
 managed apply until `CliMap` parity and transform-context atoms are complete.
 
 ### CliMap
@@ -329,8 +331,14 @@ Outputs: `CliMetadataModel`.
 
 No-op conditions: `present == 0` produces an empty model.
 
-Done when: bitstream round-trip tests cover empty metadata, heap-width flag
-combinations, sparse valid-table masks, and maximum table id `63`.
+Current evidence: the Win26100 stage fixture captures 50
+`compo::CliMetadata::InternalFromBitReader` calls from six managed PE deltas.
+Each fixture record has a normalized native object and a standalone BitReader
+blob reconstructed from the native reader state; the Rust parser consumes those
+blobs and the Rust writer reproduces them bit-for-bit.
+
+Done when: this same reader-window evidence exists for the CLI4 metadata path
+and the parsed target metadata is wired into the managed transform context.
 
 ### CliMapBitstream
 

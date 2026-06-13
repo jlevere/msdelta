@@ -17,6 +17,10 @@ const OBJECT_SINK_DIR =
   typeof globalThis.MSDELTA_STAGE_ORACLE_OBJECT_DIR === "string"
     ? globalThis.MSDELTA_STAGE_ORACLE_OBJECT_DIR
     : null;
+const BLOB_SINK_DIR =
+  typeof globalThis.MSDELTA_STAGE_ORACLE_BLOB_DIR === "string"
+    ? globalThis.MSDELTA_STAGE_ORACLE_BLOB_DIR
+    : null;
 const READY_FILE =
   typeof globalThis.MSDELTA_STAGE_ORACLE_READY_FILE === "string"
     ? globalThis.MSDELTA_STAGE_ORACLE_READY_FILE
@@ -53,6 +57,18 @@ function writeTextFile(filePath, text) {
   } finally {
     file.close();
   }
+}
+
+function writeBlobFile(eventId, slot, bytes) {
+  const fileName = `${sanitizePart(eventId)}-${sanitizePart(slot)}.bin`;
+  const filePath = joinPath(BLOB_SINK_DIR, fileName);
+  const file = new File(filePath, "wb");
+  try {
+    file.write(bytes);
+  } finally {
+    file.close();
+  }
+  return filePath;
 }
 
 function moduleByName(name) {
@@ -94,6 +110,280 @@ function parseRva(value) {
 function readU64Hex(address) {
   const value = address.readU64();
   return `0x${value.toString(16).padStart(16, "0")}`;
+}
+
+function readU64Number(address, label) {
+  const value = Number.parseInt(address.readU64().toString(10), 10);
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${label} is outside JavaScript's safe integer range`);
+  }
+  return value;
+}
+
+function readU64BigInt(address) {
+  return BigInt(address.readU64().toString(10));
+}
+
+function pointerNumber(value, label) {
+  const text = value.toString();
+  const parsed = Number.parseInt(text.startsWith("0x") ? text.slice(2) : text, text.startsWith("0x") ? 16 : 10);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error(`${label} pointer is outside JavaScript's safe integer range: ${text}`);
+  }
+  return parsed;
+}
+
+function pointerDelta(start, end, label) {
+  const startValue = pointerNumber(start, `${label} start`);
+  const endValue = pointerNumber(end, `${label} end`);
+  const value = endValue - startValue;
+  if (value < 0) {
+    throw new Error(
+      `${label} pointer range is negative: start=${start.toString()} end=${end.toString()}`
+    );
+  }
+  return value;
+}
+
+function snapshotBitReader(readerPtr, layout) {
+  if (!layout) {
+    return null;
+  }
+  if (readerPtr.isNull()) {
+    throw new Error("reader pointer is null");
+  }
+
+  const tailBits = readU64Number(readerPtr.add(layout.tail_bits_offset), "tail bits");
+  const availableBits = readerPtr.add(layout.available_bits_offset).readU32();
+  const wordCursor = readerPtr.add(layout.word_cursor_offset).readPointer();
+  const wordEnd = readerPtr.add(layout.word_end_offset).readPointer();
+  const wordBytes = pointerDelta(wordCursor, wordEnd, "reader word cursor");
+  const accumulator = readU64BigInt(readerPtr.add(layout.accumulator_offset));
+
+  if (tailBits > 31) {
+    throw new Error(`reader tail bits out of range: ${tailBits}`);
+  }
+  if (availableBits > 63) {
+    throw new Error(`reader available bits out of range: ${availableBits}`);
+  }
+  if (wordBytes % 4 !== 0) {
+    throw new Error(`reader word cursor range is not 32-bit aligned: ${wordBytes}`);
+  }
+
+  const remainingBits = availableBits + wordBytes * 8 + tailBits;
+  if (remainingBits < 0 || remainingBits > layout.max_remaining_bits) {
+    throw new Error(`reader remaining bits out of range: ${remainingBits}`);
+  }
+
+  return {
+    native_layout: layout.name,
+    accumulator,
+    word_cursor: wordCursor,
+    word_end: wordEnd,
+    available_bits: availableBits,
+    tail_bits: tailBits,
+    word_bytes: wordBytes,
+    remaining_bits: remainingBits,
+  };
+}
+
+function setBit(bytes, bitIndex, bit) {
+  if (bit !== 0) {
+    bytes[Math.floor(bitIndex / 8)] |= 1 << (bitIndex % 8);
+  }
+}
+
+function bitMask(width) {
+  return (1n << BigInt(width)) - 1n;
+}
+
+function readTailValue(address, tailBits) {
+  let value = 0n;
+  const byteCount = Math.ceil(tailBits / 8);
+  for (let i = 0; i < byteCount; i += 1) {
+    value |= BigInt(address.add(i).readU8()) << BigInt(i * 8);
+  }
+  return value;
+}
+
+function cloneReaderState(snapshot) {
+  return {
+    native_layout: snapshot.native_layout,
+    accumulator: snapshot.accumulator,
+    word_cursor: snapshot.word_cursor,
+    word_end: snapshot.word_end,
+    available_bits: snapshot.available_bits,
+    tail_bits: snapshot.tail_bits,
+  };
+}
+
+function replayNativeRead(state, width) {
+  if (width < 0 || width > 32) {
+    throw new Error(`unsupported native read width: ${width}`);
+  }
+  if (width > state.available_bits) {
+    throw new Error(`native read width ${width} exceeds available bits ${state.available_bits}`);
+  }
+
+  const value = width === 0 ? 0n : state.accumulator & bitMask(width);
+  state.accumulator >>= BigInt(width);
+  state.available_bits -= width;
+
+  if (state.available_bits < 32) {
+    if (state.word_cursor.compare(state.word_end) !== 0) {
+      const word = BigInt(state.word_cursor.readU32());
+      state.word_cursor = state.word_cursor.add(4);
+      state.accumulator |= word << BigInt(state.available_bits);
+      state.available_bits += 32;
+    } else if (state.tail_bits !== 0) {
+      const tailBits = state.tail_bits;
+      const tail = readTailValue(state.word_end, tailBits);
+      state.accumulator |= tail << BigInt(state.available_bits);
+      state.available_bits += tailBits;
+      state.tail_bits = 0;
+    }
+  }
+
+  return value;
+}
+
+function finishStandaloneBitstream(out, bitCount) {
+  const totalBits = 3 + bitCount;
+  const paddingBits = (8 - (totalBits % 8)) & 7;
+  out[0] = (out[0] & 0xf8) | (paddingBits & 7);
+  return {
+    bytes: out.buffer,
+    padding_bits: paddingBits,
+    size: out.byteLength,
+  };
+}
+
+function buildStandaloneBitstreamFromReadPlan(before, readPlan) {
+  const bitCount = readPlan.reduce((total, width) => total + width, 0);
+  const totalBits = 3 + bitCount;
+  const paddingBits = (8 - (totalBits % 8)) & 7;
+  const out = new Uint8Array((totalBits + paddingBits) / 8);
+  const replay = cloneReaderState(before);
+  let outBit = 3;
+
+  for (const width of readPlan) {
+    const value = replayNativeRead(replay, width);
+    for (let i = 0; i < width; i += 1) {
+      setBit(out, outBit, Number((value >> BigInt(i)) & 1n));
+      outBit += 1;
+    }
+  }
+
+  return {
+    standalone: finishStandaloneBitstream(out, bitCount),
+    replay,
+  };
+}
+
+function cliMetadataReadPlan(record) {
+  const widths = [1];
+  if (!record.present) {
+    return widths;
+  }
+
+  for (let i = 0; i < 15; i += 1) {
+    widths.push(32);
+  }
+  widths.push(1, 1, 1, 32, 32);
+
+  const validMask = BigInt(record.valid_table_mask);
+  for (let tableId = 0; tableId < 64; tableId += 1) {
+    if ((validMask & (1n << BigInt(tableId))) !== 0n) {
+      widths.push(32);
+    }
+  }
+  return widths;
+}
+
+function readPlanForObject(fn, objectValue) {
+  if (!objectValue) {
+    return null;
+  }
+  if (fn.capture === "cli_metadata_internal_from_bitreader") {
+    return cliMetadataReadPlan(objectValue);
+  }
+  return null;
+}
+
+function replayMatchesSnapshot(replay, after) {
+  return (
+    replay.word_cursor.compare(after.word_cursor) === 0 &&
+    replay.word_end.compare(after.word_end) === 0 &&
+    replay.available_bits === after.available_bits &&
+    replay.tail_bits === after.tail_bits &&
+    replay.accumulator === after.accumulator
+  );
+}
+
+function buildReaderWindow(before, after, layout, readPlan) {
+  if (!before || !after) {
+    return null;
+  }
+  if (before.native_layout !== after.native_layout) {
+    throw new Error("reader layout changed during call");
+  }
+  if (!readPlan || readPlan.length === 0) {
+    throw new Error("reader capture has no read plan");
+  }
+
+  const bitCount = before.remaining_bits - after.remaining_bits;
+  if (bitCount === 0) {
+    throw new Error("reader did not consume any bits");
+  }
+  if (bitCount < 0) {
+    throw new Error("reader remaining bits increased during call");
+  }
+  if (bitCount > layout.max_window_bits) {
+    throw new Error(`reader window is larger than max_window_bits: ${bitCount}`);
+  }
+
+  const plannedBits = readPlan.reduce((total, width) => total + width, 0);
+  if (plannedBits !== bitCount) {
+    throw new Error(`reader read-plan bits ${plannedBits} do not match native consumption ${bitCount}`);
+  }
+
+  const { standalone, replay } = buildStandaloneBitstreamFromReadPlan(before, readPlan);
+  if (!replayMatchesSnapshot(replay, after)) {
+    throw new Error("replayed reader state does not match native exit state");
+  }
+
+  return {
+    metadata: {
+      native_layout: layout.name,
+      bit_count: bitCount,
+      read_count: readPlan.length,
+      remaining_bits_before: before.remaining_bits,
+      remaining_bits_after: after.remaining_bits,
+      standalone_size: standalone.size,
+      standalone_padding_bits: standalone.padding_bits,
+    },
+    bytes: standalone.bytes,
+    size: standalone.size,
+  };
+}
+
+function sendBlobFromBytes(eventId, slot, bytes, size, note) {
+  const payload = {
+    type: "blob",
+    event_id: eventId,
+    slot,
+    ptr: "standalone",
+    size,
+    note: note || "",
+  };
+  if (!BLOB_SINK_DIR) {
+    payload.size = 0;
+    payload.note = "not captured: MSDELTA_STAGE_ORACLE_BLOB_DIR is not set";
+    send(payload);
+    return;
+  }
+  payload.file_sink_path = writeBlobFile(eventId, slot, bytes);
+  send(payload);
 }
 
 function readCliMetadataRecord(thisPtr, layout) {
@@ -187,6 +477,21 @@ function writeObject(eventId, slot, objectValue) {
     file_sink_path: filePath,
     note: "",
   });
+}
+
+function captureReaderSnapshot(readerPtr, layout) {
+  if (!layout) {
+    return { skipped: true, value: null };
+  }
+  try {
+    return { skipped: false, value: snapshotBitReader(readerPtr, layout) };
+  } catch (error) {
+    return {
+      skipped: false,
+      value: null,
+      error: String(error && error.stack ? error.stack : error),
+    };
+  }
 }
 
 function beginEvent(fn, moduleInfo, phase, callId, fields) {
@@ -316,6 +621,7 @@ function installStageHook(moduleInfo, fn) {
       this.callId = nextEventId(fn.name);
       this.thisPtr = args[0];
       this.readerPtr = args[1];
+      this.readerBefore = captureReaderSnapshot(this.readerPtr, fn.reader_layout);
       sendEvent(
         beginEvent(fn, moduleInfo, "enter", this.callId, {
           inputs: {
@@ -333,6 +639,7 @@ function installStageHook(moduleInfo, fn) {
         },
       };
       let objectValue = null;
+      let readerWindow = null;
       try {
         objectValue = normalizeObject(this.fn, this.thisPtr);
         fields.objects = { normalized: "pending" };
@@ -342,10 +649,46 @@ function installStageHook(moduleInfo, fn) {
           message: String(error && error.stack ? error.stack : error),
         };
       }
+      if (this.fn.reader_layout) {
+        const readerAfter = captureReaderSnapshot(this.readerPtr, this.fn.reader_layout);
+        if (this.readerBefore.error || readerAfter.error) {
+          fields.reader_window = {
+            native_layout: this.fn.reader_layout.name,
+            error: this.readerBefore.error || readerAfter.error,
+          };
+        } else {
+          try {
+            readerWindow = buildReaderWindow(
+              this.readerBefore.value,
+              readerAfter.value,
+              this.fn.reader_layout,
+              readPlanForObject(this.fn, objectValue)
+            );
+            if (readerWindow) {
+              fields.reader_window = readerWindow.metadata;
+              fields.blobs = { reader_bitstream: "pending" };
+            }
+          } catch (error) {
+            fields.reader_window = {
+              native_layout: this.fn.reader_layout.name,
+              error: String(error && error.stack ? error.stack : error),
+            };
+          }
+        }
+      }
       const event = beginEvent(this.fn, this.moduleInfo, "leave", this.callId, fields);
       sendEvent(event);
       if (objectValue) {
         writeObject(event.event_id, "normalized", objectValue);
+      }
+      if (readerWindow) {
+        sendBlobFromBytes(
+          event.event_id,
+          "reader-bitstream",
+          readerWindow.bytes,
+          readerWindow.size,
+          "standalone BitReader stream copied from the native reader window"
+        );
       }
     },
   });

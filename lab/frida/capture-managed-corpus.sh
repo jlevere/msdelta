@@ -85,6 +85,7 @@ $prelude = @"
 globalThis.MSDELTA_EXPORT_ORACLE_BLOB_DIR = "$blobLiteral";
 globalThis.MSDELTA_EXPORT_ORACLE_READY_FILE = "$readyLiteral";
 globalThis.MSDELTA_STAGE_ORACLE_OBJECT_DIR = "$objectLiteral";
+globalThis.MSDELTA_STAGE_ORACLE_BLOB_DIR = "$blobLiteral";
 globalThis.MSDELTA_STAGE_ORACLE_READY_FILE = "$stageReadyLiteral";
 globalThis.MSDELTA_STAGE_ORACLE_SELECTED_SHA256 = "$moduleHash";
 globalThis.MSDELTA_STAGE_ORACLE_SYMBOL_MAP = $symbolMapJson;

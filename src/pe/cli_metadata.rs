@@ -727,12 +727,14 @@ mod tests {
     #[test]
     fn cli_metadata_bitstream_matches_win26100_stage_fixture_objects() {
         let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/atoms/FridaStageCapture/cli-metadata-win26100/objects");
-        if !fixture.exists() {
+            .join("tests/fixtures/atoms/FridaStageCapture/cli-metadata-win26100");
+        let object_dir = fixture.join("objects");
+        let blob_dir = fixture.join("blobs");
+        if !object_dir.exists() {
             return;
         }
 
-        let mut paths = std::fs::read_dir(&fixture)
+        let mut paths = std::fs::read_dir(&object_dir)
             .unwrap()
             .map(|entry| entry.unwrap().path())
             .collect::<Vec<_>>();
@@ -759,14 +761,34 @@ mod tests {
                 empty += 1;
             }
 
-            let mut writer = BitWriter::new();
-            write_cli_metadata_bitstream(&mut writer, &expected);
-            let bytes = writer.finish();
+            let stem = path
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .unwrap_or_else(|| {
+                    panic!("fixture object path has no UTF-8 stem: {}", path.display())
+                });
+            let blob_path = blob_dir.join(format!("{stem}-reader-bitstream.bin"));
+            let bytes = std::fs::read(&blob_path)
+                .unwrap_or_else(|error| panic!("read {}: {error}", blob_path.display()));
             let mut reader = BitReader::new(&bytes).unwrap();
             let parsed = read_cli_metadata_bitstream(&mut reader, CliSchemaFlavor::Classic)
-                .unwrap_or_else(|error| panic!("parse bitstream for {}: {error}", path.display()));
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "parse native reader bitstream for {}: {error}",
+                        blob_path.display()
+                    )
+                });
             assert_eq!(reader.remaining(), 0, "{} left unread bits", path.display());
             assert_eq!(parsed, expected, "{}", path.display());
+
+            let mut writer = BitWriter::new();
+            write_cli_metadata_bitstream(&mut writer, &expected);
+            assert_eq!(
+                writer.finish(),
+                bytes,
+                "writer should reproduce native reader bitstream {}",
+                blob_path.display()
+            );
 
             if parsed.present {
                 assert!(

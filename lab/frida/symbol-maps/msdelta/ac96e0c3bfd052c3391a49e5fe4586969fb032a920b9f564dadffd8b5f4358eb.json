@@ -12,6 +12,16 @@
       "rva": "0x1cba0",
       "abi": "ms-x64-thiscall",
       "capture": "cli_metadata_internal_from_bitreader",
+      "reader_layout": {
+        "name": "msdelta-win26100-bitreader-read-v1",
+        "tail_bits_offset": 24,
+        "word_cursor_offset": 32,
+        "word_end_offset": 40,
+        "accumulator_offset": 48,
+        "available_bits_offset": 56,
+        "max_remaining_bits": 67108864,
+        "max_window_bits": 1048576
+      },
       "object_layout": {
         "name": "msdelta-win26100-compo-cli-metadata-v1",
         "base_offset": 16,

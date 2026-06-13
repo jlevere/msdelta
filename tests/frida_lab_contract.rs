@@ -152,6 +152,7 @@ fn managed_corpus_capture_wrapper_runs_full_lab_loop() {
         "Get-FileHash",
         "MSDELTA_STAGE_ORACLE_SYMBOL_MAP",
         "MSDELTA_STAGE_ORACLE_OBJECT_DIR",
+        "MSDELTA_STAGE_ORACLE_BLOB_DIR",
         "MSDELTA_STAGE_ORACLE_READY_FILE",
         "stage-agent-ready.txt",
         "--object-dir",
@@ -177,6 +178,7 @@ fn frida_stage_oracle_fails_closed_and_normalizes_cli_metadata() {
         "MSDELTA_STAGE_ORACLE_SYMBOL_MAP",
         "MSDELTA_STAGE_ORACLE_SELECTED_SHA256",
         "MSDELTA_STAGE_ORACLE_OBJECT_DIR",
+        "MSDELTA_STAGE_ORACLE_BLOB_DIR",
         "MSDELTA_STAGE_ORACLE_READY_FILE",
         "stage capture disabled",
         "selected module hash does not match symbol map",
@@ -191,7 +193,12 @@ fn frida_stage_oracle_fails_closed_and_normalizes_cli_metadata() {
         "heap_widths",
         "valid_table_mask",
         "row_counts",
+        "reader-bitstream",
+        "readPlanForObject",
+        "replayed reader state does not match native exit state",
+        "standalone BitReader stream copied from the native reader window",
         "type: \"object\"",
+        "type: \"blob\"",
         "file_sink_path",
     ] {
         assert!(
@@ -199,11 +206,6 @@ fn frida_stage_oracle_fails_closed_and_normalizes_cli_metadata() {
             "stage agent should contain {required}"
         );
     }
-
-    assert!(
-        !STAGE_AGENT.contains("readByteArray"),
-        "stage normalizer must not promote raw native object memory"
-    );
 }
 
 #[test]
@@ -220,6 +222,14 @@ fn win26100_msdelta_symbol_map_names_first_managed_atom() {
         "\"rva\": \"0x1cba0\"",
         "\"abi\": \"ms-x64-thiscall\"",
         "\"capture\": \"cli_metadata_internal_from_bitreader\"",
+        "\"reader_layout\"",
+        "\"name\": \"msdelta-win26100-bitreader-read-v1\"",
+        "\"tail_bits_offset\": 24",
+        "\"word_cursor_offset\": 32",
+        "\"word_end_offset\": 40",
+        "\"accumulator_offset\": 48",
+        "\"available_bits_offset\": 56",
+        "\"max_window_bits\": 1048576",
         "\"name\": \"msdelta-win26100-compo-cli-metadata-v1\"",
         "\"base_offset\": 16",
         "\"valid_table_mask_offset\": 80",

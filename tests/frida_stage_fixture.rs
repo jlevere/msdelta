@@ -26,9 +26,11 @@ fn cli_metadata_stage_fixture_is_curated_from_live_lab_capture() {
         "abi = \"ms-x64-thiscall\"",
         "capture_adapter = \"cli_metadata_internal_from_bitreader\"",
         "object_layout = \"msdelta-win26100-compo-cli-metadata-v1\"",
+        "reader_layout = \"msdelta-win26100-bitreader-read-v1\"",
         "target_atom = \"CliMetadataBitstream\"",
         "transport = \"frida-inject\"",
         "normalization_error_count = 0",
+        "reader_window_error_count = 0",
     ] {
         assert!(case.contains(required), "case.toml missing {required}");
     }
@@ -36,9 +38,19 @@ fn cli_metadata_stage_fixture_is_curated_from_live_lab_capture() {
     assert_eq!(read_usize(&case, "export_event_count"), 36);
     assert_eq!(read_usize(&case, "stage_event_count"), 100);
     assert_eq!(read_usize(&case, "stage_leave_object_count"), 50);
+    assert_eq!(read_usize(&case, "stage_leave_blob_count"), 50);
     assert_eq!(read_usize(&case, "distinct_object_hash_count"), 6);
+    assert_eq!(read_usize(&case, "distinct_blob_hash_count"), 6);
 
-    for volatile in ["file_sink_path", ".claude", "lab/frida/out"] {
+    for volatile in [
+        "file_sink_path",
+        ".claude",
+        "lab/frida/out",
+        "this_ptr",
+        "reader_ptr",
+        "timestamp_ms",
+        "thread_id",
+    ] {
         assert!(
             !capture.contains(volatile),
             "curated stage fixture should not retain volatile field {volatile}"
@@ -48,6 +60,7 @@ fn cli_metadata_stage_fixture_is_curated_from_live_lab_capture() {
     assert!(capture.contains("\"atom\": \"FridaStageCapture\""));
     assert!(capture.contains("\"target_atom\": \"CliMetadataBitstream\""));
     assert!(capture.contains("\"symbol\": \"compo::CliMetadata::InternalFromBitReader\""));
+    assert!(capture.contains("\"native_layout\": \"msdelta-win26100-bitreader-read-v1\""));
     assert_eq!(capture.matches("\"phase\": \"enter\"").count(), 50);
     assert_eq!(capture.matches("\"phase\": \"leave\"").count(), 50);
     assert_eq!(
@@ -55,6 +68,15 @@ fn cli_metadata_stage_fixture_is_curated_from_live_lab_capture() {
             .matches("\"type\": \"CliMetadataBitstreamRecord\"")
             .count(),
         50
+    );
+    assert_eq!(capture.matches("\"reader_window\"").count(), 50);
+    assert_eq!(
+        capture.matches("\"slot\": \"reader-bitstream\"").count(),
+        50
+    );
+    assert!(
+        !capture.contains("\"error\""),
+        "curated reader-window fixture should not contain capture errors"
     );
 }
 
@@ -139,6 +161,53 @@ fn cli_metadata_stage_objects_are_logical_and_diverse() {
     ] {
         assert!(first.contains(required), "first object missing {required}");
     }
+}
+
+#[test]
+fn cli_metadata_stage_reader_bitstreams_are_hashed_and_diverse() {
+    let fixture = Path::new(FIXTURE_DIR);
+    let case = fs::read_to_string(fixture.join("case.toml")).expect("read case.toml");
+    let capture = fs::read_to_string(fixture.join("capture.json")).expect("read capture.json");
+    let blob_dir = fixture.join("blobs");
+
+    let mut blobs = fs::read_dir(&blob_dir)
+        .expect("read blobs dir")
+        .map(|entry| entry.expect("read blob entry").path())
+        .collect::<Vec<_>>();
+    blobs.sort();
+    assert_eq!(blobs.len(), read_usize(&case, "stage_leave_blob_count"));
+
+    let mut distinct_hashes = BTreeSet::new();
+    for blob_path in blobs {
+        let bytes = fs::read(&blob_path)
+            .unwrap_or_else(|error| panic!("read {}: {error}", blob_path.display()));
+        assert!(
+            !bytes.is_empty(),
+            "{} should contain a standalone reader bitstream",
+            blob_path.display()
+        );
+        let hash = sha256_file(&blob_path);
+        distinct_hashes.insert(hash.clone());
+        let file_name = blob_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or_else(|| panic!("blob path has no UTF-8 file name: {}", blob_path.display()));
+        assert!(
+            capture.contains(file_name),
+            "capture should reference {}",
+            blob_path.display()
+        );
+        assert!(
+            capture.contains(&hash),
+            "capture should reference hash for {}",
+            blob_path.display()
+        );
+    }
+
+    assert_eq!(
+        distinct_hashes.len(),
+        read_usize(&case, "distinct_blob_hash_count")
+    );
 }
 
 fn read_usize(case: &str, key: &str) -> usize {

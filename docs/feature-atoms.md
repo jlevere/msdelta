@@ -244,12 +244,12 @@ fixture-shaped data.
 The first internal stage capture is
 `FridaStageCapture/cli-metadata-win26100`: a hash-selected
 `msdelta.dll` hook for `compo::CliMetadata::InternalFromBitReader` that emits
-logical `CliMetadataBitstream` records instead of raw native object memory.
-That fixture is enough to validate the normalized object contract and Rust
-parser model, but it does not prove the exact native reader byte window. Future
-parser atoms should capture reader state before and after the call when the
-reader layout is known, then keep the normalized object as the stable
-cross-version assertion.
+logical `CliMetadataBitstream` records plus standalone native reader-window
+bitstreams. The stage agent snapshots the native reader before and after the
+call, replays the exact native read widths for the atom into a fresh BitReader
+stream, and rejects the capture if the replayed state does not match the native
+exit state. The normalized object remains the stable cross-version assertion;
+the reader-window blob is the parser input that proves the wire contract.
 
 Use this shape for future oracle atoms:
 
@@ -262,8 +262,8 @@ Use this shape for future oracle atoms:
 4. Compare captured blob hashes to known inputs and expected outputs before
    promoting anything.
 5. Promote only the smallest capture that proves the behavior.
-6. For stage captures, commit normalized logical objects and strip volatile
-   file-sink paths before adding fixtures.
+6. For stage captures, commit normalized logical objects, reader-window blobs,
+   and stripped fixture metadata with no volatile file-sink paths.
 
 ## Near-Term Milestones
 
