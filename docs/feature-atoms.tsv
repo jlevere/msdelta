@@ -42,7 +42,7 @@ PdataARM64	arm64	source_transform	0x80	0x1000000	TransformPdataARM64::Run	missin
 CliMetadataStaticSchema	cli	parser	pe,cli	-	CliMetadata::CheckStaticData and Cli4Metadata::CheckStaticData	partial	reject	unit	Add native object-normalizer check for CheckStaticData schema parity
 CliMetadataFromPe	cli	parser	0x2,0x4,0x8	-	CliMetadata::Init	partial	reject	unit	Add curated managed fixture and native CliMetadata::Init object oracle
 Cli4MetadataFromPe	cli	parser	0x10,0x20,0x40,0x80	-	Cli4Metadata::Init	missing	reject	needs_fixture	Build source CLI4 metadata model from CLR metadata root
-CliMetadataBitstream	cli	parser	0x2,0x4,0x8	0x8000	CliMetadata::FromBitReader / compo::CliMetadata::InternalFromBitReader	missing	reject	curated	Parse classic target metadata record using the Win26100 stage fixture
+CliMetadataBitstream	cli	parser	0x2,0x4,0x8	0x8000	CliMetadata::FromBitReader / compo::CliMetadata::InternalFromBitReader	partial	reject	curated	Wire parsed target metadata into managed transform context after CliMap parity
 Cli4MetadataBitstream	cli	parser	0x10,0x20,0x40,0x80	0x400000	PortableExecutableInfoCli4::FromBitReader and CliMetadata::FromBitReader	missing	reject	needs_fixture	Parse CLI4 target metadata record from preprocess bitstream
 CliMapBitstream	cli	parser	pe,cli	-	CliMap::FromBitReader	partial	reject	unit	Validate shared-format heap/table maps with native CliMap::FromBitReader object oracle
 CliCodedTokenMap	cli	algebra	pe,cli	-	CliMap::MapCoded and CliMap::MapCodedExact	partial	reject	unit	Wire to CliMapBitstream table maps and confirm sentinel/exact-miss behavior with native oracle

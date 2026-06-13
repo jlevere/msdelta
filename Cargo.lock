@@ -666,6 +666,8 @@ dependencies = [
  "lzxd",
  "md-5",
  "memchr",
+ "serde",
+ "serde_json",
  "sha1",
  "sha2",
  "thiserror",

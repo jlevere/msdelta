@@ -182,9 +182,9 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
             )));
         }
         let pp = parse_pe_preprocess(&parsed.preprocess)?;
-        // Belt-and-suspenders: some managed deltas carry CLI buffers in the
-        // preprocess without a CLR header surviving in the reference.
-        if pp.cli_bytes > 0 {
+        // Belt-and-suspenders: some managed deltas carry CLI metadata/map state
+        // in the preprocess without a CLR header surviving in the reference.
+        if pp.has_managed_cli_state() {
             return Err(Error::Unsupported(unsupported_managed_transform(
                 parsed.header.file_type,
             )));
@@ -1485,7 +1485,7 @@ mod tests {
             // Managed (.NET) images carry a CLI-metadata rift contribution we do
             // not implement (apply_impl rejects them up front); their composed
             // rift legitimately differs, so they are out of scope here.
-            if pp.cli_bytes > 0 {
+            if pp.has_managed_cli_state() {
                 continue;
             }
             let reflen = base.len() as i64;

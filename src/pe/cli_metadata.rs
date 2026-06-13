@@ -1,5 +1,6 @@
-//! Managed PE CLR metadata root parsing.
+//! Managed PE CLR metadata root and preprocess-bitstream parsing.
 
+use crate::bitstream::{BitReader, BitWriter};
 use crate::pe::cli_schema::{metadata_schema, row_size, CliSchemaFlavor, HeapIndexWidths};
 use crate::pe::parse::{PeInfo, SectionInfo};
 use crate::{Error, Result};
@@ -39,6 +40,200 @@ pub(crate) struct CliMetadataModel {
     pub(crate) row_counts: [u32; 64],
     pub(crate) row_sizes: [u32; 64],
     pub(crate) table_file_offsets: [Option<usize>; 64],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CliMetadataBitstreamStream {
+    pub(crate) file_offset: u32,
+    pub(crate) size: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CliMetadataBitstreamStreams {
+    pub(crate) strings: CliMetadataBitstreamStream,
+    pub(crate) user_strings: CliMetadataBitstreamStream,
+    pub(crate) blob: CliMetadataBitstreamStream,
+    pub(crate) guid: CliMetadataBitstreamStream,
+    pub(crate) tables: CliMetadataBitstreamStream,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CliMetadataBitstreamRecord {
+    pub(crate) flavor: CliSchemaFlavor,
+    pub(crate) present: bool,
+    pub(crate) metadata_file_offset: u32,
+    pub(crate) metadata_size: u32,
+    pub(crate) metadata_rva: u32,
+    pub(crate) stream_count: u32,
+    pub(crate) stream_headers_end: u32,
+    pub(crate) streams: CliMetadataBitstreamStreams,
+    pub(crate) heap_widths: HeapIndexWidths,
+    pub(crate) valid_table_mask: u64,
+    pub(crate) row_counts: [u32; 64],
+    pub(crate) row_sizes: [u32; 64],
+    pub(crate) table_file_offsets: [Option<usize>; 64],
+}
+
+impl CliMetadataBitstreamRecord {
+    pub(crate) fn empty(flavor: CliSchemaFlavor) -> Self {
+        Self {
+            flavor,
+            present: false,
+            metadata_file_offset: 0,
+            metadata_size: 0,
+            metadata_rva: 0,
+            stream_count: 0,
+            stream_headers_end: 0,
+            streams: CliMetadataBitstreamStreams::empty(),
+            heap_widths: HeapIndexWidths {
+                strings: 2,
+                guid: 2,
+                blob: 2,
+            },
+            valid_table_mask: 0,
+            row_counts: [0; 64],
+            row_sizes: [0; 64],
+            table_file_offsets: [None; 64],
+        }
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        !self.present
+    }
+}
+
+impl CliMetadataBitstreamStreams {
+    const fn empty() -> Self {
+        Self {
+            strings: CliMetadataBitstreamStream::empty(),
+            user_strings: CliMetadataBitstreamStream::empty(),
+            blob: CliMetadataBitstreamStream::empty(),
+            guid: CliMetadataBitstreamStream::empty(),
+            tables: CliMetadataBitstreamStream::empty(),
+        }
+    }
+}
+
+impl CliMetadataBitstreamStream {
+    const fn empty() -> Self {
+        Self {
+            file_offset: 0,
+            size: 0,
+        }
+    }
+}
+
+pub(crate) fn read_cli_metadata_bitstream(
+    reader: &mut BitReader<'_>,
+    flavor: CliSchemaFlavor,
+) -> Result<CliMetadataBitstreamRecord> {
+    let present = reader.read_bits(1)? != 0;
+    if !present {
+        return Ok(CliMetadataBitstreamRecord::empty(flavor));
+    }
+
+    let metadata_file_offset = read_u32_bits(reader)?;
+    let metadata_size = read_u32_bits(reader)?;
+    let metadata_rva = read_u32_bits(reader)?;
+    let stream_count = read_u32_bits(reader)?;
+    let stream_headers_end = read_u32_bits(reader)?;
+    let streams = CliMetadataBitstreamStreams {
+        strings: CliMetadataBitstreamStream {
+            file_offset: read_u32_bits(reader)?,
+            size: read_u32_bits(reader)?,
+        },
+        user_strings: CliMetadataBitstreamStream {
+            file_offset: read_u32_bits(reader)?,
+            size: read_u32_bits(reader)?,
+        },
+        blob: CliMetadataBitstreamStream {
+            file_offset: read_u32_bits(reader)?,
+            size: read_u32_bits(reader)?,
+        },
+        guid: CliMetadataBitstreamStream {
+            file_offset: read_u32_bits(reader)?,
+            size: read_u32_bits(reader)?,
+        },
+        tables: CliMetadataBitstreamStream {
+            file_offset: read_u32_bits(reader)?,
+            size: read_u32_bits(reader)?,
+        },
+    };
+    let heap_widths = HeapIndexWidths {
+        strings: heap_width_from_bit(reader.read_bits(1)?),
+        guid: heap_width_from_bit(reader.read_bits(1)?),
+        blob: heap_width_from_bit(reader.read_bits(1)?),
+    };
+    let valid_table_mask = reader.read_bits(64)?;
+    let mut row_counts = [0u32; 64];
+    for (table_id, row_count) in row_counts.iter_mut().enumerate() {
+        if valid_table_mask & (1u64 << table_id) == 0 {
+            continue;
+        }
+        if metadata_schema(flavor)
+            .tables
+            .iter()
+            .all(|schema| schema.id != table_id as u8)
+        {
+            return Err(Error::Malformed("CLI metadata: unknown present table id"));
+        }
+        *row_count = read_u32_bits(reader)?;
+    }
+
+    build_cli_metadata_bitstream_record(CliMetadataBitstreamRecord {
+        flavor,
+        present,
+        metadata_file_offset,
+        metadata_size,
+        metadata_rva,
+        stream_count,
+        stream_headers_end,
+        streams,
+        heap_widths,
+        valid_table_mask,
+        row_counts,
+        row_sizes: [0; 64],
+        table_file_offsets: [None; 64],
+    })
+}
+
+pub(crate) fn write_cli_metadata_bitstream(
+    writer: &mut BitWriter,
+    record: &CliMetadataBitstreamRecord,
+) {
+    writer.write_bits(record.present as u64, 1);
+    if !record.present {
+        return;
+    }
+
+    for value in [
+        record.metadata_file_offset,
+        record.metadata_size,
+        record.metadata_rva,
+        record.stream_count,
+        record.stream_headers_end,
+        record.streams.strings.file_offset,
+        record.streams.strings.size,
+        record.streams.user_strings.file_offset,
+        record.streams.user_strings.size,
+        record.streams.blob.file_offset,
+        record.streams.blob.size,
+        record.streams.guid.file_offset,
+        record.streams.guid.size,
+        record.streams.tables.file_offset,
+        record.streams.tables.size,
+    ] {
+        writer.write_bits(value as u64, 32);
+    }
+    writer.write_bits((record.heap_widths.strings == 4) as u64, 1);
+    writer.write_bits((record.heap_widths.guid == 4) as u64, 1);
+    writer.write_bits((record.heap_widths.blob == 4) as u64, 1);
+    writer.write_bits(record.valid_table_mask, 64);
+    for (table_id, row_count) in record.row_counts.iter().enumerate() {
+        if record.valid_table_mask & (1u64 << table_id) != 0 {
+            writer.write_bits(*row_count as u64, 32);
+        }
+    }
 }
 
 pub(crate) fn parse_cli_metadata_from_pe(
@@ -289,6 +484,116 @@ fn parse_tables_stream(tables: &[u8], tables_file_offset: usize) -> Result<Parse
     })
 }
 
+fn build_cli_metadata_bitstream_record(
+    mut record: CliMetadataBitstreamRecord,
+) -> Result<CliMetadataBitstreamRecord> {
+    if record.metadata_size == 0 {
+        return Err(Error::Malformed("CLI metadata: empty metadata directory"));
+    }
+    if record.stream_count == 0 {
+        return Err(Error::Malformed("CLI metadata: no streams"));
+    }
+    validate_file_range(
+        record.metadata_file_offset,
+        record.metadata_size,
+        record.stream_headers_end,
+        0,
+    )?;
+    validate_file_range(
+        record.metadata_file_offset,
+        record.metadata_size,
+        record.streams.tables.file_offset,
+        record.streams.tables.size,
+    )?;
+    for stream in [
+        record.streams.strings,
+        record.streams.user_strings,
+        record.streams.blob,
+        record.streams.guid,
+    ] {
+        if stream.file_offset != 0 || stream.size != 0 {
+            validate_file_range(
+                record.metadata_file_offset,
+                record.metadata_size,
+                stream.file_offset,
+                stream.size,
+            )?;
+        }
+    }
+
+    let mut cursor = 24usize;
+    for table_id in 0..64u8 {
+        if record.valid_table_mask & (1u64 << table_id) != 0 {
+            cursor = cursor
+                .checked_add(4)
+                .ok_or(Error::Malformed("CLI metadata: table byte size overflow"))?;
+        }
+    }
+    let table_stream_size = record.streams.tables.size as usize;
+    if cursor > table_stream_size {
+        return Err(Error::Malformed("CLI metadata: table stream is too small"));
+    }
+
+    let tables_file_offset = record.streams.tables.file_offset as usize;
+    for table_id in 0..64u8 {
+        let row_count = record.row_counts[table_id as usize];
+        if row_count == 0 {
+            continue;
+        }
+        let row_size = row_size(table_id, &record.row_counts, record.heap_widths)
+            .ok_or(Error::Malformed("CLI metadata: unknown table schema"))?;
+        record.row_sizes[table_id as usize] = row_size as u32;
+        record.table_file_offsets[table_id as usize] = Some(
+            tables_file_offset
+                .checked_add(cursor)
+                .ok_or(Error::Malformed("CLI metadata: table file offset overflow"))?,
+        );
+        let table_bytes = row_size
+            .checked_mul(row_count as usize)
+            .ok_or(Error::Malformed("CLI metadata: table byte size overflow"))?;
+        cursor = cursor
+            .checked_add(table_bytes)
+            .ok_or(Error::Malformed("CLI metadata: table byte size overflow"))?;
+        if cursor > table_stream_size {
+            return Err(Error::Malformed("CLI metadata: table stream is too small"));
+        }
+    }
+
+    Ok(record)
+}
+
+fn validate_file_range(
+    metadata_file_offset: u32,
+    metadata_size: u32,
+    file_offset: u32,
+    size: u32,
+) -> Result<()> {
+    let metadata_end = metadata_file_offset
+        .checked_add(metadata_size)
+        .ok_or(Error::Malformed(
+            "CLI metadata: stream file offset overflow",
+        ))?;
+    let stream_end = file_offset.checked_add(size).ok_or(Error::Malformed(
+        "CLI metadata: stream file offset overflow",
+    ))?;
+    if file_offset < metadata_file_offset || stream_end > metadata_end {
+        return Err(Error::Malformed("CLI metadata: stream exceeds metadata"));
+    }
+    Ok(())
+}
+
+fn read_u32_bits(reader: &mut BitReader<'_>) -> Result<u32> {
+    Ok(reader.read_bits(32)? as u32)
+}
+
+const fn heap_width_from_bit(bit: u64) -> u8 {
+    if bit == 0 {
+        2
+    } else {
+        4
+    }
+}
+
 fn rva_to_file_offset(sections: &[SectionInfo], rva: u32) -> Option<usize> {
     for section in sections {
         if section.raw_size == 0 {
@@ -334,6 +639,7 @@ fn align_4(value: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde::Deserialize;
     use std::path::{Path, PathBuf};
 
     #[test]
@@ -416,6 +722,91 @@ mod tests {
         assert_ne!(model.valid_table_mask, 0);
         assert!(model.row_counts.iter().any(|&count| count > 0));
         assert!(model.row_sizes.iter().any(|&size| size > 0));
+    }
+
+    #[test]
+    fn cli_metadata_bitstream_matches_win26100_stage_fixture_objects() {
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/atoms/FridaStageCapture/cli-metadata-win26100/objects");
+        if !fixture.exists() {
+            return;
+        }
+
+        let mut paths = std::fs::read_dir(&fixture)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect::<Vec<_>>();
+        paths.sort();
+        assert_eq!(paths.len(), 50);
+
+        let mut present = 0usize;
+        let mut empty = 0usize;
+        for path in paths {
+            let text = std::fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+            let native: NativeCliMetadataRecord = serde_json::from_str(&text)
+                .unwrap_or_else(|error| panic!("parse {}: {error}", path.display()));
+            assert_eq!(native.record_type, "CliMetadataBitstreamRecord");
+            assert_eq!(
+                native.native_layout,
+                "msdelta-win26100-compo-cli-metadata-v1"
+            );
+
+            let expected = native_to_bitstream_record(&native, &path);
+            if expected.present {
+                present += 1;
+            } else {
+                empty += 1;
+            }
+
+            let mut writer = BitWriter::new();
+            write_cli_metadata_bitstream(&mut writer, &expected);
+            let bytes = writer.finish();
+            let mut reader = BitReader::new(&bytes).unwrap();
+            let parsed = read_cli_metadata_bitstream(&mut reader, CliSchemaFlavor::Classic)
+                .unwrap_or_else(|error| panic!("parse bitstream for {}: {error}", path.display()));
+            assert_eq!(reader.remaining(), 0, "{} left unread bits", path.display());
+            assert_eq!(parsed, expected, "{}", path.display());
+
+            if parsed.present {
+                assert!(
+                    parsed.row_sizes.iter().any(|&size| size > 0),
+                    "{} should derive row sizes",
+                    path.display()
+                );
+                assert!(
+                    parsed.table_file_offsets.iter().any(Option::is_some),
+                    "{} should derive table offsets",
+                    path.display()
+                );
+            }
+        }
+
+        assert!(present > 0, "stage fixture should include present records");
+        assert!(empty > 0, "stage fixture should include empty records");
+    }
+
+    #[test]
+    fn cli_metadata_bitstream_rejects_unknown_present_table() {
+        let mut writer = BitWriter::new();
+        writer.write_bits(1, 1);
+        for value in [
+            0x100u32, 0x200, 0, 1, 0x120, 0x120, 0x10, 0, 0, 0x130, 0x10, 0x140, 0x10, 0x150, 0x80,
+        ] {
+            writer.write_bits(value as u64, 32);
+        }
+        writer.write_bits(0, 1);
+        writer.write_bits(0, 1);
+        writer.write_bits(0, 1);
+        writer.write_bits(1u64 << 63, 64);
+        writer.write_bits(1, 32);
+
+        let bytes = writer.finish();
+        let mut reader = BitReader::new(&bytes).unwrap();
+        assert!(matches!(
+            read_cli_metadata_bitstream(&mut reader, CliSchemaFlavor::Classic),
+            Err(Error::Malformed("CLI metadata: unknown present table id"))
+        ));
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -584,6 +975,113 @@ mod tests {
 
     fn put_u64(data: &mut [u8], offset: usize, value: u64) {
         data[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct NativeCliMetadataRecord {
+        #[serde(rename = "type")]
+        record_type: String,
+        native_layout: String,
+        present: bool,
+        metadata_file_offset: u32,
+        metadata_size: u32,
+        metadata_rva: u32,
+        stream_count: u32,
+        stream_headers_end: u32,
+        streams: NativeCliStreams,
+        heap_widths: NativeHeapWidths,
+        valid_table_mask: String,
+        row_counts: Vec<u32>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct NativeCliStreams {
+        strings: NativeCliStream,
+        user_strings: NativeCliStream,
+        blob: NativeCliStream,
+        guid: NativeCliStream,
+        tables: NativeCliStream,
+    }
+
+    #[derive(Debug, Clone, Copy, Deserialize)]
+    struct NativeCliStream {
+        offset: u32,
+        size: u32,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct NativeHeapWidths {
+        strings: bool,
+        guid: bool,
+        blob: bool,
+    }
+
+    fn native_to_bitstream_record(
+        native: &NativeCliMetadataRecord,
+        path: &Path,
+    ) -> CliMetadataBitstreamRecord {
+        assert_eq!(
+            native.row_counts.len(),
+            64,
+            "{} should have 64 row counts",
+            path.display()
+        );
+        let mut row_counts = [0u32; 64];
+        row_counts.copy_from_slice(&native.row_counts);
+        let valid_table_mask = u64::from_str_radix(
+            native
+                .valid_table_mask
+                .strip_prefix("0x")
+                .unwrap_or(&native.valid_table_mask),
+            16,
+        )
+        .unwrap_or_else(|error| panic!("parse mask for {}: {error}", path.display()));
+
+        if !native.present {
+            return CliMetadataBitstreamRecord::empty(CliSchemaFlavor::Classic);
+        }
+
+        build_cli_metadata_bitstream_record(CliMetadataBitstreamRecord {
+            flavor: CliSchemaFlavor::Classic,
+            present: native.present,
+            metadata_file_offset: native.metadata_file_offset,
+            metadata_size: native.metadata_size,
+            metadata_rva: native.metadata_rva,
+            stream_count: native.stream_count,
+            stream_headers_end: native.stream_headers_end,
+            streams: CliMetadataBitstreamStreams {
+                strings: native_stream(native.streams.strings),
+                user_strings: native_stream(native.streams.user_strings),
+                blob: native_stream(native.streams.blob),
+                guid: native_stream(native.streams.guid),
+                tables: native_stream(native.streams.tables),
+            },
+            heap_widths: HeapIndexWidths {
+                strings: native_heap_width(native.heap_widths.strings),
+                guid: native_heap_width(native.heap_widths.guid),
+                blob: native_heap_width(native.heap_widths.blob),
+            },
+            valid_table_mask,
+            row_counts,
+            row_sizes: [0; 64],
+            table_file_offsets: [None; 64],
+        })
+        .unwrap_or_else(|error| panic!("build expected record for {}: {error}", path.display()))
+    }
+
+    const fn native_stream(stream: NativeCliStream) -> CliMetadataBitstreamStream {
+        CliMetadataBitstreamStream {
+            file_offset: stream.offset,
+            size: stream.size,
+        }
+    }
+
+    const fn native_heap_width(is_wide: bool) -> u8 {
+        if is_wide {
+            4
+        } else {
+            2
+        }
     }
 
     fn optional_real_sample() -> Option<PathBuf> {

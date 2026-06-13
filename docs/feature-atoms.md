@@ -245,6 +245,11 @@ The first internal stage capture is
 `FridaStageCapture/cli-metadata-win26100`: a hash-selected
 `msdelta.dll` hook for `compo::CliMetadata::InternalFromBitReader` that emits
 logical `CliMetadataBitstream` records instead of raw native object memory.
+That fixture is enough to validate the normalized object contract and Rust
+parser model, but it does not prove the exact native reader byte window. Future
+parser atoms should capture reader state before and after the call when the
+reader layout is known, then keep the normalized object as the stable
+cross-version assertion.
 
 Use this shape for future oracle atoms:
 

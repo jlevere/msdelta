@@ -144,6 +144,11 @@ model from a real metadata root. It validates the `BSJB` metadata root, stream
 header bounds, duplicate stream names, `#~`, `#Strings`, `#US`, `#Blob`, and
 `#GUID` offsets and sizes.
 
+Implementation status: the classic target `CliMetadata` preprocess record is
+parsed by `read_cli_metadata_bitstream`. It consumes the native wire fields,
+derives table row sizes and first-row file offsets, and remains gated from full
+managed apply until `CliMap` parity and transform-context atoms are complete.
+
 ### CliMap
 
 Native reference:

@@ -11,13 +11,16 @@ pub(crate) struct PePreprocess {
     pub(crate) target_field1: u32,
     pub(crate) target_timestamp: u32,
     pub(crate) pe_rift: crate::lzx::rift::RiftTable,
+    pub(crate) target_cli_metadata: crate::pe::cli_metadata::CliMetadataBitstreamRecord,
     // Second rift table (from PreProcessPEForApply, separate from PE info rift)
     pub(crate) preprocess_rift: crate::lzx::rift::RiftTable,
-    /// Bytes skipped by the current managed/.NET rejection guard. This is not a
-    /// real CLI parser: native `CliMetadata::FromBitReader` and
-    /// `CliMap::FromBitReader` are structured bitstreams that need explicit
-    /// atoms before managed PE apply can be enabled.
-    pub(crate) cli_bytes: usize,
+    pub(crate) cli_map: crate::pe::cli_map::CliMapModel,
+}
+
+impl PePreprocess {
+    pub(crate) fn has_managed_cli_state(&self) -> bool {
+        !self.target_cli_metadata.is_empty() || !self.cli_map.is_empty()
+    }
 }
 
 pub(crate) fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
@@ -42,34 +45,28 @@ pub(crate) fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
 
     let pe_rift = crate::lzx::rift::RiftTable::from_reader(&mut reader)?;
 
-    let mut cli_bytes = 0usize;
-
-    // Temporary fail-loud guard only. A real implementation must parse the
-    // metadata record fields, row counts, heap-width flags, and static schema.
-    let cli_flag = reader.read_bits(1)?;
-    if cli_flag != 0 {
-        cli_bytes += reader.read_buffer()?.len();
-    }
+    let target_cli_metadata = crate::pe::cli_metadata::read_cli_metadata_bitstream(
+        &mut reader,
+        crate::pe::cli_schema::CliSchemaFlavor::Classic,
+    )?;
 
     // Second rift table from PreProcessPEForApply
     let preprocess_rift = crate::lzx::rift::RiftTable::from_reader(&mut reader)?;
 
-    if reader.remaining() > 0 {
-        // Temporary fail-loud guard only. A real implementation must parse
-        // IntFormat records plus heap/table RiftTables.
-        let climap_flag = reader.read_bits(1)?;
-        if climap_flag != 0 {
-            cli_bytes += reader.read_buffer()?.len();
-        }
-    }
+    let cli_map = if reader.remaining() > 0 {
+        crate::pe::cli_map::read_cli_map_bitstream(&mut reader)?
+    } else {
+        crate::pe::cli_map::CliMapModel::default()
+    };
 
     Ok(PePreprocess {
         target_image_base,
         target_field1,
         target_timestamp,
         pe_rift,
+        target_cli_metadata,
         preprocess_rift,
-        cli_bytes,
+        cli_map,
     })
 }
 
@@ -89,9 +86,17 @@ pub(crate) fn build_pe_preprocess(
     writer.write_bits(target_checksum as u64, 32);
     writer.write_bits(target_timestamp as u64, 32);
     pe_rift.to_writer(&mut writer);
-    writer.write_bits(0, 1);
+    crate::pe::cli_metadata::write_cli_metadata_bitstream(
+        &mut writer,
+        &crate::pe::cli_metadata::CliMetadataBitstreamRecord::empty(
+            crate::pe::cli_schema::CliSchemaFlavor::Classic,
+        ),
+    );
     preprocess_rift.to_writer(&mut writer);
-    writer.write_bits(0, 1);
+    crate::pe::cli_map::write_cli_map_bitstream(
+        &mut writer,
+        &crate::pe::cli_map::CliMapModel::default(),
+    );
     writer.finish()
 }
 
