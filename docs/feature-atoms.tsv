@@ -39,7 +39,7 @@ DisasmARM	arm	source_transform	0x40	0x80000	TransformDisasmARM::Run	missing	reje
 PdataARM	arm	source_transform	0x40	0x100000	TransformPdataARM::Run	missing	reject	needs_fixture	Acquire ARMNT fixture with populated pdata
 DisasmARM64	arm64	source_transform	0x80	0x800000	TransformDisasmARM64::Run	missing	reject	needs_fixture	Implement ARM64 file_type 0xf5 plumbing before transform work
 PdataARM64	arm64	source_transform	0x80	0x1000000	TransformPdataARM64::Run	missing	reject	needs_fixture	Start with 8-byte pdata entry remap before full disasm
-CliMetadataStaticSchema	cli	parser	pe,cli	-	CliMetadata::CheckStaticData and Cli4Metadata::CheckStaticData	missing	reject	needs_fixture	Extract classic and CLI4 metadata schemas into Rust data
+CliMetadataStaticSchema	cli	parser	pe,cli	-	CliMetadata::CheckStaticData and Cli4Metadata::CheckStaticData	partial	reject	unit	Add native object-normalizer check for CheckStaticData schema parity
 CliMetadataFromPe	cli	parser	0x2,0x4,0x8	-	CliMetadata::Init	missing	reject	needs_fixture	Build source metadata model from CLR metadata root
 Cli4MetadataFromPe	cli	parser	0x10,0x20,0x40,0x80	-	Cli4Metadata::Init	missing	reject	needs_fixture	Build source CLI4 metadata model from CLR metadata root
 CliMetadataBitstream	cli	parser	0x2,0x4,0x8	0x8000	CliMetadata::FromBitReader	missing	reject	needs_fixture	Parse classic target metadata record from preprocess bitstream

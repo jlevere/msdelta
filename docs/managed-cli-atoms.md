@@ -247,6 +247,24 @@ native `CheckStaticData` path.
 Done when: static schema extraction is represented as Rust data, the
 self-checks pass, and classic-vs-CLI4 differences are explicit in tests.
 
+Current state: `src/pe/cli_schema.rs` now contains the pure static ECMA-335
+table schema and coded-token descriptor model used by downstream metadata
+parsers and transforms. It covers the 45 standard metadata tables, 13
+coded-token descriptors, heap/table/coded index width calculation, and row-size
+calculation. Classic CLI and CLI4 have separate schema handles even though they
+currently share the same table/coded descriptor arrays.
+
+Native evidence from the Windows Server 2025 `msdelta.dll` hash used in the
+Frida fixture (`ac96e0c3...f4358eb`) confirms that the DLL carries the relevant
+managed graph and schema labels, including `BitReadCliMetadata`,
+`BitReadCliMap`, `RiftTransformCliMetadata`, `RiftTransformCli4Metadata`,
+`CompressionRiftTableFromCliMap`, `CompressionRiftTableFromCli4Map`,
+`CliMetadata`, `TypeDefOrRef`, `MemberRefParent`, `MethodDefOrRef`, and
+`TypeOrMethodDef`. That is enough to tie this Rust atom to the native managed
+path, but not enough to call the schema native-validated. The next oracle step
+is a symbol-map hook or object normalizer around the native `CheckStaticData`
+path.
+
 ### CliMetadataFromPe
 
 Native reference: `CliMetadata::Init`, `Cli4Metadata::Init`
