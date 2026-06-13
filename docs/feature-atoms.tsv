@@ -50,7 +50,7 @@ TransformContextManaged	cli	pipeline	pe,cli	-	TransformBase::SetCliMetadata SetC
 MarkNonExeCliMethods	cli	source_transform	pe,cli	0x2	MarkNonExe::RunCli and MarkNonExe::RunCli4	missing	reject	needs_fixture	Mark method bodies from MethodDef rows in the hint map
 TransformCliDisasm	cli	source_transform	0x2,0x4,0x8	0x4000	TransformCliDisasm::Run	missing	reject	needs_fixture	Remap IL metadata-token and user-string operands through CliMap
 TransformCli4Disasm	cli	source_transform	0x10,0x20,0x40,0x80	0x200000	TransformCli4Disasm::Run	missing	reject	needs_fixture	Same as CLI disasm, using CLI4 metadata source
-CliBlobCompressedInteger	cli	parser	pe,cli	-	CliBlobTransformer::GetNumber and CliMetadata::GetBlobContent	missing	reject	needs_fixture	Implement compressed unsigned integer parser and malformed encoding checks
+CliBlobCompressedInteger	cli	parser	pe,cli	-	CliBlobTransformer::GetNumber and CliMetadata::GetBlobContent	partial	reject	unit	Add native GetNumber oracle for non-canonical encoding behavior
 CliBlobTypeTokenRemap	cli	source_transform	pe,cli	-	CliBlobTransformer::TransformTypeDef TransformType TransformParam TransformSentinel	missing	reject	needs_fixture	Remap TypeDefOrRef coded tokens inside signature blobs
 TransformCliMetadata	cli	source_transform	0x2,0x4,0x8	0x8000	TransformCliMetadata::Run	missing	reject	needs_fixture	Remap metadata table columns and signature blobs after schema and CliMap atoms
 TransformCli4Metadata	cli	source_transform	0x10,0x20,0x40,0x80	0x400000	TransformCli4Metadata::Run	missing	reject	needs_fixture	CLI4 metadata-table and signature-blob remap using CLI4 schema

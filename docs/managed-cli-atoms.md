@@ -398,6 +398,13 @@ Outputs: decoded integer and consumed byte count.
 Done when: unit/property tests cover boundary values `0x7f`, `0x80`, `0x3fff`,
 `0x4000`, and the reserved high-bit encodings.
 
+Current state: `src/pe/cli_blob.rs` implements the pure compressed unsigned
+integer reader used by later signature blob transforms. It returns the decoded
+value plus the consumed byte count, rejects truncated encodings, and rejects the
+reserved `111xxxxx` prefix family. It does not yet enforce native behavior for
+non-canonical encodings because that needs a small native `GetNumber` oracle
+case first.
+
 ### CliBlobTypeTokenRemap
 
 Native reference: `CliBlobTransformer::TransformTypeDef`,
