@@ -7,5 +7,10 @@ result
 /reference/
 /notes/
 
+# Frida lab runtime state. Curated captures should be promoted into
+# tests/fixtures/atoms instead of committed from lab/frida/out.
+/lab/frida/node_modules/
+/lab/frida/out/
+
 # Claude Code local state
 .claude/

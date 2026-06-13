@@ -177,17 +177,17 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
         // CLI preprocess stream is differently framed and would otherwise fail
         // deep in the bitstream parser. Reject cleanly instead.
         if crate::pe::transform::is_managed_pe(reference) {
-            return Err(Error::Unsupported(
-                "CLI metadata transform (managed/.NET image)",
-            ));
+            return Err(Error::Unsupported(unsupported_managed_transform(
+                parsed.header.file_type,
+            )));
         }
         let pp = parse_pe_preprocess(&parsed.preprocess)?;
         // Belt-and-suspenders: some managed deltas carry CLI buffers in the
         // preprocess without a CLR header surviving in the reference.
         if pp.cli_bytes > 0 {
-            return Err(Error::Unsupported(
-                "CLI metadata transform (managed/.NET image)",
-            ));
+            return Err(Error::Unsupported(unsupported_managed_transform(
+                parsed.header.file_type,
+            )));
         }
         let combined = build_pe_copy_rift(reference, &pp);
         (Some(combined), Some(pp))
@@ -280,6 +280,18 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
     }
 
     Ok(output)
+}
+
+fn unsupported_managed_transform(file_type: i64) -> &'static str {
+    match crate::pe::transform::managed_branch_for_file_type(file_type) {
+        Some(crate::pe::transform::ManagedBranch::ClassicCli) => {
+            "ManagedFileTypeBranch: classic CLI metadata transform (managed/.NET image)"
+        }
+        Some(crate::pe::transform::ManagedBranch::Cli4) => {
+            "ManagedFileTypeBranch: CLI4 metadata transform (managed/.NET image)"
+        }
+        None => "ManagedFileTypeBranch: unknown managed PE file type",
+    }
 }
 
 /// Apply a delta into a caller-provided buffer.

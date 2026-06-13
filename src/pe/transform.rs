@@ -15,6 +15,24 @@ pub const FILE_TYPE_IA64: i64 = 4;
 pub const FILE_TYPE_AMD64: i64 = 8;
 pub const FILE_TYPE_CLI4_I386: i64 = 0x10;
 pub const FILE_TYPE_CLI4_AMD64: i64 = 0x20;
+pub const FILE_TYPE_CLI4_ARM: i64 = 0x40;
+pub const FILE_TYPE_CLI4_ARM64: i64 = 0x80;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ManagedBranch {
+    ClassicCli,
+    Cli4,
+}
+
+pub(crate) fn managed_branch_for_file_type(file_type: i64) -> Option<ManagedBranch> {
+    match file_type {
+        FILE_TYPE_I386 | FILE_TYPE_IA64 | FILE_TYPE_AMD64 => Some(ManagedBranch::ClassicCli),
+        FILE_TYPE_CLI4_I386 | FILE_TYPE_CLI4_AMD64 | FILE_TYPE_CLI4_ARM | FILE_TYPE_CLI4_ARM64 => {
+            Some(ManagedBranch::Cli4)
+        }
+        _ => None,
+    }
+}
 
 const RELOC_MARKER: u32 = 0x01010101;
 const RELOC_CHECK: u32 = 0x02020202;
@@ -1589,6 +1607,38 @@ mod tests {
     fn raw_file_type_no_transform() {
         // FILE_TYPE_RAW doesn't trigger transforms
         assert_eq!(FILE_TYPE_RAW, 1);
+    }
+
+    #[test]
+    fn managed_file_type_branch_matches_native_cli4_split() {
+        for file_type in [FILE_TYPE_I386, FILE_TYPE_IA64, FILE_TYPE_AMD64] {
+            assert_eq!(
+                managed_branch_for_file_type(file_type),
+                Some(ManagedBranch::ClassicCli),
+                "file_type {file_type:#x} should use the classic CLI branch"
+            );
+        }
+
+        for file_type in [
+            FILE_TYPE_CLI4_I386,
+            FILE_TYPE_CLI4_AMD64,
+            FILE_TYPE_CLI4_ARM,
+            FILE_TYPE_CLI4_ARM64,
+        ] {
+            assert_eq!(
+                managed_branch_for_file_type(file_type),
+                Some(ManagedBranch::Cli4),
+                "file_type {file_type:#x} should use the CLI4 branch"
+            );
+        }
+
+        for file_type in [FILE_TYPE_RAW, 0, 0x100, -1] {
+            assert_eq!(
+                managed_branch_for_file_type(file_type),
+                None,
+                "file_type {file_type:#x} is not a managed PE branch"
+            );
+        }
     }
 
     /// Pin the amd64 length-disassembler against the representative opcode forms

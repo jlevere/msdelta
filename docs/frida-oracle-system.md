@@ -1,0 +1,449 @@
+# Frida Oracle System
+
+Frida should be the repeatable lab path for collecting native behavior from
+`msdelta.dll`, `mspatcha.dll`, and `UpdateCompression.dll`. Final output bytes
+are useful, but they are not enough for this project. The hard bugs are usually
+inside a specific atom: preprocess parsing, rift algebra, transform source
+rewrites, CLI metadata maps, or create-side map generation.
+
+The Frida system should therefore capture stage-level oracles and promote the
+smallest useful cases into fixture packets.
+
+## Goals
+
+1. Run the real Windows implementation against controlled inputs.
+2. Capture inputs and outputs at atom boundaries.
+3. Normalize native objects into stable data formats.
+4. Promote captures into `tests/fixtures/atoms/...`.
+5. Re-run the same capture set across Windows builds and DLL versions.
+6. Report compatibility drift by atom, not just as a final hash mismatch.
+
+This is both an implementation accelerator and a regression system. If a future
+Windows update changes behavior, the report should say which atom changed:
+`CliMapBitstream`, `RiftTableReverse`, `TransformCliMetadata`,
+`PdataARM64`, and so on.
+
+## Capture Tiers
+
+Use tiers so the lab can start useful and become more precise over time.
+
+| Tier | What it captures | Use |
+|---|---|---|
+| 1. Export | `ApplyDeltaB`, `ApplyDeltaGetReverseB`, `CreateDeltaB` inputs and outputs | End-to-end oracle and smoke validation |
+| 2. Stage | Known internal function entry/exit buffers and return objects | Atom fixture generation |
+| 3. Object | Logical object state such as `RiftTable`, `CliMetadata`, `CliMap`, PE info | Stable comparison against Rust models |
+| 4. Trace | Ordered transform execution and selected branch decisions | Dispatch and feature-gate validation |
+
+Tier 1 is enough to prove final compatibility. Tier 2 and 3 are what make the
+system useful for implementation work.
+
+## Current First Atom
+
+`FridaExportOracle` is the first implemented lab atom. It wraps an arbitrary
+target process, hooks the public MSDelta-compatible exports, and writes a run
+manifest plus captured binary buffers. The intended first target is the existing
+PowerShell harness in `crates/oracle/lab/oracle_harness.ps1`; that keeps the
+Frida layer focused on observation instead of also becoming a native API driver.
+
+This atom answers a narrow question:
+
+> For this Windows build and DLL hash, what exact buffers crossed
+> `ApplyDeltaB`, `ApplyDeltaGetReverseB`, or `CreateDeltaB`, and what did the
+> export return?
+
+It does not answer which preprocess, rift, metadata, or transform atom produced
+the result. Those require stage hooks and object normalizers.
+
+Current implementation:
+
+| Area | Status |
+|---|---|
+| Target shape | Spawn a command or attach to an existing PID |
+| DLLs | `msdelta.dll`, `UpdateCompression.dll`, `mspatcha.dll` |
+| Exports | `ApplyDeltaB`, `ApplyDeltaGetReverseB`, `CreateDeltaB` |
+| ABI | Windows x64 only |
+| Output | `run.json`, `capture.json`, and `blobs/*.bin` |
+| Provenance | Module name, path, base, size, and SHA-256 when readable |
+| Inject import | Normalize `frida-inject.exe` stdout plus file-sink blobs |
+| Not included | x86 ABI, internal RVAs, object normalization, fixture promotion |
+
+Transport status from the first lab attempt:
+
+- Local Nix-controlled Node/pnpm works for syntax checks and host-side tooling.
+- `ssh jackson-dev` reaches the Windows lab VM through the configured jump host.
+- `frida-inject.exe` works locally on the Windows VM and can run agent scripts.
+- `frida-inject.exe` plus the agent file-sink mode is the stable live-capture
+  path on the current Windows Server 2025 lab VM.
+- Remote `frida-server` transport is scaffolded in `capture-export-oracle.mjs`
+  with `--remote`, but `frida-server` currently exits on attach/spawn on this
+  VM. Keep it as an alternate transport for hosts where it is stable.
+
+The important ABI lesson from this first atom is that export-level capture is
+not the same as reading the C declarations. On Windows x64, `DELTA_INPUT` is
+larger than eight bytes, so the ABI passes it by pointer to a caller-provided
+temporary. The hook must read that temporary on entry and copy the source/delta
+or source/target bytes immediately. `DELTA_OUTPUT` is read on return before the
+caller frees the returned native buffer with `DeltaFree`.
+
+The first live lab run captured `ApplyDeltaB` for the tiny RAW
+`cmd.exe` to `where.exe` fixture. The source and delta blobs matched the input
+fixtures, and the target blob matched the known `where.exe` hash. Promote that
+case only as an export oracle fixture. It should not be treated as proof for any
+internal feature atom.
+
+Lessons from that run:
+
+1. Treat transport as part of the oracle contract. The remote Frida server path
+   was useful to scaffold but unstable on this VM; local inject plus a file sink
+   is the current repeatable path.
+2. Separate hook setup from behavior. The harness should load the DLL first,
+   wait while hooks are installed, and only then call the export.
+3. Never depend on `frida-inject.exe` stdout for binary payloads. Use stdout for
+   event metadata and write bytes through the agent file sink.
+4. Normalize immediately. The checked-in importer converts inject output into
+   the same shape as the Node Frida wrapper, so downstream fixture promotion does
+   not care which transport produced the capture.
+
+## Lab Shape
+
+```text
+lab/frida/
+  README.md
+  package.json
+  capture-export-oracle.mjs
+  import-inject-capture.mjs
+  agent/
+    export-oracle.js
+  schemas/
+    export-capture.schema.json
+    run.schema.json
+    capture.schema.json
+    symbol-map.schema.json
+  symbols/
+    windows-<build>/
+      msdelta.<sha256>.json
+      mspatcha.<sha256>.json
+      updateCompression.<sha256>.json
+  cases/
+    <case>.toml
+  out/
+    <run-id>/
+      run.json
+      cases/
+        <case-id>/
+          capture.json
+          blobs/
+```
+
+The checked-in scaffold currently contains the export oracle files. The generic
+`capture.ts`, hook modules, symbol maps, cases, and internal capture schemas are
+future structure for the stage/object tiers.
+
+The repo does not need to commit every lab output. Curated captures should be
+promoted into `tests/fixtures/atoms/...`; bulk lab output can stay local or in a
+separate artifact store.
+
+## Run Manifest
+
+Every run needs provenance precise enough to reproduce or explain differences.
+
+```json
+{
+  "schema": 1,
+  "run_id": "2026-06-13T18-42-10Z-win26100-msdelta",
+  "host": {
+    "os_build": "10.0.26100.7309",
+    "arch": "amd64"
+  },
+  "modules": [
+    {
+      "name": "msdelta.dll",
+      "path": "C:\\Windows\\System32\\msdelta.dll",
+      "file_version": "10.0.26100.7309",
+      "sha256": "<hex>",
+      "image_base": "0x180000000"
+    }
+  ],
+  "symbol_map": "symbols/windows-26100/msdelta.<sha256>.json",
+  "cases": ["case-id"]
+}
+```
+
+The `sha256` is mandatory. Function RVAs are only meaningful relative to the
+exact module image.
+
+## Symbol Map
+
+Internal hooks should be declared data, not hard-coded in a script. The same
+script can then run against multiple Windows builds by selecting the symbol map
+for the loaded module hash.
+
+```json
+{
+  "schema": 1,
+  "module": "msdelta.dll",
+  "sha256": "<hex>",
+  "functions": [
+    {
+      "atom": "CliMetadataBitstream",
+      "name": "CliMetadata::FromBitReader",
+      "rva": "0x4aa1c",
+      "abi": "ms-x64-thiscall",
+      "capture": "cli_metadata_from_bitreader"
+    },
+    {
+      "atom": "CliCompressionRift",
+      "name": "CompressionRiftTableCli::FromCliMap",
+      "rva": "0x5d400",
+      "abi": "ms-x64-thiscall",
+      "capture": "rift_table_return"
+    }
+  ]
+}
+```
+
+The `name` is a local label for humans. The hook is keyed by module hash plus
+RVA. If a build changes enough that the RVA or object layout no longer matches,
+the lab should fail closed and mark the capture as unmapped.
+
+## Capture Format
+
+Each case capture should be stage-oriented:
+
+```json
+{
+  "schema": 1,
+  "case_id": "managed-classic-small-method-token",
+  "inputs": {
+    "reference": "blobs/reference.bin",
+    "delta": "blobs/delta.pa30",
+    "target": "blobs/target.bin"
+  },
+  "header": {
+    "file_type_set": "0xf",
+    "file_type": "0x2",
+    "flags": "0xe63e"
+  },
+  "events": [
+    {
+      "seq": 1,
+      "atom": "CliMetadataBitstream",
+      "symbol": "CliMetadata::FromBitReader",
+      "phase": "leave",
+      "data": "objects/target-cli-metadata.json"
+    },
+    {
+      "seq": 2,
+      "atom": "CliMapBitstream",
+      "symbol": "CliMap::FromBitReader",
+      "phase": "leave",
+      "data": "objects/cli-map.json"
+    }
+  ]
+}
+```
+
+Binary buffers go under `blobs/`. Logical objects go under `objects/`.
+
+## Normalized Objects
+
+Do not store raw C++ object memory as the fixture contract. It contains
+pointers, allocator state, capacity slack, ref-count artifacts, and build-local
+layout noise. Use Frida to read the native object and emit logical data.
+
+### RiftTable
+
+```json
+{
+  "type": "RiftTable",
+  "entries": [
+    { "source": 0, "target": 0 },
+    { "source": 4096, "target": 8192 }
+  ]
+}
+```
+
+### CliMetadata
+
+```json
+{
+  "type": "CliMetadata",
+  "branch": "classic",
+  "metadata_file_offset": 8192,
+  "metadata_size": 1234,
+  "metadata_rva": 8192,
+  "streams": {
+    "strings": { "offset": 100, "size": 200 },
+    "user_strings": { "offset": 300, "size": 40 },
+    "blob": { "offset": 340, "size": 500 },
+    "guid": { "offset": 840, "size": 16 },
+    "tables": { "offset": 856, "size": 378 }
+  },
+  "heap_widths": {
+    "strings": false,
+    "guid": false,
+    "blob": true
+  },
+  "valid_table_mask": "0x0000000900001547",
+  "row_counts": [1, 0, 3]
+}
+```
+
+### CliMap
+
+```json
+{
+  "type": "CliMap",
+  "heaps": {
+    "strings": { "entries": [] },
+    "user_strings": { "entries": [] },
+    "blob": { "entries": [] },
+    "guid": { "entries": [] }
+  },
+  "tables": [
+    { "table": 0, "entries": [] },
+    { "table": 1, "entries": [{ "source": 1, "target": 1 }] }
+  ]
+}
+```
+
+Keep these schemas aligned with the Rust model types once those exist. The
+normalizer should be stricter than the hook: if an object cannot be read
+coherently, emit a capture error rather than a partial object.
+
+## Fixture Promotion
+
+Promotion converts a raw lab capture into a small test fixture:
+
+```text
+tests/fixtures/atoms/<atom>/<case>/
+  source.bin
+  target.bin
+  delta.pa30
+  native/
+    run.json
+    capture.json
+    objects/
+      target-cli-metadata.json
+      cli-map.json
+      cli-rift.json
+  case.toml
+```
+
+`case.toml` should name exactly what the fixture proves:
+
+```toml
+atom = "CliMapBitstream"
+case = "managed-classic-empty-map"
+windows_build = "10.0.26100.7309"
+module = "msdelta.dll"
+module_sha256 = "<hex>"
+file_type = "0x2"
+flags = "0xe63e"
+expected_atoms = ["CliMetadataBitstream", "CliMapBitstream"]
+primary_artifacts = ["native/objects/cli-map.json"]
+```
+
+Do not promote huge or redundant captures. Promote one fixture per behavior
+shape: empty map, non-empty heap map, table row widening, IL token remap,
+signature blob remap, and so on.
+
+For `FridaExportOracle`, promotion should start with the smallest API-level
+fixture:
+
+1. Run one RAW `native_to_native` case through a harness that loads the DLL,
+   waits for hooks, then calls the native export.
+2. Verify `capture.json` contains enter/leave pairs for the expected export.
+3. Copy only the minimal source, target, delta, `run.json`, and `capture.json`
+   into the curated fixture packet.
+4. Record the Windows build, module hash, DLL name, file type set, flags, and
+   hash algorithm in `case.toml`.
+
+Do not promote large raw `lab/frida/out` runs. Keep those as local lab output or
+external artifacts.
+
+## Version Matrix
+
+The lab should run the same cases across a matrix:
+
+```text
+Windows build x architecture x DLL hash x case set
+```
+
+The report should group results by atom:
+
+```text
+CliMetadataBitstream
+  win26100 msdelta <sha>: match
+  win26200 msdelta <sha>: match
+
+CliTableRift
+  win26100 msdelta <sha>: match
+  win26200 msdelta <sha>: changed: row-width gap at table 0x06
+```
+
+The Rust compatibility claim should be tied to this matrix. A final target hash
+mismatch should be the last line of defense, not the first diagnostic.
+
+## Hook Strategy
+
+Start with stable boundaries:
+
+| Atom | Native hook |
+|---|---|
+| `Pa30HeaderParse` | `ApplyDeltaB` export, before internal dispatch |
+| `PePreprocessNative` | `PortableExecutableInfo::FromBitReader` |
+| `PePreprocessManagedClassic` | `PortableExecutableInfo::FromBitReader` with managed source |
+| `PePreprocessManagedCli4` | `PortableExecutableInfoCli4::FromBitReader` |
+| `CliMetadataBitstream` | `CliMetadata::FromBitReader` |
+| `CliMapBitstream` | `CliMap::FromBitReader` |
+| `CliCompressionRift` | `CompressionRiftTableCli::FromCliMap` |
+| `Cli4CompressionRift` | `CompressionRiftTableCli4::FromCli4Map` |
+| `TransformCliDisasm` | `TransformCliDisasm::Run` entry/exit PE bytes |
+| `TransformCliMetadata` | `TransformCliMetadata::Run` entry/exit PE bytes |
+| `CreateCliMapFromPEs` | `CliMapFromPEs::Run` |
+| `CreateCli4MapFromPEs` | `Cli4MapFromPEs::Run` |
+
+For transforms, capture both the input PE buffer and output PE buffer at the
+transform boundary. For object-returning functions, capture normalized logical
+objects on leave.
+
+## Failure Policy
+
+The lab should fail closed:
+
+- Unknown module hash: no internal hooks.
+- Missing symbol map: export-only capture allowed, stage capture disabled.
+- Object layout mismatch: capture error, no fixture promotion.
+- Truncated or incoherent object: capture error, no fixture promotion.
+- Final native API failure: preserve error code and inputs for triage.
+
+This prevents bad fixtures from encoding wrong assumptions.
+
+## Clean-Room Boundary
+
+The capture output should contain behavior, not copied implementation text.
+Allowed fixture data:
+
+- Input and output buffers.
+- Normalized object fields.
+- Integer flags, sizes, offsets, and rift entries.
+- Function labels and local atom names.
+
+Do not commit decompiler output, disassembly snippets, or copied proprietary
+source text into fixtures, comments, or reports.
+
+## First Milestone
+
+The first milestone after this scaffold is the smallest export-capture loop:
+
+1. Run `pnpm install` and `pnpm check` on the Windows lab host.
+2. Wrap `crates/oracle/lab/oracle_harness.ps1` with
+   `pnpm capture:export -- ...`.
+3. Promote one tiny RAW export fixture.
+4. Add one native PE x64 export fixture.
+5. Add module hash detection and symbol-map selection for internal hooks.
+
+After that, hook `CliMetadata::FromBitReader`, `CliMap::FromBitReader`, and
+`CompressionRiftTableCli[4]::FromCliMap` so the first real managed rift oracle
+exists before any IL or metadata rewriting work begins.

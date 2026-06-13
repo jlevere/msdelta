@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/msdelta/frida/run.schema.json",
+  "title": "MSDelta Frida run manifest",
+  "type": "object",
+  "required": ["schema", "atom", "run_id", "started_at", "ended_at", "host", "frida", "target", "exports", "modules", "cases"],
+  "properties": {
+    "schema": { "const": 1 },
+    "atom": { "const": "FridaExportOracle" },
+    "run_id": { "type": "string" },
+    "started_at": { "type": "string" },
+    "ended_at": { "type": "string" },
+    "host": { "type": "object" },
+    "frida": {
+      "type": "object",
+      "required": ["device", "remote"],
+      "properties": {
+        "device": { "enum": ["local", "remote", "inject"] },
+        "remote": { "type": ["string", "null"] }
+      }
+    },
+    "target": {
+      "type": "object",
+      "required": ["pid", "spawned", "command", "detach"],
+      "properties": {
+        "pid": { "type": ["integer", "null"] },
+        "spawned": { "type": "boolean" },
+        "command": { "type": "array", "items": { "type": "string" } },
+        "detach": { "type": "object" }
+      }
+    },
+    "exports": {
+      "type": "array",
+      "items": {
+        "enum": ["ApplyDeltaB", "ApplyDeltaGetReverseB", "CreateDeltaB"]
+      }
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "base", "size"],
+        "properties": {
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "base": { "type": "string" },
+          "size": { "type": "integer" },
+          "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+          "sha256_error": { "type": "string" }
+        }
+      }
+    },
+    "cases": { "type": "array", "items": { "type": "string" } },
+    "errors": { "type": "array" }
+  }
+}

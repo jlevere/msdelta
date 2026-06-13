@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/msdelta/frida/export-capture.schema.json",
+  "title": "MSDelta Frida export capture",
+  "type": "object",
+  "required": ["schema", "atom", "case_id", "events"],
+  "properties": {
+    "schema": { "const": 1 },
+    "atom": { "const": "FridaExportOracle" },
+    "case_id": { "type": "string" },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["event_id", "call_id", "atom", "symbol", "phase", "module", "timestamp_ms", "blobs"],
+        "properties": {
+          "event_id": { "type": "string" },
+          "call_id": { "type": "string" },
+          "atom": { "const": "FridaExportOracle" },
+          "symbol": {
+            "enum": ["ApplyDeltaB", "ApplyDeltaGetReverseB", "CreateDeltaB"]
+          },
+          "phase": { "enum": ["enter", "leave"] },
+          "module": {
+            "type": "object",
+            "required": ["name", "path", "base"],
+            "properties": {
+              "name": { "type": "string" },
+              "path": { "type": "string" },
+              "base": { "type": "string" }
+            }
+          },
+          "timestamp_ms": { "type": "integer" },
+          "success": { "type": "boolean" },
+          "inputs": { "type": "object" },
+          "outputs": { "type": "object" },
+          "blobs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["slot", "path", "size", "sha256"],
+              "properties": {
+                "slot": { "type": "string" },
+                "path": { "type": "string" },
+                "ptr": { "type": "string" },
+                "requested_size": { "type": "integer" },
+                "size": { "type": "integer" },
+                "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "file_sink_path": { "type": "string" },
+                "note": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

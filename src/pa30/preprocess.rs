@@ -13,10 +13,10 @@ pub(crate) struct PePreprocess {
     pub(crate) pe_rift: crate::lzx::rift::RiftTable,
     // Second rift table (from PreProcessPEForApply, separate from PE info rift)
     pub(crate) preprocess_rift: crate::lzx::rift::RiftTable,
-    /// Bytes of CLI metadata / CLI map present in the preprocess buffer. Nonzero
-    /// means the target is a managed (.NET) image whose CLI transforms
-    /// (TransformCli[4]Metadata / Disasm) we do not implement -- the caller must
-    /// reject rather than decode to silently-wrong bytes.
+    /// Bytes skipped by the current managed/.NET rejection guard. This is not a
+    /// real CLI parser: native `CliMetadata::FromBitReader` and
+    /// `CliMap::FromBitReader` are structured bitstreams that need explicit
+    /// atoms before managed PE apply can be enabled.
     pub(crate) cli_bytes: usize,
 }
 
@@ -30,11 +30,11 @@ pub(crate) fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
     //   Read32(0x20) = field1 (zero for typical deltas)
     //   Read32(0x20) = target TimeDateStamp
     //   RiftTable::FromBitReader = PE-level rift table
-    //   CliMetadata::FromBitReader = CLI metadata
+    //   CliMetadata::FromBitReader = structured CLI metadata
     //
     // Then PreProcessPEForApply reads more:
     //   RiftTable::FromBitReader = second rift table
-    //   CliMap::FromBitReader = CLI map
+    //   CliMap::FromBitReader = structured CLI map
     //
     let target_image_base = reader.read_bits(64)?;
     let target_field1 = reader.read_bits(32)? as u32;
@@ -44,6 +44,8 @@ pub(crate) fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
 
     let mut cli_bytes = 0usize;
 
+    // Temporary fail-loud guard only. A real implementation must parse the
+    // metadata record fields, row counts, heap-width flags, and static schema.
     let cli_flag = reader.read_bits(1)?;
     if cli_flag != 0 {
         cli_bytes += reader.read_buffer()?.len();
@@ -53,6 +55,8 @@ pub(crate) fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
     let preprocess_rift = crate::lzx::rift::RiftTable::from_reader(&mut reader)?;
 
     if reader.remaining() > 0 {
+        // Temporary fail-loud guard only. A real implementation must parse
+        // IntFormat records plus heap/table RiftTables.
         let climap_flag = reader.read_bits(1)?;
         if climap_flag != 0 {
             cli_bytes += reader.read_buffer()?.len();
