@@ -284,6 +284,19 @@ bounds stream ranges, too-small table stream, malformed row-count array.
 Done when: a real managed PE can produce a `CliMetadataModel` without reading a
 delta, and that model matches the target metadata model for equal inputs.
 
+Current state: `src/pe/cli_metadata.rs` parses the PE CLR runtime header,
+`BSJB` metadata root, stream headers, and `#~` table stream into a
+`CliMetadataModel`. The model records metadata RVA/file offset/size, version
+string, `#Strings`/`#US`/`#Blob`/`#GUID`/`#~` stream ranges, heap index widths,
+valid/sorted table masks, row counts, row byte sizes, and first-row file
+offsets. Tests cover synthetic PE32 and PE32+ managed images, duplicate stream
+names, missing `#~`, truncated table rows, and an optional real BGPCore managed
+assembly from the local ignored corpus when present.
+
+This atom is still not native-validated. The next evidence step is a curated
+managed fixture plus a Frida stage/object oracle for native `CliMetadata::Init`
+or a direct object-normalizer comparison.
+
 ### CliMetadataBitstream
 
 Native reference: `CliMetadata::FromBitReader`
