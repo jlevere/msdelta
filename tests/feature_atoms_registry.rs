@@ -52,6 +52,7 @@ const REQUIRED_MANAGED_ATOMS: &[&str] = &[
     "PePreprocessManagedCli4",
     "CliMetadataStaticSchema",
     "CliMetadataFromPe",
+    "CliMetadataRowsAndHeaps",
     "Cli4MetadataFromPe",
     "CliMetadataBitstream",
     "Cli4MetadataBitstream",

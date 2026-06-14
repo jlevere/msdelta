@@ -411,8 +411,8 @@ Use this shape for future oracle atoms:
 
 ## Near-Term Milestones
 
-1. Fix debug/release parity for `RiftTable::reverse`; it is now blocking broad
-   confidence checks even when the active atom is unrelated.
+1. Keep `RiftTable::reverse` debug/release parity in the release suite; the
+   known overlap, gap, and wrap vectors now use explicit wrapping arithmetic.
 2. Turn the TSV into an in-crate feature gate used by `apply()` so unsupported
    paths identify the missing atom instead of collapsing into generic failure.
 3. Make fixture promotion repeatable for internal stage captures. The current
@@ -420,15 +420,15 @@ Use this shape for future oracle atoms:
    atoms.
 4. Add `NativeOracleDiff`: a normalized-object comparator that can replay Rust
    stage output against promoted native stage captures.
-5. Close the current managed parser/model gaps: native `CliMetadata::Init`,
-   CLI4 metadata bitstream, targeted non-identity `CliCodedTokenMap`, and
-   native `CliBlobTransformer::GetNumber`.
+5. Close the current managed parser/model gaps: native `CliMetadata::Init`
+   with row/heap accessor samples, CLI4 metadata bitstream, targeted
+   non-identity `CliCodedTokenMap`, and native `CliBlobTransformer::GetNumber`.
 6. Build the first managed rift producer ladder:
    `CliHeapRift` -> `CliTableRift` -> `CliCompressionRift` ->
    `FinalPeCopyRiftManaged`.
-7. Only after the rift ladder is fixture-backed, start the managed transform
-   ladder: `TransformContextManaged`, `MarkNonExeCliMethods`,
-   `TransformCliDisasm`, `CliBlobTypeTokenRemap`, and
+7. Build `TransformContextManaged` before byte transforms, then start the
+   managed transform ladder after the context and rift ladder are fixture-backed:
+   `MarkNonExeCliMethods`, `TransformCliDisasm`, `CliBlobTypeTokenRemap`, and
    `TransformCliMetadata`.
 8. Run the bulk classifier after each composed milestone and update the registry
    buckets by atom, section, flag, and byte range.

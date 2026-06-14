@@ -16,7 +16,7 @@ PePreprocessManagedClassic	cli	parser	0x2,0x4,0x8	-	PortableExecutableInfo::From
 PePreprocessManagedCli4	cli	parser	0x10,0x20,0x40,0x80	-	PortableExecutableInfoCli4::FromBitReader	rejected	reject	needs_fixture	Parse target Cli4Metadata, used rift, and CliMap instead of byte-counting
 RiftTableReadWrite	rift	parser	all	-	RiftTable::FromBitReader and ToBitWriter	supported	allow	release	Add malformed table fuzz cases as regressions are found
 RiftTableMultiply	rift	algebra	pe	-	RiftTable::Multiply	supported	allow	release	Keep oracle vectors for gaps and overlaps
-RiftTableReverse	rift	algebra	pe	-	RiftTable::Reverse	partial	allow	curated	Replace intentional debug overflows with explicit wrapping arithmetic
+RiftTableReverse	rift	algebra	pe	-	RiftTable::Reverse	supported	allow	release	Keep overlap gap and wrap vectors in the release suite
 RiftTableSum	rift	algebra	pe,cli	-	RiftTable::Sum	supported	allow	release	Add CLI rift sum cases once CLI maps parse
 FinalPeCopyRiftNative	pe	producer	0x2,0x8	-	PreProcessPEForApply final compression rift	supported	allow	curated	Extend oracle dumps beyond current native rift corpus
 ZeroPeChecksum	pe	source_transform	0x2,0x4,0x8,0x10,0x20,0x40,0x80	-	SetCheckSum zeroing	supported	allow	release	No immediate work
@@ -41,6 +41,7 @@ DisasmARM64	arm64	source_transform	0x80	0x800000	TransformDisasmARM64::Run	missi
 PdataARM64	arm64	source_transform	0x80	0x1000000	TransformPdataARM64::Run	missing	reject	needs_fixture	Start with 8-byte pdata entry remap before full disasm
 CliMetadataStaticSchema	cli	parser	pe,cli	-	CliMetadata::CheckStaticData and Cli4Metadata::CheckStaticData	partial	reject	unit	Phase 1 evidence gap: add native object-normalizer check for CheckStaticData schema parity
 CliMetadataFromPe	cli	parser	0x2,0x4,0x8	-	CliMetadata::Init	partial	reject	unit	Phase 1 evidence gap: promote managed PE snapshot and native CliMetadata::Init object oracle
+CliMetadataRowsAndHeaps	cli	parser	pe,cli	-	CliMetadata row accessors and heap getters	partial	reject	unit	Phase 1 evidence gap: promote row column and heap access with native CliMetadata::Init object samples
 Cli4MetadataFromPe	cli	parser	0x10,0x20,0x40,0x80	-	Cli4Metadata::Init	missing	reject	needs_fixture	Phase 1 evidence gap: build source CLI4 metadata model from CLR metadata root
 CliMetadataBitstream	cli	parser	0x2,0x4,0x8	0x8000	CliMetadata::FromBitReader / compo::CliMetadata::InternalFromBitReader	partial	reject	curated	Phase 2 context input: wire parsed target metadata into ManagedPeInfoBitstream and TransformContextManaged
 Cli4MetadataBitstream	cli	parser	0x10,0x20,0x40,0x80	0x400000	PortableExecutableInfoCli4::FromBitReader and CliMetadata::FromBitReader	missing	reject	needs_fixture	Phase 1 evidence gap: capture CLI4 target metadata record from preprocess bitstream

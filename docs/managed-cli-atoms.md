@@ -25,16 +25,21 @@ CLR metadata subsystem, not as miscellaneous PE helper code:
 | Module | Concern |
 |---|---|
 | `schema.rs` | static ECMA-335 table, column, heap, and coded-index schema |
-| `metadata.rs` | CLR metadata root and MSDelta metadata-bitstream models |
+| `metadata.rs` | CLR metadata root, typed rows/heaps, and MSDelta metadata-bitstream models |
 | `map.rs` | semantic `CliMap`, MSDelta map bitstream, and coded-token remapping |
 | `blob.rs` | compressed unsigned integers used by signature blobs |
-| `tokens.rs` | metadata table IDs, nonzero RIDs, and raw metadata tokens |
+| `tokens.rs` | metadata table IDs, nonzero RIDs, raw metadata tokens, and typed heap offsets/indexes |
 
 Future splits should move toward `root.rs`, `tables.rs`, `heaps.rs`,
 `rows.rs`, `signatures.rs`, `map_bitstream.rs`, and
 `metadata_bitstream.rs` as those concerns grow. Transforms should depend on
 typed rows, heap offsets, RIDs, and tokens from this subsystem instead of
 constructing magic offsets directly.
+
+`#Strings`, `#US`, and `#Blob` use byte offsets into their heaps. `#GUID` uses
+one-based indexes. Keep that distinction in the type system; otherwise metadata
+transforms will eventually conflate two wire conventions that happen to be
+encoded as integers.
 
 ## Terminology
 
@@ -163,6 +168,9 @@ Derived state after parsing:
 - Per-column byte widths: 2 or 4 bytes.
 - Per-column byte offsets inside each row.
 - Static table schema checks.
+- Typed row lookup by table id and nonzero RID.
+- Typed column decoding into primitive, heap, table, and coded-index values.
+- Heap accessors for `#Strings`, `#US`, `#Blob`, and one-based `#GUID` entries.
 
 The PE scanner (`CliMetadata::Init` and `Cli4Metadata::Init`) derives the same
 model from a real metadata root. It validates the `BSJB` metadata root, stream
@@ -339,6 +347,46 @@ assembly from the local ignored corpus when present.
 This atom is still not native-validated. The next evidence step is a curated
 managed fixture plus a Frida stage/object oracle for native `CliMetadata::Init`
 or a direct object-normalizer comparison.
+
+### CliMetadataRowsAndHeaps
+
+Native reference: the row and heap accessor behavior used by
+`CliMetadata::GetBlobContent`, `CliBlobTransformer::TransformColumn`,
+`TransformCliMetadata::Run`, and method-body enumeration.
+
+Inputs: `CliMetadataModel`, PE image bytes, table id/RID, column name or index,
+and typed heap offsets/indexes.
+
+Transition: locate the requested table row using the parsed row-size and
+first-row file offset, decode schema-described columns, decode coded-index tags
+through the static descriptor table, and read heap values with the correct heap
+convention.
+
+Outputs:
+
+- `CliTableRow` views tied to the PE image bytes.
+- `CliColumnValue` for primitive, heap, table, and coded-index columns.
+- `#Strings` UTF-8 values.
+- length-prefixed `#US` and `#Blob` payloads.
+- optional 16-byte `#GUID` entries addressed by one-based index.
+
+Failure conditions: out-of-range row RID, missing heap stream, out-of-range
+heap offset, unterminated or non-UTF-8 `#Strings`, truncated length-prefixed
+heap payloads, invalid coded-index tags, and non-null sentinel coded-index
+targets.
+
+Current state: `src/pe/cli/metadata.rs` implements read-only typed row,
+column, and heap accessors. Unit tests use a synthetic managed PE with real
+Module, TypeRef, TypeDef, and MethodDef rows plus populated `#Strings`, `#US`,
+`#Blob`, and `#GUID` heaps. The tests verify primitive columns, heap columns,
+TypeDefOrRef coded-index decoding, blob payload extraction, user-string
+payload extraction, one-based GUID indexing, and fail-loud out-of-range row
+lookup.
+
+Known gap: this is unit-backed, not native-object-backed. Promote it only after
+a native `CliMetadata::Init` object oracle or equivalent transform-stage fixture
+proves that the row and heap accessors line up with real Windows metadata
+objects across at least one non-trivial managed PE.
 
 ### CliMetadataBitstream
 
@@ -655,6 +703,7 @@ These atoms are useful building blocks today, but not all are release gates:
 | `ManagedFileTypeBranch` | exhaustive unit tests | wire branch diagnostics into every managed rejection |
 | `CliMetadataStaticSchema` | Rust schema self-checks | native `CheckStaticData` parity hook |
 | `CliMetadataFromPe` | synthetic PE32/PE32+ tests | native `CliMetadata::Init` object oracle |
+| `CliMetadataRowsAndHeaps` | synthetic metadata row/heap tests | native row and heap accessor samples from real managed PE metadata |
 | `CliMetadataBitstream` | Win26100 reader-window fixtures | CLI4 equivalent and transform-context wiring |
 | `CliMapBitstream` | Win26100 reader-window fixtures | native-like writer canonicalization for encode |
 | `CliCodedTokenMap` | Win26100 call-record fixtures | targeted non-identity `MapCoded` native case |
@@ -669,7 +718,8 @@ specific gap.
 1. Add a targeted native `CliCodedTokenMap` call where non-exact `MapCoded`
    changes the raw token.
 2. Add a native `CliMetadata::Init` or equivalent object oracle for metadata
-   parsed directly from source PE bytes.
+   parsed directly from source PE bytes, including row/heap samples consumed by
+   `CliMetadataRowsAndHeaps`.
 3. Add a native `CliBlobTransformer::GetNumber` oracle for malformed and
    non-canonical compressed integers.
 4. Add a CLI4 metadata bitstream fixture or explicitly record the native symbol
