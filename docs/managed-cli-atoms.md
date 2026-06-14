@@ -717,8 +717,15 @@ used by the decompressor copy stage.
 
 Outputs: final copy rift.
 
+Current state: the PA30 helper now keeps the PE-copy map in target-file-offset
+to source-file-offset form, sums it with the classic CLI compression rift, and
+folds the combined map into the LZX caller-rift domain once. A checked-in
+managed native corpus test covers the composition contract and verifies that an
+empty CLI rift preserves the unmanaged PE-copy path.
+
 Done when: fixture packets include `native_final_rift.tsv` for at least one
-classic CLI and one CLI4 case.
+classic CLI and one CLI4 case, and managed apply uses this rift only after the
+remaining source transforms are validated.
 
 ## Create-Side Atoms
 

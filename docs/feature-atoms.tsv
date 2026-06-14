@@ -62,7 +62,7 @@ CliHeapRift	cli	producer	pe,cli	-	CompressionRiftTableCli::AddHeapMap	partial	re
 CliTableRift	cli	producer	pe,cli	-	CompressionRiftTableCli::AddTableMap	partial	reject	unit	Generates target-to-source row-start entries and typed 2-byte/4-byte column width-hole entries; next gap is native AddTableMap output parity
 CliCompressionRift	cli	producer	0x2,0x4,0x8	-	CompressionRiftTableCli::FromCliMap	partial	reject	curated	Rust output matches six promoted Win26100 classic CLI native rift shapes; next gap is summing it with the PE-copy rift
 Cli4CompressionRift	cli	producer	0x10,0x20,0x40,0x80	-	CompressionRiftTableCli4::FromCli4Map	missing	reject	needs_fixture	Phase 3 rift ladder: compose CLI4 heap/table rifts after classic path is understood
-FinalPeCopyRiftManaged	cli	producer	pe,cli	-	PreProcessPEForApply and RiftTable::Sum	missing	reject	needs_fixture	Phase 3 release input: sum native PE-copy rift with CLI compression rift and fixture the result
+FinalPeCopyRiftManaged	cli	producer	pe,cli	-	PreProcessPEForApply and RiftTable::Sum	partial	reject	unit	PE-copy and CLI compression rifts compose in target-file-offset domain and fold once for LZX; next gap is a native final-rift fixture before full apply wiring
 CreateRaw	create	create	0x1	-	CreateDeltaB RAW path	supported	allow	release	Keep Windows oracle on raw PA30/PA31 cases
 CreatePeNative	create	create	0x2,0x8	-	CreateDeltaB native PE path	partial	allow	curated	Add transform-aware T(source) create-side checks
 CreateCliMapFromPEs	create	create	0x2,0x4,0x8	-	CliMapFromPEs::Run	missing	reject	needs_fixture	Defer until apply-side CliMap and metadata atoms pass

@@ -23,13 +23,13 @@ use signature::hex_str;
 
 use crate::{Error, Result};
 
-/// Build the decompressor's copy-placement rift in the TARGET FILE-OFFSET
-/// domain. The decompressor indexes the rift by `pos = ref_len +
+/// Build the decompressor's copy-placement rift from the target-file-offset
+/// domain. The decompressor indexes the final caller rift by `pos = ref_len +
 /// target_file_offset` and, for a source copy, resolves it to the matching
-/// SOURCE file offset. Genuine `PreProcessor::PreProcessPEForApply` computes
-/// this as (native, non-.NET reduction; the CLI `Sum` is identity):
+/// source file offset. Genuine `PreProcessor::PreProcessPEForApply` first
+/// computes the native PE component as:
 ///
-///   final = Reverse( Multiply( Multiply(rift_B, io2rva), io2rva ) )
+///   pe_copy = Reverse( Multiply( Multiply(rift_B, io2rva), io2rva ) )
 ///
 /// where `rift_B` is the decoded preprocess rift (source RVA -> target RVA)
 /// and `io2rva` = `SectionHelper::ExtractImageOffsetToRva` maps file offset ->
@@ -47,32 +47,65 @@ use crate::{Error, Result};
 /// target map on the input side and the source map on the output side makes the
 /// relayout exact for both arches:
 ///
-///   final(target_fo) = io2rva_src^-1( rift_B^-1( io2rva_tgt(target_fo) ) )
+///   pe_copy(target_fo) = io2rva_src^-1( rift_B^-1( io2rva_tgt(target_fo) ) )
+///
+/// Managed images add a second file-offset rift from the CLI metadata map:
+///
+///   final_file_offsets = RiftTable::Sum(pe_copy, cli_compression_rift)
+///
+/// Only after that sum do we fold into the decompressor caller-rift domain by
+/// adding the reference length to the entry source offsets.
 fn build_pe_copy_rift(
     reference: &[u8],
     pp: &preprocess::PePreprocess,
 ) -> crate::lzx::rift::RiftTable {
-    use crate::lzx::rift::RiftEntry;
-    let ref_len = reference.len() as i64;
+    let empty_cli_rift = crate::lzx::rift::RiftTable {
+        entries: Vec::new(),
+    };
+    build_pe_copy_rift_with_cli_rift(reference, pp, &empty_cli_rift)
+}
 
+fn build_pe_copy_rift_with_cli_rift(
+    reference: &[u8],
+    pp: &preprocess::PePreprocess,
+    cli_rift: &crate::lzx::rift::RiftTable,
+) -> crate::lzx::rift::RiftTable {
+    let Some(mut target_to_source) = build_pe_copy_rift_unfolded(reference, pp) else {
+        return build_pe_copy_rift_fallback(pp);
+    };
+
+    if !cli_rift.entries.is_empty() {
+        target_to_source = target_to_source.sum(cli_rift);
+    }
+
+    fold_target_to_source_rift_for_decompressor(reference.len(), &target_to_source)
+}
+
+fn build_pe_copy_rift_fallback(pp: &preprocess::PePreprocess) -> crate::lzx::rift::RiftTable {
+    // Reference is not a parseable PE: preserve the old RVA-domain
+    // concatenation (pe_rift then preprocess_rift), sorted by source.
+    let mut combined = pp.target_info.target_rva_to_file_offset.clone();
+    for e in &pp.preprocess_rift.entries {
+        combined.entries.push(*e);
+    }
+    combined.entries.sort_by_key(|e| e.source);
+    combined
+}
+
+fn build_pe_copy_rift_unfolded(
+    reference: &[u8],
+    pp: &preprocess::PePreprocess,
+) -> Option<crate::lzx::rift::RiftTable> {
     let Ok(src_pe) = crate::pe::parse::PeInfo::parse_lenient(reference) else {
-        // Reference is not a parseable PE: fall back to the RVA-domain
-        // concatenation (pe_rift then preprocess_rift), sorted by source.
-        let mut combined = pp.target_info.target_rva_to_file_offset.clone();
-        for e in &pp.preprocess_rift.entries {
-            combined.entries.push(*e);
-        }
-        combined.entries.sort_by_key(|e| e.source);
-        return combined;
+        return None;
     };
 
     // io2rva for the SOURCE image, exactly as ExtractImageOffsetToRva.
     let io2rva_src = build_pe_io2rva(&src_pe);
 
-    // Genuine `PreProcessPEForApply` builds the FORWARD chain in the source
+    // Genuine `PreProcessPEForApply` builds the PE FORWARD chain in the source
     // file-offset -> target file-offset direction and applies a SINGLE
-    // `Reverse` to the whole thing (then `Sum`s with the empty CLI map, which
-    // is identity, so no Sum is needed here):
+    // `Reverse` to the whole thing:
     //
     //   forward(source_fo) = pe_rift( preprocess_rift( io2rva_src(source_fo) ) )
     //                      = source_fo --io2rva_src--> rva
@@ -88,14 +121,21 @@ fn build_pe_copy_rift(
     let forward = io2rva_src
         .multiply(&pp.preprocess_rift)
         .multiply(&pp.target_info.target_rva_to_file_offset);
-    let composed = forward.reverse();
+    Some(forward.reverse())
+}
 
+fn fold_target_to_source_rift_for_decompressor(
+    reference_len: usize,
+    target_to_source: &crate::lzx::rift::RiftTable,
+) -> crate::lzx::rift::RiftTable {
+    use crate::lzx::rift::RiftEntry;
+    let ref_len = reference_len as i64;
     // composed maps target file offset -> source file offset. Fold into the
     // decompressor's keying: entry source = ref_len + target_fo, target = src_fo.
     let mut out = crate::lzx::rift::RiftTable {
-        entries: Vec::with_capacity(composed.entries.len()),
+        entries: Vec::with_capacity(target_to_source.entries.len()),
     };
-    for e in &composed.entries {
+    for e in &target_to_source.entries {
         // wrapping: composed entries can carry near-i64::MIN/MAX wrap-boundary
         // values; the sum wraps (correct) in release but would overflow-panic in
         // a debug build. The decompressor's offset lookups are wrap-consistent.
@@ -311,10 +351,22 @@ pub fn apply_into(reference: &[u8], delta: &[u8], output: &mut [u8]) -> Result<u
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lzx::rift::RiftTable;
+    use crate::pe::cli::metadata::parse_cli_metadata_from_pe;
+    use crate::pe::cli::rift::build_cli_compression_rift_from_transformed_source;
+    use crate::pe::cli::schema::CliSchemaFlavor;
     use crate::pe::parse::DataDirectoryKind;
     use std::path::PathBuf;
 
     const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
+    const MANAGED_NATIVE_CASES: &[&str] = &[
+        "cli-const-string",
+        "cli-add-method",
+        "cli-generics-signature",
+        "cli-custom-attribute",
+        "cli-resource",
+        "cli-platform-x64",
+    ];
 
     fn fixture_paths() -> Vec<PathBuf> {
         let mut paths: Vec<_> = std::fs::read_dir(FIXTURES_DIR)
@@ -449,6 +501,13 @@ mod tests {
         std::fs::read(PathBuf::from(FIXTURES_DIR).join("base_manifest.bin")).unwrap()
     }
 
+    fn managed_native_corpus_dir() -> PathBuf {
+        PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/atoms/ManagedNativeCorpus"
+        ))
+    }
+
     #[test]
     fn apply_smallest_fixture() {
         let data = std::fs::read(
@@ -506,6 +565,83 @@ mod tests {
             failures.is_empty(),
             "decompression failures:\n{}",
             failures.join("\n")
+        );
+    }
+
+    #[test]
+    fn managed_final_copy_rift_sums_pe_and_cli_rifts_from_native_corpus() {
+        let root = managed_native_corpus_dir();
+        if !root.exists() {
+            return;
+        }
+
+        let empty_cli_rift = RiftTable {
+            entries: Vec::new(),
+        };
+        let mut cases_with_target_metadata = 0usize;
+        let mut cases_changed_by_cli_rift = 0usize;
+
+        for case in MANAGED_NATIVE_CASES {
+            let case_dir = root.join(case);
+            let source =
+                std::fs::read(case_dir.join("source.dll")).expect("read managed source fixture");
+            let delta =
+                std::fs::read(case_dir.join("delta.pa30")).expect("read managed delta fixture");
+            let parsed = parse(&delta).expect("parse managed delta");
+            let preprocess =
+                parse_pe_preprocess(&parsed.preprocess).expect("parse classic managed preprocess");
+            let pe_unfolded = build_pe_copy_rift_unfolded(&source, &preprocess)
+                .unwrap_or_else(|| panic!("{case}: source PE should parse"));
+            let pe_only = build_pe_copy_rift(&source, &preprocess);
+
+            assert_eq!(
+                build_pe_copy_rift_with_cli_rift(&source, &preprocess, &empty_cli_rift),
+                pe_only,
+                "{case}: empty CLI rift must preserve unmanaged PE-copy rift"
+            );
+
+            if !preprocess.target_info.has_target_metadata() {
+                continue;
+            }
+            cases_with_target_metadata += 1;
+
+            let source_metadata = parse_cli_metadata_from_pe(&source, CliSchemaFlavor::Classic)
+                .expect("parse source CLI metadata");
+            let cli_rift = build_cli_compression_rift_from_transformed_source(
+                &source_metadata,
+                &preprocess.target_info.target_metadata,
+                &preprocess.cli_map,
+                &source,
+            );
+            let summed_unfolded = pe_unfolded.sum(&cli_rift);
+            let expected =
+                fold_target_to_source_rift_for_decompressor(source.len(), &summed_unfolded);
+            let final_rift = build_pe_copy_rift_with_cli_rift(&source, &preprocess, &cli_rift);
+
+            assert_eq!(
+                final_rift, expected,
+                "{case}: final managed rift must sum PE and CLI maps before LZX folding"
+            );
+            assert!(
+                final_rift
+                    .entries
+                    .windows(2)
+                    .all(|window| window[0].source <= window[1].source),
+                "{case}: final managed rift should be sorted in decompressor domain"
+            );
+
+            if !cli_rift.entries.is_empty() && final_rift != pe_only {
+                cases_changed_by_cli_rift += 1;
+            }
+        }
+
+        assert!(
+            cases_with_target_metadata > 0,
+            "managed corpus should include at least one classic CLI metadata case"
+        );
+        assert!(
+            cases_changed_by_cli_rift > 0,
+            "at least one managed final rift should differ from the PE-only rift"
         );
     }
 
