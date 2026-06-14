@@ -563,8 +563,15 @@ Outputs: source image bytes rewritten in place.
 Failure conditions: malformed method body bounds or truncated opcode operands
 terminate the current method scan without panicking.
 
-Done when: isolated IL fixtures cover one-byte opcodes, `0xfe` two-byte
-opcodes, token operands, user-string operands, and switch operands.
+Current state: `pe::cli::disasm` remaps classic CLI metadata and user-string
+tokens in IL method bodies using the parsed `CliMap`. Unit coverage includes
+one-byte token opcodes, `0xfe` two-byte token opcodes, switch-table skipping,
+and truncated operand handling. The managed native corpus also produces at
+least one real source-image rewrite through this path.
+
+Done when: native entry/exit fixtures prove parity for isolated one-byte
+opcodes, `0xfe` two-byte opcodes, token operands, user-string operands, and
+switch operands.
 
 ### CliBlobCompressedInteger
 
