@@ -13,7 +13,14 @@ const HEADER: &[&str] = &[
     "apply_policy",
     "oracle_level",
     "next_step",
+    "proof",
 ];
+
+/// Oracle levels that require executable native-backed evidence.
+const ORACLE_BACKED_LEVELS: &[&str] = &["curated", "bulk", "release", "manual"];
+
+/// Oracle levels consistent with having no evidence yet.
+const UNPROVEN_LEVELS: &[&str] = &["none", "needs_fixture"];
 
 const LAYERS: &[&str] = &[
     "format", "codec", "rift", "pe", "x86", "x64", "ia64", "arm", "arm64", "cli", "pipeline",
@@ -109,10 +116,10 @@ const CLASSIC_MANAGED_APPLY_ALLOWED_ATOMS: &[&str] = &[
 #[derive(Debug, Clone, Copy)]
 struct AtomRow<'a> {
     atom: &'a str,
-    layer: &'a str,
     status: &'a str,
     apply_policy: &'a str,
     oracle_level: &'a str,
+    proof: &'a str,
 }
 
 #[test]
@@ -192,6 +199,17 @@ fn feature_atom_registry_is_well_formed() {
             !cols[9].is_empty(),
             "line {line_number}: next_step must be non-empty"
         );
+        assert!(
+            valid_proof(cols[10]),
+            "line {line_number}: invalid proof {} (want none | oracle:<path> | unit:<path>)",
+            cols[10]
+        );
+        if let Some(path) = proof_path(cols[10]) {
+            assert!(
+                proof_target_exists(path),
+                "line {line_number}: proof cites {path}, which does not exist"
+            );
+        }
         row_count += 1;
     }
 
@@ -243,51 +261,60 @@ fn frida_oracle_atom_set_is_explicit() {
     }
 }
 
+/// Every atom that claims progress must cite evidence. This is the core
+/// anti-drift invariant: a `supported` or `partial` status cannot float
+/// above an empty proof. (Exact status/policy distributions are deliberately
+/// not asserted -- pinning tallies tests the map, not the territory.)
 #[test]
-fn managed_cli_readiness_counts_are_explicit() {
-    let rows = registry_rows();
-    let cli_rows = rows
-        .iter()
-        .copied()
-        .filter(|row| row.layer == "cli")
-        .collect::<Vec<_>>();
-
-    assert_eq!(cli_rows.len(), 24, "CLI-layer atom count changed");
-    assert_eq!(count_by(&cli_rows, |row| row.status, "supported"), 1);
-    assert_eq!(count_by(&cli_rows, |row| row.status, "partial"), 23);
-    assert_eq!(count_by(&cli_rows, |row| row.status, "missing"), 0);
-    assert_eq!(count_by(&cli_rows, |row| row.status, "rejected"), 0);
-    assert_eq!(count_by(&cli_rows, |row| row.apply_policy, "allow"), 10);
-    assert_eq!(count_by(&cli_rows, |row| row.apply_policy, "reject"), 14);
-    assert_eq!(count_by(&cli_rows, |row| row.oracle_level, "curated"), 8);
-    assert_eq!(count_by(&cli_rows, |row| row.oracle_level, "unit"), 16);
-    assert_eq!(
-        count_by(&cli_rows, |row| row.oracle_level, "needs_fixture"),
-        0
-    );
+fn progressing_atoms_cite_evidence() {
+    for row in registry_rows() {
+        if matches!(row.status, "supported" | "partial") {
+            assert_ne!(
+                row.proof, "none",
+                "{} is {} but cites no proof",
+                row.atom, row.status
+            );
+        }
+    }
 }
 
+/// A `missing` atom has nothing to prove yet, so it must not cite evidence.
 #[test]
-fn managed_workstream_readiness_counts_are_explicit() {
-    let required = REQUIRED_MANAGED_ATOMS
-        .iter()
-        .copied()
-        .collect::<HashSet<_>>();
-    let rows = registry_rows()
-        .into_iter()
-        .filter(|row| required.contains(row.atom))
-        .collect::<Vec<_>>();
+fn missing_atoms_cite_no_evidence() {
+    for row in registry_rows() {
+        if row.status == "missing" {
+            assert_eq!(
+                row.proof, "none",
+                "{} is missing but cites proof {}",
+                row.atom, row.proof
+            );
+        }
+    }
+}
 
-    assert_eq!(rows.len(), REQUIRED_MANAGED_ATOMS.len());
-    assert_eq!(count_by(&rows, |row| row.status, "supported"), 1);
-    assert_eq!(count_by(&rows, |row| row.status, "partial"), 28);
-    assert_eq!(count_by(&rows, |row| row.status, "missing"), 2);
-    assert_eq!(count_by(&rows, |row| row.status, "rejected"), 0);
-    assert_eq!(count_by(&rows, |row| row.apply_policy, "allow"), 10);
-    assert_eq!(count_by(&rows, |row| row.apply_policy, "reject"), 21);
-    assert_eq!(count_by(&rows, |row| row.oracle_level, "curated"), 8);
-    assert_eq!(count_by(&rows, |row| row.oracle_level, "unit"), 21);
-    assert_eq!(count_by(&rows, |row| row.oracle_level, "needs_fixture"), 2);
+/// Proof kind and oracle level must agree: an `oracle:` proof requires a
+/// native-backed oracle level, and a `none` proof requires an unproven level.
+/// This catches the inflation the registry could previously hide -- claiming
+/// a curated/bulk/release oracle level while pointing at nothing executable.
+#[test]
+fn proof_kind_agrees_with_oracle_level() {
+    for row in registry_rows() {
+        match proof_kind(row.proof) {
+            "oracle" => assert!(
+                ORACLE_BACKED_LEVELS.contains(&row.oracle_level),
+                "{} cites an oracle proof but its oracle_level is {}",
+                row.atom,
+                row.oracle_level
+            ),
+            "none" => assert!(
+                UNPROVEN_LEVELS.contains(&row.oracle_level),
+                "{} cites no proof but its oracle_level is {}",
+                row.atom,
+                row.oracle_level
+            ),
+            _ => {}
+        }
+    }
 }
 
 #[test]
@@ -343,18 +370,38 @@ fn registry_rows() -> Vec<AtomRow<'static>> {
             let cols = line.split('\t').collect::<Vec<_>>();
             AtomRow {
                 atom: cols[0],
-                layer: cols[1],
                 status: cols[6],
                 apply_policy: cols[7],
                 oracle_level: cols[8],
+                proof: cols[10],
             }
         })
         .collect()
 }
 
-fn count_by(rows: &[AtomRow<'_>], key: impl Fn(AtomRow<'_>) -> &str, value: &str) -> usize {
-    rows.iter()
-        .copied()
-        .filter(|&row| key(row) == value)
-        .count()
+/// A proof cell is `oracle:<path>` or `unit:<path>` (non-empty path), or the
+/// bare word `none`. `oracle` cites a genuine/native artifact; `unit` cites
+/// in-tree self-consistency / algebra / structural tests only.
+fn valid_proof(value: &str) -> bool {
+    match value.split_once(':') {
+        Some((kind, path)) => matches!(kind, "oracle" | "unit") && !path.is_empty(),
+        None => value == "none",
+    }
+}
+
+/// The kind tag of a proof cell (`oracle`, `unit`, `none`, or the raw value
+/// if it is malformed).
+fn proof_kind(value: &str) -> &str {
+    value.split_once(':').map(|(kind, _)| kind).unwrap_or(value)
+}
+
+/// The path a proof cites, if any (`None` for `none`).
+fn proof_path(value: &str) -> Option<&str> {
+    value.split_once(':').map(|(_, path)| path)
+}
+
+fn proof_target_exists(path: &str) -> bool {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join(path)
+        .exists()
 }
