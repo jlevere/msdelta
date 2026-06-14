@@ -1,5 +1,6 @@
 //! PA30 delta encoder.
 
+use crate::pe::parse::PeInfo;
 use crate::Result;
 
 use super::header::{FormatVersion, PA30_MAGIC, PA31_MAGIC};
@@ -85,18 +86,21 @@ impl CreateOptions {
     pub fn execute(&self, reference: &[u8], target: &[u8]) -> Result<Vec<u8>> {
         use crate::bitstream::BitWriter;
         use crate::lzx::rift::RiftTable;
-        use crate::pe::{parse::PeInfo, rift_gen, transform};
+        use crate::pe::{rift_gen, transform};
 
         let pe_info = if self.file_type == FileType::Auto {
             PeInfo::parse(reference)
                 .ok()
                 .zip(PeInfo::parse(target).ok())
+                .and_then(|(src_pe, tgt_pe)| {
+                    create_pe_file_type(&src_pe, &tgt_pe).map(|ft| (src_pe, tgt_pe, ft))
+                })
         } else {
             None
         };
 
         let (patch_data, file_type_set, file_type_val, flags, preprocess) =
-            if let Some((src_pe, tgt_pe)) = pe_info {
+            if let Some((src_pe, tgt_pe, ft)) = pe_info {
                 let _ = &src_pe;
                 // Do NOT normalize timestamps: diff the raw target so its real
                 // timestamps are carried in the patch (as literals where they
@@ -129,7 +133,6 @@ impl CreateOptions {
                     &merged,
                     &RiftTable { entries: vec![] },
                 );
-                let ft: i64 = if tgt_pe.is_64bit { 8 } else { 2 };
                 // flags=0xe63e: the PE transform-config bitmask genuine msdelta
                 // emits for AMD64 PE deltas; its apply requires it to drive
                 // rift-based decode of the patch.
@@ -208,6 +211,13 @@ impl CreateOptions {
     }
 }
 
+fn create_pe_file_type(source: &PeInfo, target: &PeInfo) -> Option<i64> {
+    if source.machine != target.machine {
+        return None;
+    }
+    target.machine.supported_create_file_type()
+}
+
 /// Apply a delta AND generate a reverse delta.
 ///
 /// Equivalent to `ApplyDeltaGetReverseB(...)` on Windows. Returns
@@ -231,4 +241,50 @@ pub fn get_info(delta: &[u8]) -> Result<super::header::Header> {
 /// Returns the same Header struct — PA31 extra fields are in `pa31_extra`.
 pub fn get_info_ex(delta: &[u8]) -> Result<super::header::Header> {
     super::header::parse_header(delta)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pe::parse::PeMachine;
+
+    fn pe(machine: PeMachine) -> PeInfo {
+        PeInfo {
+            image_base: 0x140000000,
+            size_of_image: 0x1000,
+            timestamp: 0,
+            checksum: 0,
+            is_64bit: matches!(
+                machine,
+                PeMachine::Amd64 | PeMachine::Arm64 | PeMachine::Ia64
+            ),
+            machine,
+            sections: vec![],
+            data_directories: vec![],
+        }
+    }
+
+    #[test]
+    fn create_pe_file_type_requires_matching_supported_machine() {
+        assert_eq!(
+            create_pe_file_type(&pe(PeMachine::I386), &pe(PeMachine::I386)),
+            Some(0x2)
+        );
+        assert_eq!(
+            create_pe_file_type(&pe(PeMachine::Amd64), &pe(PeMachine::Amd64)),
+            Some(0x8)
+        );
+        assert_eq!(
+            create_pe_file_type(&pe(PeMachine::I386), &pe(PeMachine::Amd64)),
+            None
+        );
+        assert_eq!(
+            create_pe_file_type(&pe(PeMachine::Ia64), &pe(PeMachine::Ia64)),
+            None
+        );
+        assert_eq!(
+            create_pe_file_type(&pe(PeMachine::Arm64), &pe(PeMachine::Arm64)),
+            None
+        );
+    }
 }

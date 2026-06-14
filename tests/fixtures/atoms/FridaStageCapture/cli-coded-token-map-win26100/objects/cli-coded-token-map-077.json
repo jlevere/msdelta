@@ -1,0 +1,494 @@
+{
+  "type": "CliCodedTokenMapCallRecord",
+  "native_layout": "msdelta-win26100-compo-cli-map-coded-token-v1",
+  "operation": "MapCodedExact",
+  "kind": 5,
+  "raw": 33,
+  "result": 33,
+  "map": {
+    "type": "CliMapBitstreamRecord",
+    "native_layout": "msdelta-win26100-compo-cli-map-v1",
+    "strings": {
+      "entries": [
+        {
+          "source": 0,
+          "target": 0
+        },
+        {
+          "source": 1,
+          "target": 1
+        },
+        {
+          "source": 34,
+          "target": 34
+        },
+        {
+          "source": 44,
+          "target": 44
+        },
+        {
+          "source": 59,
+          "target": 59
+        },
+        {
+          "source": 68,
+          "target": 68
+        },
+        {
+          "source": 75,
+          "target": 75
+        },
+        {
+          "source": 82,
+          "target": 82
+        },
+        {
+          "source": 88,
+          "target": 88
+        },
+        {
+          "source": 94,
+          "target": 94
+        },
+        {
+          "source": 126,
+          "target": 126
+        },
+        {
+          "source": 158,
+          "target": 158
+        },
+        {
+          "source": 208,
+          "target": 208
+        },
+        {
+          "source": 226,
+          "target": 226
+        },
+        {
+          "source": 235,
+          "target": 235
+        },
+        {
+          "source": 256,
+          "target": 256
+        },
+        {
+          "source": 281,
+          "target": 292
+        }
+      ],
+      "sorted": true
+    },
+    "user_strings": {
+      "entries": [
+        {
+          "source": 0,
+          "target": 0
+        },
+        {
+          "source": 1,
+          "target": 1
+        }
+      ],
+      "sorted": true
+    },
+    "blob": {
+      "entries": [],
+      "sorted": true
+    },
+    "guid": {
+      "entries": [
+        {
+          "source": 0,
+          "target": 0
+        },
+        {
+          "source": 1,
+          "target": "9223372036854775807"
+        }
+      ],
+      "sorted": true
+    },
+    "tables": [
+      {
+        "entries": [
+          {
+            "source": 0,
+            "target": 0
+          },
+          {
+            "source": 1,
+            "target": "9223372036854775807"
+          }
+        ],
+        "sorted": true
+      },
+      {
+        "entries": [
+          {
+            "source": 0,
+            "target": 0
+          },
+          {
+            "source": 1,
+            "target": 1
+          },
+          {
+            "source": 2,
+            "target": 2
+          },
+          {
+            "source": 3,
+            "target": 3
+          },
+          {
+            "source": 4,
+            "target": 4
+          }
+        ],
+        "sorted": true
+      },
+      {
+        "entries": [
+          {
+            "source": 0,
+            "target": 0
+          },
+          {
+            "source": 1,
+            "target": 1
+          },
+          {
+            "source": 2,
+            "target": 2
+          }
+        ],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [
+          {
+            "source": 0,
+            "target": 0
+          },
+          {
+            "source": 1,
+            "target": 1
+          },
+          {
+            "source": 2,
+            "target": 2
+          }
+        ],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [
+          {
+            "source": 0,
+            "target": 0
+          },
+          {
+            "source": 1,
+            "target": "9223372036854775807"
+          },
+          {
+            "source": 2,
+            "target": "9223372036854775807"
+          },
+          {
+            "source": 3,
+            "target": "9223372036854775807"
+          },
+          {
+            "source": 4,
+            "target": "9223372036854775807"
+          },
+          {
+            "source": 5,
+            "target": "9223372036854775807"
+          }
+        ],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [
+          {
+            "source": 0,
+            "target": 0
+          },
+          {
+            "source": 1,
+            "target": "9223372036854775807"
+          },
+          {
+            "source": 2,
+            "target": "9223372036854775807"
+          }
+        ],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [
+          {
+            "source": 0,
+            "target": 0
+          },
+          {
+            "source": 1,
+            "target": "9223372036854775807"
+          }
+        ],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [
+          {
+            "source": 0,
+            "target": 0
+          },
+          {
+            "source": 1,
+            "target": 1
+          }
+        ],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [
+          {
+            "source": 0,
+            "target": 0
+          },
+          {
+            "source": 1,
+            "target": "9223372036854775807"
+          }
+        ],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      }
+    ]
+  }
+}

@@ -35,9 +35,14 @@
             pkgs.cargo-nextest
             pkgs.cargo-expand
 
+            # Frida lab host/controller scripts under lab/frida.
+            pkgs.nodejs_22
+            pkgs.pnpm
+
             # Reverse engineering msdelta.dll / wcp.dll.
             # Use Ghidra's `analyzeHeadless` for scripted/repeatable analysis.
             pkgs.ghidra
+            pkgs.radare2
             python
             pkgs.file
             pkgs.hexyl
@@ -46,8 +51,9 @@
           shellHook = ''
             echo "msdelta — PA30 / DCM workbench"
             echo ""
-            echo "RE:     ghidra  |  analyzeHeadless <proj-dir> <proj-name> -import <bin>"
+            echo "RE:     ghidra  |  radare2  |  analyzeHeadless <proj-dir> <proj-name> -import <bin>"
             echo "Build:  cargo build  |  cargo nextest run"
+            echo "Lab:    pnpm --dir lab/frida run check  |  ssh jackson-dev"
             echo "Fuzz:   nix develop .#fuzz"
           '';
         };

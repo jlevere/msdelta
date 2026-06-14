@@ -1,0 +1,28 @@
+{
+  "type": "CliBlobCompressedIntegerCallRecord",
+  "native_layout": "msdelta-win26100-compo-cli-metadata-get-blob-content-v1",
+  "blob_offset": 29,
+  "blob_stream": {
+    "offset": 1408,
+    "size": 88,
+    "available_bytes": 59
+  },
+  "encoded_prefix": {
+    "bytes": [
+      7,
+      16,
+      1,
+      1
+    ],
+    "decode": {
+      "status": "ok",
+      "value": 7,
+      "width": 1
+    }
+  },
+  "result": {
+    "success": true,
+    "decoded_length": 7,
+    "encoded_width": 1
+  }
+}

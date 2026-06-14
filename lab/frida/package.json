@@ -1,0 +1,14 @@
+{
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.1.2",
+  "scripts": {
+    "capture:export": "node ./capture-export-oracle.mjs",
+    "import:inject": "node ./import-inject-capture.mjs",
+    "promote:stage": "node ./promote-stage-fixture.mjs",
+    "check": "node --check ./capture-export-oracle.mjs && node --check ./import-inject-capture.mjs && node --check ./promote-stage-fixture.mjs && node --check ./agent/export-oracle.js && node --check ./agent/stage/reader-window.js && node --check ./agent/stage/cli-managed.js && node --check ./agent/stage-oracle.js"
+  },
+  "dependencies": {
+    "frida": "17.12.0"
+  }
+}

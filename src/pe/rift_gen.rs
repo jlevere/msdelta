@@ -1,6 +1,6 @@
 //! Rift table generation from comparing two PE binaries.
 
-use super::parse::PeInfo;
+use super::parse::{DataDirectoryKind, PeInfo};
 use crate::lzx::rift::{RiftEntry, RiftTable};
 
 /// Build the PE rift table the way genuine msdelta.dll does: the *source*
@@ -161,16 +161,14 @@ pub fn rift_from_exports(source_data: &[u8], target_data: &[u8]) -> RiftTable {
 /// Compares resource directory RVAs between source and target PEs.
 pub fn rift_from_resources(source: &PeInfo, target: &PeInfo) -> RiftTable {
     let mut entries = Vec::new();
-    const RESOURCE_DIR_IDX: usize = 2;
-    if RESOURCE_DIR_IDX < source.data_directories.len()
-        && RESOURCE_DIR_IDX < target.data_directories.len()
-    {
-        let (src_rva, src_size) = source.data_directories[RESOURCE_DIR_IDX];
-        let (tgt_rva, tgt_size) = target.data_directories[RESOURCE_DIR_IDX];
-        if src_rva > 0 && src_size > 0 && tgt_rva > 0 && tgt_size > 0 && src_rva != tgt_rva {
+    if let (Some(src_dir), Some(tgt_dir)) = (
+        source.data_directory(DataDirectoryKind::Resource),
+        target.data_directory(DataDirectoryKind::Resource),
+    ) {
+        if !src_dir.is_empty() && !tgt_dir.is_empty() && src_dir.rva != tgt_dir.rva {
             entries.push(RiftEntry {
-                source: src_rva as i64 - 1,
-                target: tgt_rva as i64 - 1,
+                source: src_dir.rva as i64 - 1,
+                target: tgt_dir.rva as i64 - 1,
             });
         }
     }
@@ -183,16 +181,14 @@ pub fn rift_from_resources(source: &PeInfo, target: &PeInfo) -> RiftTable {
 /// Compares pdata (exception handler) directory RVAs between PEs.
 pub fn rift_from_pdata(source: &PeInfo, target: &PeInfo) -> RiftTable {
     let mut entries = Vec::new();
-    const EXCEPTION_DIR_IDX: usize = 3;
-    if EXCEPTION_DIR_IDX < source.data_directories.len()
-        && EXCEPTION_DIR_IDX < target.data_directories.len()
-    {
-        let (src_rva, src_size) = source.data_directories[EXCEPTION_DIR_IDX];
-        let (tgt_rva, tgt_size) = target.data_directories[EXCEPTION_DIR_IDX];
-        if src_rva > 0 && src_size > 0 && tgt_rva > 0 && tgt_size > 0 && src_rva != tgt_rva {
+    if let (Some(src_dir), Some(tgt_dir)) = (
+        source.data_directory(DataDirectoryKind::Exception),
+        target.data_directory(DataDirectoryKind::Exception),
+    ) {
+        if !src_dir.is_empty() && !tgt_dir.is_empty() && src_dir.rva != tgt_dir.rva {
             entries.push(RiftEntry {
-                source: src_rva as i64 - 1,
-                target: tgt_rva as i64 - 1,
+                source: src_dir.rva as i64 - 1,
+                target: tgt_dir.rva as i64 - 1,
             });
         }
     }
@@ -237,6 +233,7 @@ pub fn rift_from_import_thunks(source_data: &[u8], target_data: &[u8]) -> RiftTa
 
 #[cfg(test)]
 mod tests {
+    use super::super::parse::PeMachine;
     use super::*;
 
     #[test]
@@ -247,6 +244,7 @@ mod tests {
             timestamp: 0x12345678,
             checksum: 0,
             is_64bit: true,
+            machine: PeMachine::Amd64,
             sections: vec![super::super::parse::SectionInfo {
                 name: ".text".to_string(),
                 virtual_address: 0x1000,
@@ -269,6 +267,7 @@ mod tests {
             timestamp: 0x11111111,
             checksum: 0,
             is_64bit: true,
+            machine: PeMachine::Amd64,
             sections: vec![super::super::parse::SectionInfo {
                 name: ".text".to_string(),
                 virtual_address: 0x1000,
@@ -285,6 +284,7 @@ mod tests {
             timestamp: 0x22222222,
             checksum: 0,
             is_64bit: true,
+            machine: PeMachine::Amd64,
             sections: vec![super::super::parse::SectionInfo {
                 name: ".text".to_string(),
                 virtual_address: 0x2000,

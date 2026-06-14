@@ -1,0 +1,95 @@
+{
+  "schema": 1,
+  "atom": "FridaExportOracle",
+  "case_id": "raw-apply-delta-b",
+  "events": [
+    {
+      "event_id": "1781381321391-6416-1-ApplyDeltaB-enter",
+      "call_id": "1781381321391-6416-1-ApplyDeltaB",
+      "seq": 1,
+      "atom": "FridaExportOracle",
+      "symbol": "ApplyDeltaB",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff3d710000"
+      },
+      "thread_id": 2452,
+      "timestamp_ms": 1781381321391,
+      "apply_flags": "0x0",
+      "inputs": {
+        "source": {
+          "ptr": "0x259dda6baa8",
+          "size": 339968,
+          "editable": 0,
+          "valid": true
+        },
+        "delta": {
+          "ptr": "0x259ce4dcd88",
+          "size": 18048,
+          "editable": 0,
+          "valid": true
+        }
+      },
+      "outputs": {
+        "target": "0xc6e8d0e8a8"
+      },
+      "blobs": [
+        {
+          "slot": "source",
+          "path": "blobs/1781381321391-6416-1-ApplyDeltaB-enter-source.bin",
+          "ptr": "0x259dda6baa8",
+          "requested_size": 339968,
+          "size": 339968,
+          "sha256": "64afc6db3aad1289533662e2d79e27dd55c7dcdb8cd918b08e145ad82ad5acb4",
+          "note": ""
+        },
+        {
+          "slot": "delta",
+          "path": "blobs/1781381321391-6416-1-ApplyDeltaB-enter-delta.bin",
+          "ptr": "0x259ce4dcd88",
+          "requested_size": 18048,
+          "size": 18048,
+          "sha256": "69e2f9e82df18316f77d1fb13d1d169a42ce3238087292d5708604a7a3b1d61f",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "event_id": "1781381321391-6416-1-ApplyDeltaB-leave",
+      "call_id": "1781381321391-6416-1-ApplyDeltaB",
+      "seq": 1,
+      "atom": "FridaExportOracle",
+      "symbol": "ApplyDeltaB",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\msdelta.dll",
+        "base": "0x7fff3d710000"
+      },
+      "thread_id": 2452,
+      "timestamp_ms": 1781381321422,
+      "success": true,
+      "retval": "0x1",
+      "outputs": {
+        "target": {
+          "ptr": "0x259e64afed0",
+          "size": 65536,
+          "valid": true
+        }
+      },
+      "blobs": [
+        {
+          "slot": "target",
+          "path": "blobs/1781381321391-6416-1-ApplyDeltaB-leave-target.bin",
+          "ptr": "0x259e64afed0",
+          "requested_size": 65536,
+          "size": 65536,
+          "sha256": "f51fab8041e5023d7290b540a2106f051ef0bd2bc3443c9daf318628b560fa29",
+          "note": ""
+        }
+      ]
+    }
+  ]
+}

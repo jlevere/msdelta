@@ -1,0 +1,12 @@
+{
+  "type": "CliCompressionRiftRecord",
+  "native_layout": "msdelta-win26100-compression-rift-from-cli-map-v1",
+  "source_buffer": {
+    "size": 3584
+  },
+  "source_widening_fill_offset": 5,
+  "rift": {
+    "entries": [],
+    "sorted": true
+  }
+}

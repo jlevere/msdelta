@@ -1,0 +1,365 @@
+{
+  "schema": 1,
+  "atom": "FridaStageCapture",
+  "case_id": "cli-compression-rift-win26100",
+  "source_case_id": "managed-corpus-msdelta",
+  "module_sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb",
+  "target_atom": "CliCompressionRift",
+  "selection": "one representative per source-size/fill-offset/rift-entry tuple observed in the managed corpus",
+  "events": [
+    {
+      "event_id": "cli-compression-rift-001-enter",
+      "call_id": "cli-compression-rift-001",
+      "seq": 1,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCompressionRift",
+      "symbol": "CompressionRiftTableFromCliMap::Generate",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1da60",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_compression_rift_generate"
+      },
+      "inputs": {
+        "source_buffer": {
+          "size": 2560
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-compression-rift-001-leave",
+      "call_id": "cli-compression-rift-001",
+      "seq": 1,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCompressionRift",
+      "symbol": "CompressionRiftTableFromCliMap::Generate",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1da60",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_compression_rift_generate"
+      },
+      "inputs": {
+        "source_buffer": {
+          "size": 2560
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-compression-rift-001.json",
+          "size": 1063,
+          "sha256": "0647f75bba37e3285336f0f6d154c6a506ea299c734051c7c905ad91b7de9311",
+          "note": "",
+          "type": "CliCompressionRiftRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-compression-rift-002-enter",
+      "call_id": "cli-compression-rift-002",
+      "seq": 2,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCompressionRift",
+      "symbol": "CompressionRiftTableFromCliMap::Generate",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1da60",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_compression_rift_generate"
+      },
+      "inputs": {
+        "source_buffer": {
+          "size": 3072
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-compression-rift-002-leave",
+      "call_id": "cli-compression-rift-002",
+      "seq": 2,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCompressionRift",
+      "symbol": "CompressionRiftTableFromCliMap::Generate",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1da60",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_compression_rift_generate"
+      },
+      "inputs": {
+        "source_buffer": {
+          "size": 3072
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-compression-rift-002.json",
+          "size": 1001,
+          "sha256": "f176d72fee21dd1d4670e1f2c4145f286e21b1371809b772a4e8482db58b000f",
+          "note": "",
+          "type": "CliCompressionRiftRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-compression-rift-003-enter",
+      "call_id": "cli-compression-rift-003",
+      "seq": 3,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCompressionRift",
+      "symbol": "CompressionRiftTableFromCliMap::Generate",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1da60",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_compression_rift_generate"
+      },
+      "inputs": {
+        "source_buffer": {
+          "size": 3072
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-compression-rift-003-leave",
+      "call_id": "cli-compression-rift-003",
+      "seq": 3,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCompressionRift",
+      "symbol": "CompressionRiftTableFromCliMap::Generate",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1da60",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_compression_rift_generate"
+      },
+      "inputs": {
+        "source_buffer": {
+          "size": 3072
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-compression-rift-003.json",
+          "size": 1194,
+          "sha256": "af597c4e03dadace9859f26e3be1652ecabd739579417cb6e95d72f8050a9379",
+          "note": "",
+          "type": "CliCompressionRiftRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-compression-rift-004-enter",
+      "call_id": "cli-compression-rift-004",
+      "seq": 4,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCompressionRift",
+      "symbol": "CompressionRiftTableFromCliMap::Generate",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1da60",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_compression_rift_generate"
+      },
+      "inputs": {
+        "source_buffer": {
+          "size": 3072
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-compression-rift-004-leave",
+      "call_id": "cli-compression-rift-004",
+      "seq": 4,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCompressionRift",
+      "symbol": "CompressionRiftTableFromCliMap::Generate",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1da60",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_compression_rift_generate"
+      },
+      "inputs": {
+        "source_buffer": {
+          "size": 3072
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-compression-rift-004.json",
+          "size": 1318,
+          "sha256": "6cc0057668a8619564b0cb3c2b38edae1fc5b880a34874993e0ff0c511c7069f",
+          "note": "",
+          "type": "CliCompressionRiftRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-compression-rift-005-enter",
+      "call_id": "cli-compression-rift-005",
+      "seq": 5,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCompressionRift",
+      "symbol": "CompressionRiftTableFromCliMap::Generate",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1da60",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_compression_rift_generate"
+      },
+      "inputs": {
+        "source_buffer": {
+          "size": 3584
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-compression-rift-005-leave",
+      "call_id": "cli-compression-rift-005",
+      "seq": 5,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCompressionRift",
+      "symbol": "CompressionRiftTableFromCliMap::Generate",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1da60",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_compression_rift_generate"
+      },
+      "inputs": {
+        "source_buffer": {
+          "size": 3584
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-compression-rift-005.json",
+          "size": 247,
+          "sha256": "3c65b8f2ee8c39dae5579ceda618cb4748baa1adcb2b8fc69acde37a11c036b6",
+          "note": "",
+          "type": "CliCompressionRiftRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-compression-rift-006-enter",
+      "call_id": "cli-compression-rift-006",
+      "seq": 6,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCompressionRift",
+      "symbol": "CompressionRiftTableFromCliMap::Generate",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1da60",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_compression_rift_generate"
+      },
+      "inputs": {
+        "source_buffer": {
+          "size": 3584
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-compression-rift-006-leave",
+      "call_id": "cli-compression-rift-006",
+      "seq": 6,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCompressionRift",
+      "symbol": "CompressionRiftTableFromCliMap::Generate",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1da60",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_compression_rift_generate"
+      },
+      "inputs": {
+        "source_buffer": {
+          "size": 3584
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-compression-rift-006.json",
+          "size": 1455,
+          "sha256": "c0ffde05a8723f10b8de62d6dad8d222b3dd81f0594333a0bb59d2705ecb06c1",
+          "note": "",
+          "type": "CliCompressionRiftRecord"
+        }
+      ],
+      "blobs": []
+    }
+  ]
+}

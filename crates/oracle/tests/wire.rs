@@ -49,6 +49,24 @@ fn job_round_trips_through_disk() {
 }
 
 #[test]
+fn job_read_tolerates_utf8_bom_from_powershell() {
+    let dir = tempfile::tempdir().unwrap();
+    let domain = MsDeltaDomain;
+    let written = domain
+        .build_job(0xC0FFEE, &sample_cases(), dir.path())
+        .unwrap();
+    let path = dir.path().join("job.json");
+    let original = fs::read(&path).unwrap();
+    let mut with_bom = vec![0xEF, 0xBB, 0xBF];
+    with_bom.extend_from_slice(&original);
+    fs::write(&path, with_bom).unwrap();
+
+    let read: Job<CreateSpec> = Job::read(dir.path()).unwrap();
+
+    assert_eq!(read, written);
+}
+
+#[test]
 fn create_spec_carries_exact_native_args() {
     let dir = tempfile::tempdir().unwrap();
     let domain = MsDeltaDomain;

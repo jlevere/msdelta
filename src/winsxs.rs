@@ -106,13 +106,14 @@ const DESCRIPTOR_WINDOW: usize = 64;
 /// smallest valid length (the tight bound that ends the buffer exactly, rather
 /// than an over-long reference into trailing data).
 fn recover_len(data: &[u8], info: &PeInfo, start: usize) -> Result<usize> {
-    let rva = file_offset_to_rva(info, start)
+    let rva = info
+        .file_offset_to_rva(start)
         .ok_or(Error::BaseManifest("base offset not inside any section"))?;
     let needle = rva.to_le_bytes();
     let valid = |len: usize| {
         (MIN_LEN..=MAX_LEN).contains(&len)
             && start + len <= data.len()
-            && same_section(info, start, start + len - 1)
+            && info.same_file_section(start, start + len - 1)
     };
 
     // The canonical descriptor is the rva-match nearest before the data;
@@ -140,30 +141,6 @@ fn recover_len(data: &[u8], info: &PeInfo, start: usize) -> Result<usize> {
 fn read_len(data: &[u8], at: usize) -> Option<usize> {
     let raw = data.get(at + 4..at + 8)?;
     Some(u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]) as usize)
-}
-
-/// Map a file offset to its image RVA via the section table.
-fn file_offset_to_rva(info: &PeInfo, offset: usize) -> Option<u32> {
-    for s in &info.sections {
-        let raw = s.raw_offset as usize;
-        let size = s.raw_size as usize;
-        if offset >= raw && offset < raw + size {
-            return Some(s.virtual_address + (offset - raw) as u32);
-        }
-    }
-    None
-}
-
-/// True if both file offsets fall in the same PE section.
-fn same_section(info: &PeInfo, a: usize, b: usize) -> bool {
-    for s in &info.sections {
-        let lo = s.raw_offset as usize;
-        let hi = lo + s.raw_size as usize;
-        if (lo..hi).contains(&a) {
-            return (lo..hi).contains(&b);
-        }
-    }
-    false
 }
 
 /// Decompress a DCM-wrapped WinSxS `.manifest` against an already-extracted

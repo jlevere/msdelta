@@ -1,0 +1,47 @@
+atom = "ManagedNativeCorpus"
+case = "cli-properties-events"
+category = "managed-cli/properties-events-semantics"
+description = "Native msdelta.dll CreateDeltaB managed PE source/target/delta fixture."
+windows_caption = "Microsoft Windows Server 2025 Standard Evaluation"
+windows_version = "10.0.26100"
+windows_build = "26100"
+windows_arch = "x64"
+module = "msdelta.dll"
+module_path = "C:\\Windows\\System32\\msdelta.dll"
+module_sha256 = "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+module_file_version = "5.00 (WinBuild.160101.0800)"
+native_export_create = "CreateDeltaB"
+native_export_apply = "ApplyDeltaB"
+file_type_set = "0xf"
+set_flags = "0x0"
+reset_flags = "0x0"
+hash_alg_id = "0"
+source = "source.dll"
+target = "target.dll"
+delta = "delta.pa30"
+source_csharp = "source.cs"
+target_csharp = "target.cs"
+
+source_size = 3584
+target_size = 4096
+delta_size = 755
+source_sha256 = "7bbd2926501460c93cd82c9ec14595dc366d58b5fc6dd57fad92f8f107aece3f"
+target_sha256 = "cf3b6f166f51ad7ec055f941d959a56777f57a371368a34ca6564175247d3169"
+delta_sha256 = "71cfe4d7ccef310b817ad38e3b9a1a6e9c14f7e5ae921182d97ea76f38b1a155"
+native_to_ours_status = "OK"
+native_to_native_status = "PASS"
+native_to_native_got_len = 4096
+native_to_native_got_sha256 = "cf3b6f166f51ad7ec055f941d959a56777f57a371368a34ca6564175247d3169"
+
+proves = [
+  "native CreateDeltaB can produce a managed PE delta for this source/target pair",
+  "native ApplyDeltaB accepts that produced delta and reconstructs the target",
+  "real managed metadata and IL surfaces are available for future internal atom fixtures",
+]
+
+does_not_prove = [
+  "Rust managed apply support",
+  "CliMetadataBitstream object parity",
+  "CliMapBitstream object parity",
+  "TransformCliMetadata behavior",
+]

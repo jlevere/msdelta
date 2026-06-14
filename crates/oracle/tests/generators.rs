@@ -4,11 +4,12 @@
 
 use std::collections::BTreeSet;
 
-use oracle::kernel::{Domain, Generator};
+use oracle::kernel::{Direction, Domain, Generator};
 use oracle::msdelta::generators::{
-    default_suite, FuzzDerivedGen, ManifestPairGen, PePairGen, RandomGen, TextGen,
+    default_suite, FuzzDerivedGen, ManagedNativeCorpusGen, ManifestPairGen, PePairGen, RandomGen,
+    TextGen,
 };
-use oracle::msdelta::MsDeltaDomain;
+use oracle::msdelta::{MsDeltaDomain, FILE_TYPE_SET_EXECUTABLES};
 
 #[test]
 fn generation_is_deterministic() {
@@ -43,12 +44,27 @@ fn fixture_generators_present_in_dev_checkout() {
     // are missing we skip rather than fail (published-crate tree).
     let manifests = ManifestPairGen.generate(0, 16);
     let pes = PePairGen.generate(0, 16);
+    let managed = ManagedNativeCorpusGen.generate(0, 16);
     if !manifests.is_empty() {
         assert!(manifests.iter().all(|c| c.category == "manifest_pair"));
         assert!(manifests.iter().all(|c| !c.target.is_empty()));
     }
     if !pes.is_empty() {
         assert!(pes.iter().all(|c| c.category == "pe_pair"));
+    }
+    if !managed.is_empty() {
+        assert!(managed
+            .iter()
+            .all(|c| c.id.starts_with("managed_native_corpus.")));
+        assert!(managed
+            .iter()
+            .all(|c| c.category.starts_with("managed-cli/")));
+        assert!(managed
+            .iter()
+            .all(|c| c.native.file_type_set == FILE_TYPE_SET_EXECUTABLES));
+        assert!(managed
+            .iter()
+            .all(|c| c.directions == vec![Direction::NativeToOurs, Direction::NativeToNative]));
     }
 }
 
@@ -90,6 +106,35 @@ fn fast_subset_lowers_without_encoder_failure() {
         .build_job(0x1234, &suite, dir.path())
         .expect("every generated case must lower (self-encode) cleanly");
     assert_eq!(job.cases.len(), suite.len());
+}
+
+#[test]
+fn managed_decode_only_cases_lower_without_self_encode() {
+    let cases = ManagedNativeCorpusGen.generate(0, 16);
+    if cases.is_empty() {
+        return;
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let job = MsDeltaDomain
+        .build_job(0xCAFE, &cases, dir.path())
+        .expect("managed decode-only cases should lower");
+
+    assert_eq!(job.cases.len(), cases.len());
+    for case in &job.cases {
+        assert_eq!(
+            case.directions,
+            vec![Direction::NativeToOurs, Direction::NativeToNative]
+        );
+        assert_eq!(
+            std::fs::metadata(dir.path().join(&case.ours_delta))
+                .unwrap()
+                .len(),
+            0,
+            "{} should not run our encoder yet",
+            case.id
+        );
+    }
 }
 
 #[test]

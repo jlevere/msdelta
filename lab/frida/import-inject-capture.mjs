@@ -1,0 +1,441 @@
+#!/usr/bin/env node
+import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import fsSync from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import process from "node:process";
+
+const EXPORTS = ["ApplyDeltaB", "ApplyDeltaGetReverseB", "CreateDeltaB"];
+const ANSI_ESCAPE = /\x1b\[[0-9;]*m/g;
+
+function usage() {
+  return `usage:
+  node import-inject-capture.mjs --stdout <frida-out.txt> --blob-dir <dir> [--object-dir <dir>] --out <dir> --case-id <id>
+
+The input stdout file should be the line-oriented JSON output from
+frida-inject.exe. The blob directory should contain files written by
+MSDELTA_EXPORT_ORACLE_BLOB_DIR. The optional object directory should contain
+JSON objects written by MSDELTA_STAGE_ORACLE_OBJECT_DIR.`;
+}
+
+function parseArgs(argv) {
+  const options = {
+    stdoutPath: null,
+    blobDir: null,
+    objectDir: null,
+    outDir: null,
+    caseId: "export-capture",
+  };
+
+  let i = 0;
+  while (i < argv.length) {
+    const arg = argv[i];
+    if (arg === "--") {
+      i += 1;
+      continue;
+    }
+    if (arg === "--stdout") {
+      options.stdoutPath = argv[++i];
+    } else if (arg === "--blob-dir") {
+      options.blobDir = argv[++i];
+    } else if (arg === "--object-dir") {
+      options.objectDir = argv[++i];
+    } else if (arg === "--out") {
+      options.outDir = argv[++i];
+    } else if (arg === "--case-id") {
+      options.caseId = argv[++i];
+    } else if (arg === "--help" || arg === "-h") {
+      console.log(usage());
+      process.exit(0);
+    } else {
+      throw new Error(`unknown argument: ${arg}\n${usage()}`);
+    }
+    i += 1;
+  }
+
+  for (const [name, value] of Object.entries(options)) {
+    if (name === "objectDir") {
+      continue;
+    }
+    if (!value) {
+      throw new Error(`--${name.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`)} is required\n${usage()}`);
+    }
+  }
+  if (!/^[A-Za-z0-9_.-]+$/.test(options.caseId)) {
+    throw new Error("--case-id must be a non-empty file-safe identifier");
+  }
+
+  return options;
+}
+
+function sanitizePart(value) {
+  return String(value).replace(/[^A-Za-z0-9_.-]/g, "_");
+}
+
+function sha256Bytes(bytes) {
+  return crypto.createHash("sha256").update(bytes).digest("hex");
+}
+
+function resolveExistingPath(value) {
+  if (path.isAbsolute(value)) {
+    return value;
+  }
+
+  const cwdPath = path.resolve(value);
+  if (fsSync.existsSync(cwdPath)) {
+    return cwdPath;
+  }
+
+  if (process.env.INIT_CWD) {
+    const initPath = path.resolve(process.env.INIT_CWD, value);
+    if (fsSync.existsSync(initPath)) {
+      return initPath;
+    }
+  }
+
+  return cwdPath;
+}
+
+function resolveOutputPath(value) {
+  if (path.isAbsolute(value)) {
+    return value;
+  }
+
+  if (process.env.INIT_CWD) {
+    const initPath = path.resolve(process.env.INIT_CWD, value);
+    if (fsSync.existsSync(path.dirname(initPath))) {
+      return initPath;
+    }
+  }
+
+  return path.resolve(value);
+}
+
+function nowIsoCompact() {
+  return new Date().toISOString().replace(/[:.]/g, "-");
+}
+
+function parseMessageLine(line) {
+  const clean = line.replace(ANSI_ESCAPE, "");
+  const jsonStart = clean.indexOf("{");
+  if (jsonStart === -1) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(clean.slice(jsonStart));
+  } catch {
+    return null;
+  }
+}
+
+function fileSinkBasename(fileSinkPath) {
+  return path.win32.basename(String(fileSinkPath));
+}
+
+function eventTimeBounds(events) {
+  const timestamps = events
+    .map(event => event.timestamp_ms)
+    .filter(value => Number.isInteger(value));
+  if (timestamps.length === 0) {
+    const now = new Date().toISOString();
+    return { startedAt: now, endedAt: now };
+  }
+
+  return {
+    startedAt: new Date(Math.min(...timestamps)).toISOString(),
+    endedAt: new Date(Math.max(...timestamps)).toISOString(),
+  };
+}
+
+function inferPid(events) {
+  for (const event of events) {
+    const parts = String(event.call_id || "").split("-");
+    if (parts.length >= 2) {
+      const pid = Number(parts[1]);
+      if (Number.isInteger(pid)) {
+        return pid;
+      }
+    }
+  }
+  return null;
+}
+
+async function readSinkBlob(options, payload) {
+  if (payload.file_sink_path) {
+    const sourceName = fileSinkBasename(payload.file_sink_path);
+    const sourcePath = path.join(options.resolvedBlobDir, sourceName);
+    return fs.readFile(sourcePath);
+  }
+
+  if (payload.size === 0) {
+    return Buffer.alloc(0);
+  }
+
+  throw new Error(
+    `blob ${payload.event_id}:${payload.slot} has no file_sink_path and requested ${payload.size} bytes`
+  );
+}
+
+async function readTextFile(filePath) {
+  const bytes = await fs.readFile(filePath);
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return bytes.subarray(2).toString("utf16le");
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    throw new Error(`${filePath} is UTF-16BE; convert it to UTF-8 or UTF-16LE before import`);
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return bytes.subarray(3).toString("utf8");
+  }
+  return bytes.toString("utf8");
+}
+
+async function importBlob(options, ctx, payload) {
+  const event = ctx.eventById.get(payload.event_id);
+  if (!event) {
+    ctx.errors.push({
+      type: "orphan_blob",
+      event_id: payload.event_id,
+      slot: payload.slot,
+    });
+    return;
+  }
+
+  const slot = sanitizePart(payload.slot);
+  const eventId = sanitizePart(payload.event_id);
+  const rel = path.join("blobs", `${eventId}-${slot}.bin`).replaceAll("\\", "/");
+  const abs = path.join(ctx.blobDir, `${eventId}-${slot}.bin`);
+  const bytes = await readSinkBlob(options, payload);
+  await fs.writeFile(abs, bytes);
+
+  if (Number.isInteger(payload.size) && payload.size !== bytes.length) {
+    ctx.errors.push({
+      type: "blob_size_mismatch",
+      event_id: payload.event_id,
+      slot: payload.slot,
+      requested_size: payload.size,
+      actual_size: bytes.length,
+      file_sink_path: payload.file_sink_path || null,
+    });
+  }
+
+  event.blobs.push({
+    slot: payload.slot,
+    path: rel,
+    ptr: payload.ptr,
+    requested_size: payload.size,
+    size: bytes.length,
+    sha256: sha256Bytes(bytes),
+    file_sink_path: payload.file_sink_path || "",
+    note: payload.note || "",
+  });
+}
+
+async function importObject(options, ctx, payload) {
+  const event = ctx.eventById.get(payload.event_id);
+  if (!event) {
+    ctx.errors.push({
+      type: "orphan_object",
+      event_id: payload.event_id,
+      slot: payload.slot,
+    });
+    return;
+  }
+
+  if (!payload.file_sink_path) {
+    ctx.errors.push({
+      type: "object_not_captured",
+      event_id: payload.event_id,
+      slot: payload.slot,
+      note: payload.note || "",
+    });
+    return;
+  }
+
+  if (!options.resolvedObjectDir) {
+    ctx.errors.push({
+      type: "object_dir_missing",
+      event_id: payload.event_id,
+      slot: payload.slot,
+      file_sink_path: payload.file_sink_path,
+    });
+    return;
+  }
+
+  const sourceName = fileSinkBasename(payload.file_sink_path);
+  const sourcePath = path.join(options.resolvedObjectDir, sourceName);
+  const bytes = await fs.readFile(sourcePath);
+  let parsed;
+  try {
+    parsed = JSON.parse(bytes.toString("utf8"));
+  } catch (error) {
+    ctx.errors.push({
+      type: "object_json_invalid",
+      event_id: payload.event_id,
+      slot: payload.slot,
+      file_sink_path: payload.file_sink_path,
+      message: String(error),
+    });
+    return;
+  }
+
+  const slot = sanitizePart(payload.slot);
+  const eventId = sanitizePart(payload.event_id);
+  const rel = path.join("objects", `${eventId}-${slot}.json`).replaceAll("\\", "/");
+  const abs = path.join(ctx.objectDir, `${eventId}-${slot}.json`);
+  await fs.writeFile(abs, bytes);
+
+  if (Number.isInteger(payload.size) && payload.size !== bytes.length) {
+    ctx.errors.push({
+      type: "object_size_mismatch",
+      event_id: payload.event_id,
+      slot: payload.slot,
+      requested_size: payload.size,
+      actual_size: bytes.length,
+      file_sink_path: payload.file_sink_path || null,
+    });
+  }
+
+  event.objects.push({
+    slot: payload.slot,
+    path: rel,
+    size: bytes.length,
+    sha256: sha256Bytes(bytes),
+    file_sink_path: payload.file_sink_path || "",
+    note: payload.note || "",
+    type: parsed && typeof parsed.type === "string" ? parsed.type : null,
+  });
+}
+
+async function main() {
+  const options = parseArgs(process.argv.slice(2));
+  options.resolvedStdoutPath = resolveExistingPath(options.stdoutPath);
+  options.resolvedBlobDir = resolveExistingPath(options.blobDir);
+  options.resolvedObjectDir = options.objectDir ? resolveExistingPath(options.objectDir) : null;
+
+  const outDir = resolveOutputPath(options.outDir);
+  const caseDir = path.join(outDir, "cases", options.caseId);
+  const blobDir = path.join(caseDir, "blobs");
+  const objectDir = path.join(caseDir, "objects");
+  await fs.mkdir(blobDir, { recursive: true });
+  await fs.mkdir(objectDir, { recursive: true });
+
+  const events = [];
+  const eventById = new Map();
+  const modules = new Map();
+  const logs = [];
+  const errors = [];
+  let ignoredLines = 0;
+
+  const stdout = await readTextFile(options.resolvedStdoutPath);
+  const messages = stdout.split(/\r?\n/).map(parseMessageLine);
+
+  for (const message of messages) {
+    if (!message) {
+      ignoredLines += 1;
+      continue;
+    }
+
+    if (message.type === "error") {
+      errors.push({
+        type: "agent_error",
+        description: message.description,
+        stack: message.stack,
+      });
+      continue;
+    }
+
+    const payload = message.payload;
+    if (!payload || typeof payload !== "object") {
+      errors.push({ type: "unknown_message", message });
+      continue;
+    }
+
+    if (payload.type === "event") {
+      const event = { ...payload.event, blobs: [], objects: [] };
+      events.push(event);
+      eventById.set(event.event_id, event);
+    } else if (payload.type === "blob") {
+      await importBlob(options, { blobDir, eventById, errors }, payload);
+    } else if (payload.type === "object") {
+      await importObject(options, { objectDir, eventById, errors }, payload);
+    } else if (payload.type === "module") {
+      const key = `${payload.module.name}:${payload.module.path}`;
+      modules.set(key, payload.module);
+    } else if (payload.type === "log") {
+      logs.push({
+        level: payload.level,
+        message: payload.message,
+        detail: payload.detail || null,
+      });
+      if (payload.level === "error") {
+        errors.push({ type: "agent_log", message: payload.message, detail: payload.detail });
+      }
+    } else {
+      errors.push({ type: "unhandled_payload", payload });
+    }
+  }
+
+  events.sort((a, b) => {
+    const seq = (a.seq || 0) - (b.seq || 0);
+    if (seq !== 0) {
+      return seq;
+    }
+    return String(a.event_id).localeCompare(String(b.event_id));
+  });
+
+  const { startedAt, endedAt } = eventTimeBounds(events);
+  const run = {
+    schema: 1,
+    atom: "FridaExportOracle",
+    run_id: `${nowIsoCompact()}-${options.caseId}`,
+    started_at: startedAt,
+    ended_at: endedAt,
+    host: {
+      platform: process.platform,
+      release: os.release(),
+      arch: os.arch(),
+      hostname: os.hostname(),
+    },
+    frida: {
+      device: "inject",
+      remote: null,
+    },
+    target: {
+      pid: inferPid(events),
+      spawned: false,
+      command: [],
+      detach: { reason: "imported-frida-inject-stdout" },
+    },
+    exports: EXPORTS,
+    modules: Array.from(modules.values()).sort((a, b) =>
+      `${a.name}:${a.path}`.localeCompare(`${b.name}:${b.path}`)
+    ),
+    cases: [options.caseId],
+    logs,
+    errors,
+    import: {
+      stdout: options.resolvedStdoutPath,
+      blob_dir: options.resolvedBlobDir,
+      object_dir: options.resolvedObjectDir,
+      ignored_lines: ignoredLines,
+    },
+  };
+
+  const capture = {
+    schema: 1,
+    atom: "FridaExportOracle",
+    case_id: options.caseId,
+    events,
+  };
+
+  await fs.writeFile(path.join(outDir, "run.json"), `${JSON.stringify(run, null, 2)}\n`);
+  await fs.writeFile(path.join(caseDir, "capture.json"), `${JSON.stringify(capture, null, 2)}\n`);
+}
+
+main().catch(error => {
+  console.error(error instanceof Error ? error.stack || error.message : String(error));
+  process.exit(1);
+});

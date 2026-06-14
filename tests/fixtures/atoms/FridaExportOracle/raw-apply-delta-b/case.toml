@@ -1,0 +1,53 @@
+atom = "FridaExportOracle"
+case = "raw-apply-delta-b"
+description = "Export-level ApplyDeltaB RAW smoke capture for cmd.exe to where.exe."
+
+windows_caption = "Microsoft Windows Server 2025 Standard Evaluation"
+windows_version = "10.0.26100"
+windows_build = "26100"
+windows_arch = "x64"
+
+module = "msdelta.dll"
+module_path = "C:\\Windows\\System32\\msdelta.dll"
+module_sha256 = "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+module_file_version = "5.00 (WinBuild.160101.0800)"
+
+transport = "frida-inject"
+capture_mode = "file_sink"
+native_export = "ApplyDeltaB"
+apply_flags = "0x0"
+file_type_set = "0x1"
+file_type = "0x1"
+flags = "0x0"
+hash_alg_id = "0"
+
+source = "source.bin"
+delta = "delta.pa30"
+target = "target.bin"
+native_run = "native/run.json"
+native_capture = "native/capture.json"
+
+source_size = 339968
+delta_size = 18048
+target_size = 65536
+source_sha256 = "64afc6db3aad1289533662e2d79e27dd55c7dcdb8cd918b08e145ad82ad5acb4"
+delta_sha256 = "69e2f9e82df18316f77d1fb13d1d169a42ce3238087292d5708604a7a3b1d61f"
+target_sha256 = "f51fab8041e5023d7290b540a2106f051ef0bd2bc3443c9daf318628b560fa29"
+
+expected_exports = ["ApplyDeltaB"]
+expected_events = ["ApplyDeltaB.enter", "ApplyDeltaB.leave"]
+expected_blobs = ["source", "delta", "target"]
+
+proves = [
+  "Windows x64 DELTA_INPUT export ABI capture",
+  "ApplyDeltaB RAW source/delta/target byte capture",
+  "frida-inject file-sink normalization into fixture-shaped data",
+]
+
+does_not_prove = [
+  "preprocess parsing",
+  "rift algebra",
+  "PE transforms",
+  "managed CLI metadata transforms",
+  "CreateDeltaB behavior",
+]

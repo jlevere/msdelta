@@ -56,7 +56,7 @@ pub(super) fn hex_str(bytes: &[u8]) -> String {
 /// Zeroes volatile PE fields (timestamps, checksums) so that
 /// `get_signature` produces stable results across rebuilds.
 pub fn normalize_for_signature(data: &mut [u8]) {
-    use crate::pe::transform::{pe_timestamp, pe_timestamp_offsets};
+    use crate::pe::transform::{pe_checksum_offset, pe_timestamp, pe_timestamp_offsets};
 
     let ts = pe_timestamp(data);
     if ts == 0 {
@@ -73,11 +73,7 @@ pub fn normalize_for_signature(data: &mut [u8]) {
         }
     }
 
-    if data.len() >= 0x40 {
-        let pe_off = u32::from_le_bytes(data[0x3C..0x40].try_into().unwrap()) as usize;
-        let cksum_off = pe_off + 0x58;
-        if cksum_off + 4 <= data.len() {
-            data[cksum_off..cksum_off + 4].copy_from_slice(&zeros);
-        }
+    if let Some(checksum_offset) = pe_checksum_offset(data) {
+        data[checksum_offset..checksum_offset + 4].copy_from_slice(&zeros);
     }
 }

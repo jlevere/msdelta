@@ -96,6 +96,13 @@ layers gate them:
 - `file_type != 1` (**PE**) runs the pipeline below, each transform enabled by
   its own header flag bit, in `g_transformsMap` order.
 
+The implementation plan for making this tractable is tracked as feature atoms:
+small state transitions with explicit contracts, oracles, and status. See
+[`docs/feature-atoms.md`](docs/feature-atoms.md) and the machine-readable
+registry in [`docs/feature-atoms.tsv`](docs/feature-atoms.tsv). Native
+stage-oracle capture is planned in
+[`docs/frida-oracle-system.md`](docs/frida-oracle-system.md).
+
 **Decode** of native x86 / x64 PE deltas is complete and byte-exact (see status
 below). Encode emits a structurally valid delta but the byte-rewriting transforms
 are not yet round-trip-validated against Windows.
