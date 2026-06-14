@@ -805,12 +805,15 @@ with target child names in the corresponding target range. The triplet matcher
 projects source row keys through current string, table, and coded-token maps,
 compares them with raw target keys, and emits one-to-one table-rift entries.
 The matrix covers the native `Run` triplet order, including the Constant table's
-native logical `Parent` key rather than its physical padding byte. Unit coverage
-proves MethodDef sequence remapping, existing child-map stop behavior, missing
-string-map accounting, the native key matrix, schema compatibility, and
-string/table/coded-key triplet matching. The remaining gap is native
-`ProcessTripletTable` second-pass parity for TypeDef nested-class ownership and
-TypeRef self-resolution-scope ownership, plus duplicate ordering and native
+native logical `Parent` key rather than its physical padding byte. TypeDef and
+TypeRef use the native owner fallback shape: namespace string keys are tagged
+away from owner RID keys, nested TypeDef owners come from the NestedClass table,
+TypeRef self-resolution scopes use the parent TypeRef RID, and owner RIDs are
+mapped through the evolving current table rift. Unit coverage proves MethodDef
+sequence remapping, existing child-map stop behavior, missing string-map
+accounting, the native key matrix, schema compatibility, string/table/coded-key
+triplet matching, and the TypeDef/TypeRef owner fallback cases. The remaining
+gap is exact native sorted retry and duplicate ordering parity, plus native
 fixture parity.
 
 ## Current Implementation Plan

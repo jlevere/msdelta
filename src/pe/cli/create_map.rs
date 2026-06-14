@@ -87,6 +87,16 @@ pub(crate) struct CliTripletTableMap {
     pub(crate) stats: CliTripletTableMapStats,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CliTripletSpecialContext {
+    None,
+    TypeDef {
+        source_enclosing_by_nested: Vec<Option<u32>>,
+        target_enclosing_by_nested: Vec<Option<u32>>,
+    },
+    TypeRef,
+}
+
 pub(crate) const CLI_SEQUENCE_TABLE_SPECS: &[CliSequenceTableSpec] = &[
     CliSequenceTableSpec {
         table_id: 0x04,
@@ -124,6 +134,8 @@ pub(crate) const CLI_TRIPLET_TABLE_ORDER: &[u8] = &[
     0x20, 0x23, 0x00, 0x1a, 0x02, 0x01, 0x0a, 0x12, 0x15, 0x0b, 0x0d, 0x0e, 0x0f, 0x10, 0x18, 0x1c,
     0x1d, 0x26, 0x28, 0x2a, 0x2b, 0x2c, 0x0c,
 ];
+
+const TRIPLET_STRING_KEY_TAG: u32 = 0x8000_0000;
 
 const TRIPLET_ASSEMBLY_KEYS: &[CliTripletKeyColumn] = &[CliTripletKeyColumn::MappedString("Name")];
 const TRIPLET_ASSEMBLY_REF_KEYS: &[CliTripletKeyColumn] =
@@ -519,10 +531,19 @@ pub(crate) fn build_cli_triplet_table_map(
         });
     }
 
+    let special_context = triplet_special_context(
+        source_image,
+        source_metadata,
+        target_image,
+        target_metadata,
+        spec.table_id,
+    )?;
+
     let mut targets_by_key = BTreeMap::<Vec<u32>, VecDeque<u32>>::new();
     for target_rid in 1..=target_row_count {
         let row = target_metadata.table_row_by_id(target_image, spec.table_id, target_rid)?;
-        let Some(key) = triplet_target_key(row, spec.key_columns)? else {
+        let Some(key) = triplet_target_key(row, target_rid, spec.key_columns, &special_context)?
+        else {
             stats.missing_target_key_rows += 1;
             continue;
         };
@@ -531,7 +552,16 @@ pub(crate) fn build_cli_triplet_table_map(
 
     for source_rid in 1..=source_row_count {
         let row = source_metadata.table_row_by_id(source_image, spec.table_id, source_rid)?;
-        let Some(key) = triplet_source_key(row, spec.key_columns, strings_map, table_maps)? else {
+        let Some(key) = triplet_source_key(
+            row,
+            source_rid,
+            spec.key_columns,
+            strings_map,
+            &rift,
+            table_maps,
+            &special_context,
+        )?
+        else {
             stats.missing_source_key_rows += 1;
             continue;
         };
@@ -676,12 +706,79 @@ fn set_rift_entry(rift: &mut RiftTable, source: u32, target: u32) {
     }
 }
 
+fn triplet_special_context(
+    source_image: &[u8],
+    source_metadata: &CliMetadataModel,
+    target_image: &[u8],
+    target_metadata: &CliMetadataModel,
+    table_id: u8,
+) -> Result<CliTripletSpecialContext> {
+    match table_id {
+        0x01 => Ok(CliTripletSpecialContext::TypeRef),
+        0x02 => Ok(CliTripletSpecialContext::TypeDef {
+            source_enclosing_by_nested: nested_class_enclosing_by_nested(
+                source_image,
+                source_metadata,
+            )?,
+            target_enclosing_by_nested: nested_class_enclosing_by_nested(
+                target_image,
+                target_metadata,
+            )?,
+        }),
+        _ => Ok(CliTripletSpecialContext::None),
+    }
+}
+
+fn nested_class_enclosing_by_nested(
+    image: &[u8],
+    metadata: &CliMetadataModel,
+) -> Result<Vec<Option<u32>>> {
+    let type_count = metadata.row_counts[0x02];
+    let mut enclosing_by_nested = vec![None; type_count as usize + 1];
+    let nested_count = metadata.row_counts[0x29];
+    for nested_rid in 1..=nested_count {
+        let row = metadata.table_row_by_id(image, 0x29, nested_rid)?;
+        let nested_class = table_column_rid(row.column("NestedClass")?)?;
+        let enclosing_class = table_column_rid(row.column("EnclosingClass")?)?;
+        if nested_class != 0
+            && nested_class <= type_count
+            && enclosing_class != 0
+            && enclosing_class <= type_count
+        {
+            enclosing_by_nested[nested_class as usize] = Some(enclosing_class);
+        }
+    }
+    Ok(enclosing_by_nested)
+}
+
 fn triplet_source_key(
     row: crate::pe::cli::metadata::CliTableRow<'_>,
+    rid: u32,
     columns: &[CliTripletKeyColumn],
     strings_map: &RiftTable,
+    current_table_map: &RiftTable,
     table_maps: &[RiftTable; 64],
+    special_context: &CliTripletSpecialContext,
 ) -> Result<Option<Vec<u32>>> {
+    match special_context {
+        CliTripletSpecialContext::None => {}
+        CliTripletSpecialContext::TypeDef {
+            source_enclosing_by_nested,
+            ..
+        } => {
+            return typedef_triplet_source_key(
+                row,
+                rid,
+                source_enclosing_by_nested,
+                strings_map,
+                current_table_map,
+            );
+        }
+        CliTripletSpecialContext::TypeRef => {
+            return typeref_triplet_source_key(row, strings_map, current_table_map);
+        }
+    }
+
     let mut key = Vec::with_capacity(columns.len());
     for column in columns {
         let Some(value) =
@@ -696,8 +793,23 @@ fn triplet_source_key(
 
 fn triplet_target_key(
     row: crate::pe::cli::metadata::CliTableRow<'_>,
+    rid: u32,
     columns: &[CliTripletKeyColumn],
+    special_context: &CliTripletSpecialContext,
 ) -> Result<Option<Vec<u32>>> {
+    match special_context {
+        CliTripletSpecialContext::None => {}
+        CliTripletSpecialContext::TypeDef {
+            target_enclosing_by_nested,
+            ..
+        } => {
+            return typedef_triplet_target_key(row, rid, target_enclosing_by_nested);
+        }
+        CliTripletSpecialContext::TypeRef => {
+            return typeref_triplet_target_key(row);
+        }
+    }
+
     let mut key = Vec::with_capacity(columns.len());
     for column in columns {
         let Some(value) = triplet_target_key_value(row.column(column.name())?, *column)? else {
@@ -706,6 +818,99 @@ fn triplet_target_key(
         key.push(value);
     }
     Ok(Some(key))
+}
+
+fn typedef_triplet_source_key(
+    row: crate::pe::cli::metadata::CliTableRow<'_>,
+    rid: u32,
+    enclosing_by_nested: &[Option<u32>],
+    strings_map: &RiftTable,
+    current_table_map: &RiftTable,
+) -> Result<Option<Vec<u32>>> {
+    let Some(name) =
+        exact_rift_target_value(strings_map, string_column_offset(row.column("Name")?)?)
+    else {
+        return Ok(None);
+    };
+    let second_key =
+        if let Some(enclosing_rid) = enclosing_by_nested.get(rid as usize).copied().flatten() {
+            exact_rift_target_value(current_table_map, enclosing_rid)
+        } else {
+            mapped_tagged_string_key(row, "Namespace", strings_map)?
+        };
+    let Some(second_key) = second_key else {
+        return Ok(None);
+    };
+    Ok(Some(vec![name, second_key]))
+}
+
+fn typedef_triplet_target_key(
+    row: crate::pe::cli::metadata::CliTableRow<'_>,
+    rid: u32,
+    enclosing_by_nested: &[Option<u32>],
+) -> Result<Option<Vec<u32>>> {
+    let name = string_column_offset(row.column("Name")?)?;
+    let second_key = match enclosing_by_nested.get(rid as usize).copied().flatten() {
+        Some(enclosing_rid) => enclosing_rid,
+        None => tagged_string_key(string_column_offset(row.column("Namespace")?)?),
+    };
+    Ok(Some(vec![name, second_key]))
+}
+
+fn typeref_triplet_source_key(
+    row: crate::pe::cli::metadata::CliTableRow<'_>,
+    strings_map: &RiftTable,
+    current_table_map: &RiftTable,
+) -> Result<Option<Vec<u32>>> {
+    let Some(name) =
+        exact_rift_target_value(strings_map, string_column_offset(row.column("Name")?)?)
+    else {
+        return Ok(None);
+    };
+    let second_key =
+        if let Some(owner_rid) = typeref_resolution_scope_owner(row.column("ResolutionScope")?)? {
+            exact_rift_target_value(current_table_map, owner_rid)
+        } else {
+            mapped_tagged_string_key(row, "Namespace", strings_map)?
+        };
+    let Some(second_key) = second_key else {
+        return Ok(None);
+    };
+    Ok(Some(vec![name, second_key]))
+}
+
+fn typeref_triplet_target_key(
+    row: crate::pe::cli::metadata::CliTableRow<'_>,
+) -> Result<Option<Vec<u32>>> {
+    let name = string_column_offset(row.column("Name")?)?;
+    let second_key = match typeref_resolution_scope_owner(row.column("ResolutionScope")?)? {
+        Some(owner_rid) => owner_rid,
+        None => tagged_string_key(string_column_offset(row.column("Namespace")?)?),
+    };
+    Ok(Some(vec![name, second_key]))
+}
+
+fn typeref_resolution_scope_owner(value: CliColumnValue) -> Result<Option<u32>> {
+    match value {
+        CliColumnValue::Coded { raw, .. } if raw & 0x3 == 0x3 => Ok(Some(raw >> 2)),
+        CliColumnValue::Coded { .. } => Ok(None),
+        _ => Err(Error::Malformed(
+            "CLI triplet map: expected TypeRef ResolutionScope coded column",
+        )),
+    }
+}
+
+fn mapped_tagged_string_key(
+    row: crate::pe::cli::metadata::CliTableRow<'_>,
+    column: &str,
+    strings_map: &RiftTable,
+) -> Result<Option<u32>> {
+    let source_offset = string_column_offset(row.column(column)?)?;
+    Ok(exact_rift_target_value(strings_map, source_offset).map(tagged_string_key))
+}
+
+fn tagged_string_key(offset: u32) -> u32 {
+    offset | TRIPLET_STRING_KEY_TAG
 }
 
 fn triplet_source_key_value(
@@ -1511,6 +1716,107 @@ mod tests {
 
         assert_eq!(pairs(&map.rift), vec![(0, 0), (1, 1)]);
         assert_eq!(map.stats.mapped_rows, 1);
+    }
+
+    #[test]
+    fn triplet_table_map_matches_typedef_rows_by_mapped_nested_owner() {
+        let heap_widths = narrow_heap_widths();
+        let mut row_counts = [0u32; 64];
+        row_counts[0x02] = 2;
+        row_counts[0x29] = 1;
+        let typedef_row_size = row_size(0x02, &row_counts, heap_widths).unwrap();
+        let nested_row_size = row_size(0x29, &row_counts, heap_widths).unwrap();
+        let mut source_image = vec![0u8; 0x100];
+        let mut target_image = vec![0u8; 0x120];
+
+        put_u16(&mut source_image, 0x24, 10);
+        put_u16(&mut source_image, 0x26, 20);
+        put_u16(&mut source_image, 0x24 + typedef_row_size, 11);
+        put_u16(&mut source_image, 0x26 + typedef_row_size, 30);
+        put_u16(&mut target_image, 0x44, 101);
+        put_u16(&mut target_image, 0x46, 999);
+        put_u16(&mut target_image, 0x44 + typedef_row_size, 100);
+        put_u16(&mut target_image, 0x46 + typedef_row_size, 200);
+
+        put_u16(&mut source_image, 0x80, 2);
+        put_u16(&mut source_image, 0x82, 1);
+        put_u16(&mut target_image, 0xa0, 1);
+        put_u16(&mut target_image, 0xa2, 2);
+
+        let source_metadata = metadata_with_rows(
+            &row_counts,
+            &[
+                (0x02, typedef_row_size as u32, 0x20),
+                (0x29, nested_row_size as u32, 0x80),
+            ],
+        );
+        let target_metadata = metadata_with_rows(
+            &row_counts,
+            &[
+                (0x02, typedef_row_size as u32, 0x40),
+                (0x29, nested_row_size as u32, 0xa0),
+            ],
+        );
+        let mut table_maps = empty_table_maps();
+        table_maps[0x02] = rift(&[(0, 0)]);
+
+        let map = build_cli_triplet_table_map(
+            &source_image,
+            &source_metadata,
+            &target_image,
+            &target_metadata,
+            &rift(&[(0, 0), (10, 100), (11, 101), (20, 200), (30, 300)]),
+            &table_maps,
+            &rift(&[(0, 0)]),
+            cli_triplet_table_spec(0x02).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(pairs(&map.rift), vec![(0, 0), (1, 2), (2, 1)]);
+        assert_eq!(map.stats.mapped_rows, 2);
+    }
+
+    #[test]
+    fn triplet_table_map_matches_typeref_rows_by_mapped_self_scope_owner() {
+        let heap_widths = narrow_heap_widths();
+        let mut row_counts = [0u32; 64];
+        row_counts[0x01] = 2;
+        let row_size = row_size(0x01, &row_counts, heap_widths).unwrap();
+        let mut source_image = vec![0u8; 0x80];
+        let mut target_image = vec![0u8; 0x80];
+
+        put_u16(&mut source_image, 0x20, 0);
+        put_u16(&mut source_image, 0x22, 10);
+        put_u16(&mut source_image, 0x24, 20);
+        put_u16(&mut source_image, 0x20 + row_size, (1 << 2) | 3);
+        put_u16(&mut source_image, 0x22 + row_size, 11);
+        put_u16(&mut source_image, 0x24 + row_size, 30);
+        put_u16(&mut target_image, 0x40, (2 << 2) | 3);
+        put_u16(&mut target_image, 0x42, 101);
+        put_u16(&mut target_image, 0x44, 999);
+        put_u16(&mut target_image, 0x40 + row_size, 0);
+        put_u16(&mut target_image, 0x42 + row_size, 100);
+        put_u16(&mut target_image, 0x44 + row_size, 200);
+
+        let source_metadata = metadata_with_rows(&row_counts, &[(0x01, row_size as u32, 0x20)]);
+        let target_metadata = metadata_with_rows(&row_counts, &[(0x01, row_size as u32, 0x40)]);
+        let mut table_maps = empty_table_maps();
+        table_maps[0x01] = rift(&[(0, 0)]);
+
+        let map = build_cli_triplet_table_map(
+            &source_image,
+            &source_metadata,
+            &target_image,
+            &target_metadata,
+            &rift(&[(0, 0), (10, 100), (11, 101), (20, 200), (30, 300)]),
+            &table_maps,
+            &rift(&[(0, 0)]),
+            cli_triplet_table_spec(0x01).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(pairs(&map.rift), vec![(0, 0), (1, 2), (2, 1)]);
+        assert_eq!(map.stats.mapped_rows, 2);
     }
 
     #[test]
