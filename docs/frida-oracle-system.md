@@ -465,6 +465,23 @@ The lab should fail closed:
 
 This prevents bad fixtures from encoding wrong assumptions.
 
+## Adapter Modularity
+
+Stage hooks use a capture-adapter registry. A new internal atom should add one
+adapter that owns:
+
+- stable call input capture,
+- optional normalized object extraction,
+- whether the native function consumes a `BitReader`,
+- any atom-specific return-value normalization.
+
+The generic hook lifecycle should stay independent of atom details: attach by
+symbol map, capture enter/leave events, manage optional reader windows, write
+objects/blobs, and fail closed on adapter errors. If a new atom needs custom
+transport, custom fixture promotion, or special native state lifetime handling,
+record that as a lab atom or split the hook boundary. Do not hide it inside a
+large transform-specific adapter.
+
 ## Clean-Room Boundary
 
 The capture output should contain behavior, not copied implementation text.

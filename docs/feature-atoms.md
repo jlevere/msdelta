@@ -270,6 +270,46 @@ removes the most ambiguity for the others. Right now that usually means
 improving the lab/oracle lane or a pure rift/model atom before writing another
 large transform.
 
+## Module Boundaries
+
+Keep every serious atom split into four concerns:
+
+| Concern | Owns | Should not own |
+|---|---|---|
+| semantic model | typed Rust state and invariants | bit-level parsing, fixture paths, native pointers |
+| wire parser/writer | bitstream layout and malformed-input errors | transform policy or native-lab assumptions |
+| transition/algebra | pure state change under test | file IO, Frida data, broad apply dispatch |
+| oracle adapter | fixture normalization and native comparison | production behavior |
+
+This is the maintainability rule that matters most for the managed path:
+native evidence may change how we understand an atom, but that should usually
+change an oracle adapter or a small transition function, not a whole transform
+pipeline. Production code should depend on semantic models and explicit
+transitions. Tests may depend on fixture packets. Lab tools may depend on
+native layouts. Those dependencies should not point the other way.
+
+When a file starts accumulating multiple concerns, split by concern before
+splitting by convenience. For example, `CliMapBitstream` and
+`CliCodedTokenMap` can live near each other because they share a model, but the
+bitstream reader, coded-token algebra, and native fixture replay should remain
+separate entry points.
+
+## Extension Points
+
+Future atom work should add to explicit registries rather than editing several
+switches:
+
+| Area | Extension point |
+|---|---|
+| feature map | one row in `docs/feature-atoms.tsv` |
+| Rust parser/model | one typed module or submodule with focused tests |
+| native symbol hooks | one symbol-map function entry with versioned layouts |
+| Frida stage capture | one capture adapter entry |
+| fixture tests | one shared contract plus atom-specific assertions |
+
+If adding an atom requires touching unrelated parser, transform, and fixture
+code at the same time, the atom boundary is probably still too large.
+
 ## Next Atom Selection
 
 Pick the next atom by asking:

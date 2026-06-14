@@ -375,10 +375,7 @@ function readPlanForObject(fn, objectValue) {
   if (!objectValue) {
     return null;
   }
-  if (fn.capture === "cli_metadata_internal_from_bitreader") {
-    return cliMetadataReadPlan(objectValue);
-  }
-  return null;
+  return captureAdapter(fn).readPlan(fn, objectValue);
 }
 
 function replayMatchesSnapshot(replay, after) {
@@ -643,22 +640,6 @@ function readCliCodedTokenMapCallRecord(fn, callContext, retval) {
   };
 }
 
-function normalizeObject(fn, callContext, retval) {
-  if (fn.capture === "cli_metadata_internal_from_bitreader") {
-    return readCliMetadataRecord(callContext.this_ptr, fn.object_layout);
-  }
-  if (fn.capture === "cli_map_from_bitreader") {
-    return readCliMapRecord(callContext.this_ptr, fn.object_layout);
-  }
-  if (fn.capture === "cli_map_coded_token_call") {
-    return readCliCodedTokenMapCallRecord(fn, callContext, retval);
-  }
-  if (fn.capture === "reader_bitstream_only") {
-    return null;
-  }
-  throw new Error(`unsupported stage capture adapter: ${fn.capture}`);
-}
-
 function nativePointerU32(value, label) {
   const raw = BigInt(value.toString());
   const masked = raw & 0xffffffffn;
@@ -669,18 +650,60 @@ function nativePointerU32(value, label) {
   return parsed;
 }
 
-function captureInputs(fn, args) {
-  if (fn.capture === "cli_map_coded_token_call") {
-    return {
-      this_ptr: args[0].toString(),
-      kind: nativePointerU32(args[1], "coded-token kind"),
-      raw: nativePointerU32(args[2], "coded-token raw value"),
-    };
-  }
+function captureReaderInputs(_fn, args) {
   return {
     this_ptr: args[0].toString(),
     reader_ptr: args[1].toString(),
   };
+}
+
+function captureCliCodedTokenInputs(_fn, args) {
+  return {
+    this_ptr: args[0].toString(),
+    kind: nativePointerU32(args[1], "coded-token kind"),
+    raw: nativePointerU32(args[2], "coded-token raw value"),
+  };
+}
+
+// Adapter-specific ABI and object logic lives here so new stage atoms do not
+// spread capture-name switches through the hook lifecycle.
+const STAGE_CAPTURE_ADAPTERS = {
+  cli_metadata_internal_from_bitreader: {
+    captureInputs: captureReaderInputs,
+    readObject: (fn, callContext) => readCliMetadataRecord(callContext.this_ptr, fn.object_layout),
+    readPlan: (_fn, objectValue) => cliMetadataReadPlan(objectValue),
+  },
+  cli_map_from_bitreader: {
+    captureInputs: captureReaderInputs,
+    readObject: (fn, callContext) => readCliMapRecord(callContext.this_ptr, fn.object_layout),
+    readPlan: () => null,
+  },
+  cli_map_coded_token_call: {
+    captureInputs: captureCliCodedTokenInputs,
+    readObject: readCliCodedTokenMapCallRecord,
+    readPlan: () => null,
+  },
+  reader_bitstream_only: {
+    captureInputs: captureReaderInputs,
+    readObject: () => null,
+    readPlan: () => null,
+  },
+};
+
+function captureAdapter(fn) {
+  const adapter = STAGE_CAPTURE_ADAPTERS[fn.capture];
+  if (!adapter) {
+    throw new Error(`unsupported stage capture adapter: ${fn.capture}`);
+  }
+  return adapter;
+}
+
+function normalizeObject(fn, callContext, retval) {
+  return captureAdapter(fn).readObject(fn, callContext, retval);
+}
+
+function captureInputs(fn, args) {
+  return captureAdapter(fn).captureInputs(fn, args);
 }
 
 function captureCallContext(fn, args) {
@@ -944,6 +967,17 @@ function installStageHook(moduleInfo, fn) {
       pointer_size: POINTER_SIZE,
       symbol: fn.name,
       abi: fn.abi,
+    });
+    return;
+  }
+
+  try {
+    captureAdapter(fn);
+  } catch (error) {
+    log("error", "stage hook skipped: unsupported capture adapter", {
+      symbol: fn.name,
+      capture: fn.capture,
+      error: String(error),
     });
     return;
   }

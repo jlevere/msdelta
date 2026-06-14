@@ -174,6 +174,9 @@ Supported now:
   delta controls.
 - Internal stage hooks: hash-selected, module-specific Frida hooks from
   `lab/frida/symbol-maps`.
+- Stage capture adapters registered by capture name, so each new internal atom
+  owns its input capture and object normalization without changing the generic
+  hook lifecycle.
 - Logical object normalization for managed metadata and CLI map bitstream records.
 - Replay-checked native reader-window blob capture for stage parser atoms.
 - Pure method call records for stage algebra atoms: stable call inputs, native
