@@ -168,7 +168,7 @@ fn apply_classic_cli_source_transforms(
     cli_map: &crate::pe::cli::map::CliMapModel,
     rva_map: &crate::lzx::rift::RiftTable,
     flags: u64,
-) -> Result<()> {
+) {
     if flags & 0x4000 != 0 {
         crate::pe::cli::disasm::transform_cli_disasm_tokens(image, pe, metadata, cli_map);
     }
@@ -177,7 +177,6 @@ fn apply_classic_cli_source_transforms(
             image, metadata, cli_map, rva_map,
         );
     }
-    Ok(())
 }
 
 /// Build `io2rva` exactly as `SectionHelper::ExtractImageOffsetToRva`: an
@@ -244,10 +243,8 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
         return Ok(output);
     }
 
-    let managed_branch = if parsed.header.file_type != 1
-        && !parsed.preprocess.is_empty()
-        && crate::pe::transform::is_managed_pe(reference)
-    {
+    let has_pe_preprocess = parsed.header.file_type != 1 && !parsed.preprocess.is_empty();
+    let managed_branch = if has_pe_preprocess && crate::pe::transform::is_managed_pe(reference) {
         let Some(branch) =
             crate::pe::transform::managed_branch_for_file_type(parsed.header.file_type)
         else {
@@ -265,7 +262,7 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
         None
     };
 
-    let pp = if parsed.header.file_type != 1 && !parsed.preprocess.is_empty() {
+    let pp = if has_pe_preprocess {
         let pp = parse_pe_preprocess(&parsed.preprocess)?;
         // Belt-and-suspenders: some managed deltas carry CLI metadata/map state
         // in the preprocess without a CLR header surviving in the reference.
@@ -318,7 +315,7 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
                     &pp.cli_map,
                     &pp.preprocess_rift,
                     parsed.header.flags as u64,
-                )?;
+                );
             }
         }
         let cli_rift = if let Some(metadata) = &source_metadata {

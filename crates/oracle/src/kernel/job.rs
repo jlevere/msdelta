@@ -22,6 +22,7 @@ pub const SCHEMA_VERSION: u32 = 1;
 
 /// Filename of the manifest within a job directory.
 pub const JOB_FILE: &str = "job.json";
+const UTF8_BOM: &[u8] = b"\xEF\xBB\xBF";
 
 /// A full job: a set of cases sharing a generation seed and domain.
 ///
@@ -98,9 +99,7 @@ where
     /// Read and validate `job.json` from `dir`.
     pub fn read(dir: &Path) -> io::Result<Self> {
         let bytes = fs::read(dir.join(JOB_FILE))?;
-        let slice = bytes
-            .strip_prefix(&[0xEF, 0xBB, 0xBF])
-            .unwrap_or(bytes.as_slice());
+        let slice = bytes.strip_prefix(UTF8_BOM).unwrap_or(bytes.as_slice());
         let job: Job<P> = serde_json::from_slice(slice).map_err(io::Error::other)?;
         if job.schema_version != SCHEMA_VERSION {
             return Err(io::Error::new(
