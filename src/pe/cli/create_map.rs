@@ -120,6 +120,158 @@ pub(crate) const CLI_SEQUENCE_TABLE_SPECS: &[CliSequenceTableSpec] = &[
     },
 ];
 
+pub(crate) const CLI_TRIPLET_TABLE_ORDER: &[u8] = &[
+    0x20, 0x23, 0x00, 0x1a, 0x02, 0x01, 0x0a, 0x12, 0x15, 0x0b, 0x0d, 0x0e, 0x0f, 0x10, 0x18, 0x1c,
+    0x1d, 0x26, 0x28, 0x2a, 0x2b, 0x2c, 0x0c,
+];
+
+const TRIPLET_ASSEMBLY_KEYS: &[CliTripletKeyColumn] = &[CliTripletKeyColumn::MappedString("Name")];
+const TRIPLET_ASSEMBLY_REF_KEYS: &[CliTripletKeyColumn] =
+    &[CliTripletKeyColumn::MappedString("Name")];
+const TRIPLET_MODULE_KEYS: &[CliTripletKeyColumn] = &[CliTripletKeyColumn::MappedString("Name")];
+const TRIPLET_MODULE_REF_KEYS: &[CliTripletKeyColumn] =
+    &[CliTripletKeyColumn::MappedString("Name")];
+const TRIPLET_TYPE_DEF_KEYS: &[CliTripletKeyColumn] = &[
+    CliTripletKeyColumn::MappedString("Name"),
+    CliTripletKeyColumn::MappedString("Namespace"),
+];
+const TRIPLET_TYPE_REF_KEYS: &[CliTripletKeyColumn] = &[
+    CliTripletKeyColumn::MappedString("Name"),
+    CliTripletKeyColumn::MappedString("Namespace"),
+];
+const TRIPLET_MEMBER_REF_KEYS: &[CliTripletKeyColumn] = &[
+    CliTripletKeyColumn::MappedString("Name"),
+    CliTripletKeyColumn::MappedCoded("Class"),
+];
+const TRIPLET_EVENT_MAP_KEYS: &[CliTripletKeyColumn] =
+    &[CliTripletKeyColumn::MappedTable("Parent")];
+const TRIPLET_PROPERTY_MAP_KEYS: &[CliTripletKeyColumn] =
+    &[CliTripletKeyColumn::MappedTable("Parent")];
+const TRIPLET_CONSTANT_KEYS: &[CliTripletKeyColumn] = &[CliTripletKeyColumn::MappedCoded("Parent")];
+const TRIPLET_FIELD_MARSHAL_KEYS: &[CliTripletKeyColumn] =
+    &[CliTripletKeyColumn::MappedCoded("Parent")];
+const TRIPLET_DECL_SECURITY_KEYS: &[CliTripletKeyColumn] =
+    &[CliTripletKeyColumn::MappedCoded("Parent")];
+const TRIPLET_CLASS_LAYOUT_KEYS: &[CliTripletKeyColumn] =
+    &[CliTripletKeyColumn::MappedTable("Parent")];
+const TRIPLET_FIELD_LAYOUT_KEYS: &[CliTripletKeyColumn] =
+    &[CliTripletKeyColumn::MappedTable("Field")];
+const TRIPLET_METHOD_SEMANTICS_KEYS: &[CliTripletKeyColumn] =
+    &[CliTripletKeyColumn::MappedTable("Method")];
+const TRIPLET_IMPL_MAP_KEYS: &[CliTripletKeyColumn] = &[
+    CliTripletKeyColumn::MappedString("ImportName"),
+    CliTripletKeyColumn::MappedCoded("MemberForwarded"),
+];
+const TRIPLET_FIELD_RVA_KEYS: &[CliTripletKeyColumn] = &[CliTripletKeyColumn::MappedTable("Field")];
+const TRIPLET_FILE_KEYS: &[CliTripletKeyColumn] = &[CliTripletKeyColumn::MappedString("Name")];
+const TRIPLET_MANIFEST_RESOURCE_KEYS: &[CliTripletKeyColumn] =
+    &[CliTripletKeyColumn::MappedString("Name")];
+const TRIPLET_GENERIC_PARAM_KEYS: &[CliTripletKeyColumn] = &[
+    CliTripletKeyColumn::MappedString("Name"),
+    CliTripletKeyColumn::MappedCoded("Owner"),
+];
+const TRIPLET_METHOD_SPEC_KEYS: &[CliTripletKeyColumn] =
+    &[CliTripletKeyColumn::MappedCoded("Method")];
+const TRIPLET_GENERIC_PARAM_CONSTRAINT_KEYS: &[CliTripletKeyColumn] =
+    &[CliTripletKeyColumn::MappedTable("Owner")];
+const TRIPLET_CUSTOM_ATTRIBUTE_KEYS: &[CliTripletKeyColumn] =
+    &[CliTripletKeyColumn::MappedCoded("Parent")];
+
+pub(crate) const CLI_TRIPLET_TABLE_SPECS: &[CliTripletTableSpec] = &[
+    CliTripletTableSpec {
+        table_id: 0x20,
+        key_columns: TRIPLET_ASSEMBLY_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x23,
+        key_columns: TRIPLET_ASSEMBLY_REF_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x00,
+        key_columns: TRIPLET_MODULE_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x1a,
+        key_columns: TRIPLET_MODULE_REF_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x02,
+        key_columns: TRIPLET_TYPE_DEF_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x01,
+        key_columns: TRIPLET_TYPE_REF_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x0a,
+        key_columns: TRIPLET_MEMBER_REF_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x12,
+        key_columns: TRIPLET_EVENT_MAP_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x15,
+        key_columns: TRIPLET_PROPERTY_MAP_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x0b,
+        key_columns: TRIPLET_CONSTANT_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x0d,
+        key_columns: TRIPLET_FIELD_MARSHAL_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x0e,
+        key_columns: TRIPLET_DECL_SECURITY_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x0f,
+        key_columns: TRIPLET_CLASS_LAYOUT_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x10,
+        key_columns: TRIPLET_FIELD_LAYOUT_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x18,
+        key_columns: TRIPLET_METHOD_SEMANTICS_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x1c,
+        key_columns: TRIPLET_IMPL_MAP_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x1d,
+        key_columns: TRIPLET_FIELD_RVA_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x26,
+        key_columns: TRIPLET_FILE_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x28,
+        key_columns: TRIPLET_MANIFEST_RESOURCE_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x2a,
+        key_columns: TRIPLET_GENERIC_PARAM_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x2b,
+        key_columns: TRIPLET_METHOD_SPEC_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x2c,
+        key_columns: TRIPLET_GENERIC_PARAM_CONSTRAINT_KEYS,
+    },
+    CliTripletTableSpec {
+        table_id: 0x0c,
+        key_columns: TRIPLET_CUSTOM_ATTRIBUTE_KEYS,
+    },
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct StringsHeapEntry<'a> {
     offset: u32,
@@ -745,6 +897,13 @@ fn cli_sequence_table_spec(table_id: u8) -> Option<CliSequenceTableSpec> {
         .find(|spec| spec.table_id == table_id)
 }
 
+fn cli_triplet_table_spec(table_id: u8) -> Option<CliTripletTableSpec> {
+    CLI_TRIPLET_TABLE_SPECS
+        .iter()
+        .copied()
+        .find(|spec| spec.table_id == table_id)
+}
+
 fn empty_strings_heap_map() -> CliStringsHeapMap {
     CliStringsHeapMap {
         rift: RiftTable {
@@ -785,7 +944,9 @@ fn parse_strings_heap_entries(heap: &[u8]) -> Result<Vec<StringsHeapEntry<'_>>> 
 mod tests {
     use super::*;
     use crate::pe::cli::metadata::{CliMetadataModel, CliStream, CliStreamSet};
-    use crate::pe::cli::schema::{row_size, CliSchemaFlavor, HeapIndexWidths};
+    use crate::pe::cli::schema::{
+        row_size, CliSchemaFlavor, ColumnKind, HeapIndexWidths, HeapKind,
+    };
 
     fn pairs(table: &RiftTable) -> Vec<(i64, i64)> {
         table
@@ -801,6 +962,115 @@ mod tests {
                 .iter()
                 .map(|&(source, target)| RiftEntry { source, target })
                 .collect(),
+        }
+    }
+
+    #[test]
+    fn triplet_table_specs_follow_native_run_order() {
+        let spec_order = CLI_TRIPLET_TABLE_SPECS
+            .iter()
+            .map(|spec| spec.table_id)
+            .collect::<Vec<_>>();
+
+        assert_eq!(CLI_TRIPLET_TABLE_ORDER, spec_order.as_slice());
+        assert_eq!(
+            spec_order,
+            vec![
+                0x20, 0x23, 0x00, 0x1a, 0x02, 0x01, 0x0a, 0x12, 0x15, 0x0b, 0x0d, 0x0e, 0x0f, 0x10,
+                0x18, 0x1c, 0x1d, 0x26, 0x28, 0x2a, 0x2b, 0x2c, 0x0c,
+            ]
+        );
+    }
+
+    #[test]
+    fn triplet_table_specs_match_native_key_matrix() {
+        let expected: &[(u8, &[CliTripletKeyColumn])] = &[
+            (0x20, &[CliTripletKeyColumn::MappedString("Name")]),
+            (0x23, &[CliTripletKeyColumn::MappedString("Name")]),
+            (0x00, &[CliTripletKeyColumn::MappedString("Name")]),
+            (0x1a, &[CliTripletKeyColumn::MappedString("Name")]),
+            (
+                0x02,
+                &[
+                    CliTripletKeyColumn::MappedString("Name"),
+                    CliTripletKeyColumn::MappedString("Namespace"),
+                ],
+            ),
+            (
+                0x01,
+                &[
+                    CliTripletKeyColumn::MappedString("Name"),
+                    CliTripletKeyColumn::MappedString("Namespace"),
+                ],
+            ),
+            (
+                0x0a,
+                &[
+                    CliTripletKeyColumn::MappedString("Name"),
+                    CliTripletKeyColumn::MappedCoded("Class"),
+                ],
+            ),
+            (0x12, &[CliTripletKeyColumn::MappedTable("Parent")]),
+            (0x15, &[CliTripletKeyColumn::MappedTable("Parent")]),
+            (0x0b, &[CliTripletKeyColumn::MappedCoded("Parent")]),
+            (0x0d, &[CliTripletKeyColumn::MappedCoded("Parent")]),
+            (0x0e, &[CliTripletKeyColumn::MappedCoded("Parent")]),
+            (0x0f, &[CliTripletKeyColumn::MappedTable("Parent")]),
+            (0x10, &[CliTripletKeyColumn::MappedTable("Field")]),
+            (0x18, &[CliTripletKeyColumn::MappedTable("Method")]),
+            (
+                0x1c,
+                &[
+                    CliTripletKeyColumn::MappedString("ImportName"),
+                    CliTripletKeyColumn::MappedCoded("MemberForwarded"),
+                ],
+            ),
+            (0x1d, &[CliTripletKeyColumn::MappedTable("Field")]),
+            (0x26, &[CliTripletKeyColumn::MappedString("Name")]),
+            (0x28, &[CliTripletKeyColumn::MappedString("Name")]),
+            (
+                0x2a,
+                &[
+                    CliTripletKeyColumn::MappedString("Name"),
+                    CliTripletKeyColumn::MappedCoded("Owner"),
+                ],
+            ),
+            (0x2b, &[CliTripletKeyColumn::MappedCoded("Method")]),
+            (0x2c, &[CliTripletKeyColumn::MappedTable("Owner")]),
+            (0x0c, &[CliTripletKeyColumn::MappedCoded("Parent")]),
+        ];
+
+        for &(table_id, key_columns) in expected {
+            let spec = cli_triplet_table_spec(table_id).unwrap();
+            assert_eq!(spec.key_columns, key_columns, "table {table_id:#x}");
+        }
+        assert!(cli_triplet_table_spec(0x29).is_none());
+    }
+
+    #[test]
+    fn triplet_table_specs_reference_typed_schema_columns() {
+        for spec in CLI_TRIPLET_TABLE_SPECS {
+            let schema = table_schema(spec.table_id).unwrap();
+            for key_column in spec.key_columns {
+                let column = schema
+                    .columns
+                    .iter()
+                    .find(|column| column.name == key_column.name())
+                    .unwrap_or_else(|| {
+                        panic!("{} missing key column {}", schema.name, key_column.name())
+                    });
+                match (key_column, column.kind) {
+                    (CliTripletKeyColumn::MappedString(_), ColumnKind::Heap(HeapKind::Strings))
+                    | (CliTripletKeyColumn::MappedTable(_), ColumnKind::Table(_))
+                    | (CliTripletKeyColumn::MappedCoded(_), ColumnKind::Coded(_))
+                    | (CliTripletKeyColumn::RawU16(_), ColumnKind::U16)
+                    | (CliTripletKeyColumn::RawU32(_), ColumnKind::U32 | ColumnKind::Rva) => {}
+                    _ => panic!(
+                        "{}.{} has incompatible kind {:?}",
+                        schema.name, column.name, column.kind
+                    ),
+                }
+            }
         }
     }
 
@@ -1202,6 +1472,40 @@ mod tests {
             &table_maps,
             &rift(&[(0, 0)]),
             NESTED_CLASS_TRIPLET,
+        )
+        .unwrap();
+
+        assert_eq!(pairs(&map.rift), vec![(0, 0), (1, 1)]);
+        assert_eq!(map.stats.mapped_rows, 1);
+    }
+
+    #[test]
+    fn triplet_table_map_matches_rows_by_mapped_coded_keys() {
+        let heap_widths = narrow_heap_widths();
+        let mut row_counts = [0u32; 64];
+        row_counts[0x06] = 2;
+        row_counts[0x2b] = 1;
+        let row_size = row_size(0x2b, &row_counts, heap_widths).unwrap();
+        let mut source_image = vec![0u8; 0x80];
+        let mut target_image = vec![0u8; 0x80];
+
+        put_u16(&mut source_image, 0x20, 1 << 1);
+        put_u16(&mut target_image, 0x30, 2 << 1);
+
+        let source_metadata = metadata_with_rows(&row_counts, &[(0x2b, row_size as u32, 0x20)]);
+        let target_metadata = metadata_with_rows(&row_counts, &[(0x2b, row_size as u32, 0x30)]);
+        let mut table_maps = empty_table_maps();
+        table_maps[0x06] = rift(&[(0, 0), (1, 2)]);
+
+        let map = build_cli_triplet_table_map(
+            &source_image,
+            &source_metadata,
+            &target_image,
+            &target_metadata,
+            &rift(&[(0, 0)]),
+            &table_maps,
+            &rift(&[(0, 0)]),
+            cli_triplet_table_spec(0x2b).unwrap(),
         )
         .unwrap();
 

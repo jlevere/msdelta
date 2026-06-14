@@ -797,16 +797,21 @@ are not treated as RVAs, and truncated row rejection. The next gap is native
 fixture parity plus the create graph step that composes RVA maps with PE section
 maps.
 
-`CliMapSequenceTables` now has the `ProcessSequenceTable` half and a generic
-`ProcessTripletTable` row-key matcher as pure atoms. The sequence mapper matches
-child rows within mapped owner row ranges by comparing each source child's
-mapped `Name` heap offset with target child names in the corresponding target
-range. The triplet matcher projects source row keys through current string,
-table, and coded-token maps, compares them with raw target keys, and emits
-one-to-one table-rift entries. Unit coverage proves MethodDef sequence
-remapping, existing child-map stop behavior, missing string-map accounting,
-string-key triplet matching, and table-key triplet matching. The remaining gap
-is the native table-spec matrix plus duplicate ordering and special-case parity.
+`CliMapSequenceTables` now has the `ProcessSequenceTable` half, the native
+`ProcessTripletTable` table order/key matrix, and a generic triplet row-key
+matcher as pure atoms. The sequence mapper matches child rows within mapped
+owner row ranges by comparing each source child's mapped `Name` heap offset
+with target child names in the corresponding target range. The triplet matcher
+projects source row keys through current string, table, and coded-token maps,
+compares them with raw target keys, and emits one-to-one table-rift entries.
+The matrix covers the native `Run` triplet order, including the Constant table's
+native logical `Parent` key rather than its physical padding byte. Unit coverage
+proves MethodDef sequence remapping, existing child-map stop behavior, missing
+string-map accounting, the native key matrix, schema compatibility, and
+string/table/coded-key triplet matching. The remaining gap is native
+`ProcessTripletTable` second-pass parity for TypeDef nested-class ownership and
+TypeRef self-resolution-scope ownership, plus duplicate ordering and native
+fixture parity.
 
 ## Current Implementation Plan
 
