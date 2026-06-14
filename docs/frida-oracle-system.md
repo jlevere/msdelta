@@ -571,15 +571,17 @@ The lab lane should now optimize for repeatability and smaller atom fixtures:
 3. Add targeted call/object harnesses for evidence gaps such as non-identity
    `MapCoded` and compressed-integer 2-byte, 4-byte, reserved, truncated, and
    non-canonical edge cases.
-4. Add object normalizers for PE info, CLI4 metadata/map, and CLI compression
-   rift builders.
+4. Add object normalizers for PE info, CLI4 metadata/map, CLI compression rift
+   builders, and native x64 `PdataX64` transform stats.
 5. Run the same capture set on a second Windows/DLL build and record drift by
    atom, not by whole corpus result.
 
-New hooks should be chosen by the managed phase they unblock. For the current
-plan, prefer `CliMetadata::Init`, `CliBlobTransformer::GetNumber`, CLI4
-metadata/map readers, and `CompressionRiftTableCli[4]::FromCliMap` before IL or
-metadata transform entry/exit hooks.
+New hooks should be chosen by the phase they unblock. For managed work, prefer
+`CliMetadata::Init`, `CliBlobTransformer::GetNumber`, CLI4 metadata/map readers,
+and `CompressionRiftTableCli[4]::FromCliMap` before IL or metadata transform
+entry/exit hooks. For native x64 work, start with `PdataX64`: it needs transform
+entry/exit buffers, the exception-directory file range, the input rift table,
+and normalized record/field/rewrite counts before `DisasmX64` is promoted.
 
 ## Managed Corpus
 
