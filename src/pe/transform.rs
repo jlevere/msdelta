@@ -5,7 +5,7 @@
 //! "inferred relocations" which scans for 32-bit pointers within
 //! the PE's image range and rebases them using the rift table.
 
-use super::parse::{DataDirectoryKind, PeHeaderLayout, PeInfo, PeOptionalHeaderKind};
+use super::parse::{DataDirectoryKind, PeHeaderLayout, PeInfo, PeMachine, PeOptionalHeaderKind};
 use crate::Result;
 
 /// MSDelta file type flags.
@@ -1323,8 +1323,9 @@ fn disasm_amd64(code: &[u8]) -> DisasmInsn {
     }
 }
 
-/// `TransformDisasmX64` apply pass (dpx, g_transformsMap mask 0x200, machine
-/// 0x8664). Driven by `.pdata` (the exception directory, data dir index 3):
+/// `TransformDisasmX64` apply pass (dpx, g_transformsMap mask 0x200,
+/// `PeMachine::Amd64`). Driven by `.pdata` (the exception directory, data dir
+/// index 3):
 /// each `RUNTIME_FUNCTION` `[BeginAddress, EndAddress)` RVA range is
 /// length-disassembled forward in `output` (target layout) and every
 /// RIP-relative disp32 / rel32 displacement is remapped through the preprocess
@@ -1407,7 +1408,7 @@ pub(crate) fn transform_disasm_x64(output: &mut [u8], pe: &PeInfo, rift: &RiftTa
 /// where `i` is the byte offset and `v` the stored displacement (verified
 /// byte-for-byte against genuine output -- `translation_size == target_size`).
 ///
-/// Runs ONLY on i386 PEs (`IMAGE_FILE_MACHINE_I386`, machine `0x14C`) and skips
+/// Runs ONLY on i386 PEs (`PeMachine::I386`) and skips
 /// pure-managed (.NET, `COMIMAGE_FLAGS_ILONLY`) images, which carry machine
 /// `0x14C` too but must not be touched. No-op on everything else, so it is safe
 /// to call unconditionally on the reconstructed image. Returns the site count.
@@ -1463,7 +1464,7 @@ pub(crate) fn undo_x86_e8_translation(buf: &mut [u8]) -> u32 {
 ///
 /// Parses only the few header fields needed, by hand (no full `goblin` parse,
 /// which over-validates and rejects some valid system images). Requires machine
-/// `IMAGE_FILE_MACHINE_I386` (0x14C) and a PE32 optional header, and rejects
+/// `PeMachine::I386` and a PE32 optional header, and rejects
 /// images whose CLR runtime header (data directory 14) has `COMIMAGE_FLAGS_ILONLY`.
 fn is_i386_native_pe(buf: &[u8]) -> bool {
     let rd_u32 = |o: usize| -> Option<u32> {
@@ -1474,7 +1475,7 @@ fn is_i386_native_pe(buf: &[u8]) -> bool {
     let Ok(layout) = PeHeaderLayout::parse(buf) else {
         return false;
     };
-    if layout.machine != 0x014c {
+    if layout.machine != PeMachine::I386 {
         return false; // not i386
     }
     if layout.optional_header_kind != PeOptionalHeaderKind::Pe32 {
@@ -1649,11 +1650,15 @@ mod tests {
         data[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
     }
 
-    fn synthetic_transform_pe(pe32_plus: bool, machine: u16, clr_flags: Option<u32>) -> Vec<u8> {
+    fn synthetic_transform_pe(
+        pe32_plus: bool,
+        machine: PeMachine,
+        clr_flags: Option<u32>,
+    ) -> Vec<u8> {
         let mut image = vec![0u8; 0x1000];
         put_u32(&mut image, 0x3c, 0x80);
         image[0x80..0x84].copy_from_slice(b"PE\0\0");
-        put_u16(&mut image, 0x84, machine);
+        put_u16(&mut image, 0x84, machine.raw());
         put_u16(&mut image, 0x86, 1);
         put_u32(&mut image, 0x88, 0x1234_5678);
         put_u16(&mut image, 0x94, if pe32_plus { 0xf0 } else { 0xe0 });
@@ -1721,7 +1726,7 @@ mod tests {
 
     #[test]
     fn pe_header_layout_drives_header_fixups() {
-        let mut image = synthetic_transform_pe(true, 0x8664, None);
+        let mut image = synthetic_transform_pe(true, PeMachine::Amd64, None);
 
         assert_eq!(pe_timestamp(&image), 0x1234_5678);
         assert_eq!(pe_checksum_offset(&image), Some(0xd8));
@@ -1738,15 +1743,15 @@ mod tests {
 
     #[test]
     fn managed_and_i386_native_probes_share_header_layout() {
-        let native = synthetic_transform_pe(false, 0x014c, None);
+        let native = synthetic_transform_pe(false, PeMachine::I386, None);
         assert!(!is_managed_pe(&native));
         assert!(is_i386_native_pe(&native));
 
-        let il_only = synthetic_transform_pe(false, 0x014c, Some(1));
+        let il_only = synthetic_transform_pe(false, PeMachine::I386, Some(1));
         assert!(is_managed_pe(&il_only));
         assert!(!is_i386_native_pe(&il_only));
 
-        let mixed_mode = synthetic_transform_pe(false, 0x014c, Some(0));
+        let mixed_mode = synthetic_transform_pe(false, PeMachine::I386, Some(0));
         assert!(is_managed_pe(&mixed_mode));
         assert!(is_i386_native_pe(&mixed_mode));
     }

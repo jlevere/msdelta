@@ -897,7 +897,7 @@ fn align_4(value: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pe::parse::PeOptionalHeaderKind;
+    use crate::pe::parse::{PeMachine, PeOptionalHeaderKind};
     use serde::Deserialize;
     use std::path::{Path, PathBuf};
 
@@ -1183,7 +1183,15 @@ mod tests {
         image[0..2].copy_from_slice(b"MZ");
         put_u32(&mut image, 0x3c, 0x80);
         image[0x80..0x84].copy_from_slice(b"PE\0\0");
-        put_u16(&mut image, 0x84, if pe32_plus { 0x8664 } else { 0x014c });
+        put_u16(
+            &mut image,
+            0x84,
+            if pe32_plus {
+                PeMachine::Amd64.raw()
+            } else {
+                PeMachine::I386.raw()
+            },
+        );
         put_u16(&mut image, 0x86, 1);
         put_u32(&mut image, 0x88, 0x1234_5678);
         put_u16(&mut image, 0x94, if pe32_plus { 0xf0 } else { 0xe0 });

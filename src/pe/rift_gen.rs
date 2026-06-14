@@ -233,6 +233,7 @@ pub fn rift_from_import_thunks(source_data: &[u8], target_data: &[u8]) -> RiftTa
 
 #[cfg(test)]
 mod tests {
+    use super::super::parse::PeMachine;
     use super::*;
 
     #[test]
@@ -243,6 +244,7 @@ mod tests {
             timestamp: 0x12345678,
             checksum: 0,
             is_64bit: true,
+            machine: PeMachine::Amd64,
             sections: vec![super::super::parse::SectionInfo {
                 name: ".text".to_string(),
                 virtual_address: 0x1000,
@@ -265,6 +267,7 @@ mod tests {
             timestamp: 0x11111111,
             checksum: 0,
             is_64bit: true,
+            machine: PeMachine::Amd64,
             sections: vec![super::super::parse::SectionInfo {
                 name: ".text".to_string(),
                 virtual_address: 0x1000,
@@ -281,6 +284,7 @@ mod tests {
             timestamp: 0x22222222,
             checksum: 0,
             is_64bit: true,
+            machine: PeMachine::Amd64,
             sections: vec![super::super::parse::SectionInfo {
                 name: ".text".to_string(),
                 virtual_address: 0x2000,

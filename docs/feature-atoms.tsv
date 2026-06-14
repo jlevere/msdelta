@@ -8,10 +8,10 @@ PseudoLzxDecode	codec	codec	all	-	ApplyPseudoLzxPatchTargetBufferProvided	suppor
 LzmsContainer	codec	codec	all	-	UpdateCompression LZMS container	supported	allow	release	Keep corpus coverage in lzms crate
 BsdiffFlagPath	codec	codec	0x1	0x100	CreateDeltaB bsdiff flag path	partial	allow	release	Clarify genuine framing and update docs/tests
 ReverseDeltaApply	format	pipeline	all	-	ApplyDeltaGetReverseB data path	supported	allow	release	Add more reverse golds as fixtures appear
-PeMachineClassifier	pipeline	classifier	0x1,0x2,0x4,0x8,0x10,0x20,0x40,0x80	-	FileTypeHelper::DetermineFileType	partial	lab_only	manual	Store PE machine and implement 0x75 and 0xf5 classification
+PeMachineClassifier	pipeline	classifier	0x1,0x2,0x4,0x8,0x10,0x20,0x40,0x80	-	FileTypeHelper::DetermineFileType	partial	lab_only	unit	Native-validate 0x75 and 0xf5 file_type_set classification before enabling ARM64 or CLI4 transforms
 ManagedFileTypeBranch	cli	classifier	0x2,0x4,0x8,0x10,0x20,0x40,0x80	-	IsCLI4FileType	supported	reject	unit	Use branch result to route classic and CLI4 metadata parsers once implemented
 PeHeaderLayout	pe	parser	0x2,0x4,0x8,0x10,0x20,0x40,0x80	-	PE NT headers and optional-header layout	supported	allow	unit	Use this for checksum timestamp image-base section-table and CLR-directory offset access
-PeInfoParse	pe	parser	0x2,0x4,0x8,0x10,0x20,0x40,0x80	-	PortableExecutable parser	supported	allow	release	Add machine field and stricter file_type mismatch checks
+PeInfoParse	pe	parser	0x2,0x4,0x8,0x10,0x20,0x40,0x80	-	PortableExecutable parser	supported	allow	release	Add native PE info normalizer fixture covering machine optional-header kind and directory edge cases
 PeLogicalSections	pe	parser	0x2,0x4,0x8,0x10,0x20,0x40,0x80	-	SectionHelper::ExtractImageOffsetToRva and RVA section predicates	partial	allow	unit	Add native PE info normalizer fixture to confirm raw range and logical RVA span edge cases
 PeDataDirectories	pe	parser	0x2,0x4,0x8,0x10,0x20,0x40,0x80	-	PE optional-header IMAGE_DATA_DIRECTORY table	partial	allow	unit	Keep named-directory consumers on DataDirectoryKind and fixture truncated or absent directory tables
 PePreprocessNative	pe	parser	0x2,0x4,0x8	-	PortableExecutableInfo::FromBitReader	supported	allow	curated	Split native and CLI preprocess tests explicitly

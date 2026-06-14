@@ -430,6 +430,27 @@ This atom is deliberately layout-only. It does not prove that a directory points
 to mapped bytes, that a section is semantically valid, or that a managed image is
 supported by the transform pipeline.
 
+## PE Machine Classification
+
+`PeMachineClassifier` owns the conversion from the PE COFF `Machine` value to
+MSDelta file-type families. It is intentionally separate from
+`ManagedFileTypeBranch`: machine tells us the architecture, while the final PA
+file type tells us which native managed/classic/CLI4 state machine the delta
+chose.
+
+- `PeInfoParse` stores a typed `PeMachine` for both strict and lenient PE
+  parsing.
+- Classic MSDelta file types are explicit for i386 (`0x2`), IA64 (`0x4`), and
+  AMD64 (`0x8`).
+- CLI4 file-type candidates are explicit for i386 (`0x10`), AMD64 (`0x20`),
+  ARMNT (`0x40`), and ARM64 (`0x80`).
+- Create-side PE auto mode only uses the machines this implementation can route
+  today: i386 and AMD64, and only when source and target machines match.
+
+Do not infer transform support from a known machine enum alone. ARM/ARM64,
+IA64, and CLI4 routing still need native classification fixtures before their
+transform atoms can move out of `missing` or `partial`.
+
 ## PE Logical Sections
 
 `PeLogicalSections` is the architecture-neutral section/address-domain atom.

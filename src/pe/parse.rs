@@ -27,6 +27,72 @@ fn read_u64(data: &[u8], offset: usize) -> Option<u64> {
     Some(u64::from_le_bytes(read_array(data, offset)?))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PeMachine {
+    I386,
+    Ia64,
+    Amd64,
+    ArmNt,
+    Arm64,
+    Unknown(u16),
+}
+
+impl PeMachine {
+    pub const I386_RAW: u16 = 0x014c;
+    pub const IA64_RAW: u16 = 0x0200;
+    pub const AMD64_RAW: u16 = 0x8664;
+    pub const ARMNT_RAW: u16 = 0x01c4;
+    pub const ARM64_RAW: u16 = 0xaa64;
+
+    pub const fn from_raw(raw: u16) -> Self {
+        match raw {
+            Self::I386_RAW => Self::I386,
+            Self::IA64_RAW => Self::Ia64,
+            Self::AMD64_RAW => Self::Amd64,
+            Self::ARMNT_RAW => Self::ArmNt,
+            Self::ARM64_RAW => Self::Arm64,
+            value => Self::Unknown(value),
+        }
+    }
+
+    pub const fn raw(self) -> u16 {
+        match self {
+            Self::I386 => Self::I386_RAW,
+            Self::Ia64 => Self::IA64_RAW,
+            Self::Amd64 => Self::AMD64_RAW,
+            Self::ArmNt => Self::ARMNT_RAW,
+            Self::Arm64 => Self::ARM64_RAW,
+            Self::Unknown(value) => value,
+        }
+    }
+
+    pub const fn classic_msdelta_file_type(self) -> Option<i64> {
+        match self {
+            Self::I386 => Some(0x2),
+            Self::Ia64 => Some(0x4),
+            Self::Amd64 => Some(0x8),
+            _ => None,
+        }
+    }
+
+    pub const fn cli4_msdelta_file_type(self) -> Option<i64> {
+        match self {
+            Self::I386 => Some(0x10),
+            Self::Amd64 => Some(0x20),
+            Self::ArmNt => Some(0x40),
+            Self::Arm64 => Some(0x80),
+            _ => None,
+        }
+    }
+
+    pub const fn supported_create_file_type(self) -> Option<i64> {
+        match self {
+            Self::I386 | Self::Amd64 => self.classic_msdelta_file_type(),
+            _ => None,
+        }
+    }
+}
+
 /// Parsed PE metadata needed for delta transforms.
 #[derive(Debug, Clone)]
 pub struct PeInfo {
@@ -37,6 +103,7 @@ pub struct PeInfo {
     /// patch domain and restores it from the preprocess on apply.
     pub checksum: u32,
     pub is_64bit: bool,
+    pub machine: PeMachine,
     pub sections: Vec<SectionInfo>,
     pub data_directories: Vec<(u32, u32)>,
 }
@@ -174,7 +241,7 @@ pub struct PeHeaderLayout {
     pub optional_header_offset: usize,
     pub optional_header_size: usize,
     pub optional_header_kind: PeOptionalHeaderKind,
-    pub machine: u16,
+    pub machine: PeMachine,
     pub number_of_sections: usize,
     pub number_of_rva_and_sizes: usize,
 }
@@ -205,8 +272,9 @@ impl PeHeaderLayout {
             return Err(Error::Malformed("PE: truncated COFF header"));
         }
 
-        let machine =
-            read_u16(data, file_header_offset).ok_or(Error::Malformed("PE: missing machine"))?;
+        let machine = read_u16(data, file_header_offset)
+            .map(PeMachine::from_raw)
+            .ok_or(Error::Malformed("PE: missing machine"))?;
         let number_of_sections = read_u16(data, file_header_offset + 2)
             .ok_or(Error::Malformed("PE: missing section count"))?
             as usize;
@@ -409,6 +477,7 @@ impl PeInfo {
         let size_of_image = opt.windows_fields.size_of_image;
         let timestamp = header.coff_header.time_date_stamp;
         let checksum = opt.windows_fields.check_sum;
+        let machine = PeMachine::from_raw(header.coff_header.machine);
 
         let mut data_directories = vec![(0u32, 0u32); 16];
         for (dtype, dd) in opt.data_directories.dirs() {
@@ -443,6 +512,7 @@ impl PeInfo {
             timestamp,
             checksum,
             is_64bit,
+            machine,
             sections,
             data_directories,
         })
@@ -486,6 +556,7 @@ impl PeInfo {
             timestamp: pe.timestamp(),
             checksum: pe.check_sum(),
             is_64bit: pe.is_64bit(),
+            machine: PeMachine::from_raw(pe.machine()),
             sections,
             data_directories,
         })
@@ -559,6 +630,7 @@ mod tests {
             assert!(info.size_of_image > 0);
             assert!(!info.sections.is_empty());
             assert!(info.is_64bit);
+            assert_eq!(info.machine, PeMachine::Amd64);
         }
     }
 
@@ -580,6 +652,7 @@ mod tests {
             timestamp: 0,
             checksum: 0,
             is_64bit: true,
+            machine: PeMachine::Amd64,
             sections,
             data_directories: vec![],
         }
@@ -592,6 +665,7 @@ mod tests {
             timestamp: 0,
             checksum: 0,
             is_64bit: true,
+            machine: PeMachine::Amd64,
             sections: vec![],
             data_directories,
         }
@@ -620,7 +694,11 @@ mod tests {
         put_u16(
             &mut image,
             file_header,
-            if pe32_plus { 0x8664 } else { 0x014c },
+            if pe32_plus {
+                PeMachine::Amd64.raw()
+            } else {
+                PeMachine::I386.raw()
+            },
         );
         put_u16(&mut image, file_header + 2, 1);
         put_u32(&mut image, file_header + 4, 0x1234_5678);
@@ -771,6 +849,33 @@ mod tests {
     }
 
     #[test]
+    fn pe_machine_maps_known_architectures_and_file_types() {
+        assert_eq!(PeMachine::from_raw(0x014c), PeMachine::I386);
+        assert_eq!(PeMachine::from_raw(0x0200), PeMachine::Ia64);
+        assert_eq!(PeMachine::from_raw(0x8664), PeMachine::Amd64);
+        assert_eq!(PeMachine::from_raw(0x01c4), PeMachine::ArmNt);
+        assert_eq!(PeMachine::from_raw(0xaa64), PeMachine::Arm64);
+        assert_eq!(PeMachine::from_raw(0x1234), PeMachine::Unknown(0x1234));
+        assert_eq!(PeMachine::Unknown(0x1234).raw(), 0x1234);
+
+        assert_eq!(PeMachine::I386.classic_msdelta_file_type(), Some(0x2));
+        assert_eq!(PeMachine::Ia64.classic_msdelta_file_type(), Some(0x4));
+        assert_eq!(PeMachine::Amd64.classic_msdelta_file_type(), Some(0x8));
+        assert_eq!(PeMachine::ArmNt.classic_msdelta_file_type(), None);
+
+        assert_eq!(PeMachine::I386.cli4_msdelta_file_type(), Some(0x10));
+        assert_eq!(PeMachine::Amd64.cli4_msdelta_file_type(), Some(0x20));
+        assert_eq!(PeMachine::ArmNt.cli4_msdelta_file_type(), Some(0x40));
+        assert_eq!(PeMachine::Arm64.cli4_msdelta_file_type(), Some(0x80));
+        assert_eq!(PeMachine::Ia64.cli4_msdelta_file_type(), None);
+
+        assert_eq!(PeMachine::I386.supported_create_file_type(), Some(0x2));
+        assert_eq!(PeMachine::Amd64.supported_create_file_type(), Some(0x8));
+        assert_eq!(PeMachine::Ia64.supported_create_file_type(), None);
+        assert_eq!(PeMachine::Arm64.supported_create_file_type(), None);
+    }
+
+    #[test]
     fn pe_data_directory_lookup_uses_typed_kind() {
         let mut directories = vec![(0, 0); DataDirectoryKind::COUNT];
         directories[DataDirectoryKind::Import.index()] = (0x1200, 0x28);
@@ -817,7 +922,7 @@ mod tests {
         assert_eq!(layout.file_header_offset, 0x84);
         assert_eq!(layout.optional_header_offset, 0x98);
         assert_eq!(layout.optional_header_kind, PeOptionalHeaderKind::Pe32);
-        assert_eq!(layout.machine, 0x014c);
+        assert_eq!(layout.machine, PeMachine::I386);
         assert!(!layout.is_64bit());
         assert_eq!(layout.timestamp_offset(), Some(0x88));
         assert_eq!(layout.image_base_offset(), Some(0xb4));
@@ -842,7 +947,7 @@ mod tests {
         let layout = PeHeaderLayout::parse(&image).unwrap();
 
         assert_eq!(layout.optional_header_kind, PeOptionalHeaderKind::Pe32Plus);
-        assert_eq!(layout.machine, 0x8664);
+        assert_eq!(layout.machine, PeMachine::Amd64);
         assert!(layout.is_64bit());
         assert_eq!(layout.image_base_offset(), Some(0xb0));
         assert_eq!(layout.image_base_width(), 8);
@@ -863,6 +968,7 @@ mod tests {
         assert_eq!(pe.timestamp, 0x1234_5678);
         assert_eq!(pe.checksum, 0xfeed_beef);
         assert!(pe.is_64bit);
+        assert_eq!(pe.machine, PeMachine::Amd64);
         assert_eq!(
             pe.data_directory(DataDirectoryKind::Import),
             Some(PeDataDirectory {
