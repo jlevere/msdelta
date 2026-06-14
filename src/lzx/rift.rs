@@ -508,7 +508,11 @@ impl RiftTable {
             }
             local_88 = u_var7;
             if term_idx != u_var7 {
-                local_90 = if u_var7 + 1 < n { u_var7 + 1 } else { 0 };
+                local_90 = if u_var7.wrapping_add(1) < n {
+                    u_var7.wrapping_add(1)
+                } else {
+                    0
+                };
                 u_var7 = local_90;
                 continue;
             }
