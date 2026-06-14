@@ -8,6 +8,8 @@ const MANAGED_CAPTURE: &str = include_str!("../lab/frida/capture-managed-corpus.
 const STAGE_MAP_STATUS: &str = include_str!("../lab/frida/check-stage-symbol-map.sh");
 const MANAGED_CORPUS: &str = include_str!("../lab/frida/managed-corpus.ps1");
 const AGENT: &str = include_str!("../lab/frida/agent/export-oracle.js");
+const STAGE_READER: &str = include_str!("../lab/frida/agent/stage/reader-window.js");
+const STAGE_CLI_MANAGED: &str = include_str!("../lab/frida/agent/stage/cli-managed.js");
 const STAGE_AGENT: &str = include_str!("../lab/frida/agent/stage-oracle.js");
 const WIN26100_MSDELTA_STAGE_MAP: &str = include_str!(
     "../lab/frida/symbol-maps/msdelta/ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb.json"
@@ -59,6 +61,8 @@ fn frida_export_oracle_scaffold_has_expected_entrypoints() {
         "node --check ./capture-export-oracle.mjs",
         "node --check ./import-inject-capture.mjs",
         "node --check ./agent/export-oracle.js",
+        "node --check ./agent/stage/reader-window.js",
+        "node --check ./agent/stage/cli-managed.js",
         "node --check ./agent/stage-oracle.js",
         "\"frida\"",
         "\"packageManager\": \"pnpm@11.1.2\"",
@@ -149,6 +153,9 @@ fn managed_corpus_capture_wrapper_runs_full_lab_loop() {
         "oracle_harness.ps1",
         "export-oracle.js",
         "stage-oracle.js",
+        "stage\\reader-window.js",
+        "stage\\cli-managed.js",
+        "System.Collections.Generic.List[string]",
         "symbol-maps",
         "Get-FileHash",
         "MSDELTA_STAGE_ORACLE_SYMBOL_MAP",
@@ -221,9 +228,14 @@ fn stage_symbol_map_status_preflights_new_dll_builds() {
 
 #[test]
 fn frida_stage_oracle_fails_closed_and_normalizes_cli_metadata() {
+    let stage_runtime = [STAGE_READER, STAGE_CLI_MANAGED, STAGE_AGENT].join("\n");
     for required in [
         "FridaStageCapture",
         "MSDELTA_STAGE_ORACLE_SYMBOL_MAP",
+        "MSDELTA_STAGE_READER",
+        "MSDELTA_STAGE_CAPTURE_ADAPTERS",
+        "registerStageCaptureAdapter",
+        "stageReaderRuntime",
         "MSDELTA_STAGE_ORACLE_SELECTED_SHA256",
         "MSDELTA_STAGE_ORACLE_OBJECT_DIR",
         "MSDELTA_STAGE_ORACLE_BLOB_DIR",
@@ -270,8 +282,8 @@ fn frida_stage_oracle_fails_closed_and_normalizes_cli_metadata() {
         "file_sink_path",
     ] {
         assert!(
-            STAGE_AGENT.contains(required),
-            "stage agent should contain {required}"
+            stage_runtime.contains(required),
+            "stage runtime should contain {required}"
         );
     }
 }

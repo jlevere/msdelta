@@ -45,6 +45,7 @@ scp -q \
   "$ROOT/lab/frida/agent/export-oracle.js" \
   "$ROOT/lab/frida/agent/stage-oracle.js" \
   "$SSH_HOST:$REMOTE_ROOT/"
+scp -q -r "$ROOT/lab/frida/agent/stage" "$SSH_HOST:$REMOTE_ROOT/"
 scp -q -r "$ROOT/lab/frida/symbol-maps" "$SSH_HOST:$REMOTE_ROOT/"
 
 log "building managed source/target pairs and native gold deltas"
@@ -91,10 +92,16 @@ globalThis.MSDELTA_STAGE_ORACLE_READY_FILE = "$stageReadyLiteral";
 globalThis.MSDELTA_STAGE_ORACLE_SELECTED_SHA256 = "$moduleHash";
 globalThis.MSDELTA_STAGE_ORACLE_SYMBOL_MAP = $symbolMapJson;
 "@
-$agent = @(
-    Get-Content -LiteralPath (Join-Path $root "export-oracle.js") -Raw
-    Get-Content -LiteralPath (Join-Path $root "stage-oracle.js") -Raw
-) -join ([Environment]::NewLine)
+$agentParts = New-Object System.Collections.Generic.List[string]
+$agentParts.Add((Get-Content -LiteralPath (Join-Path $root "export-oracle.js") -Raw))
+foreach ($stageAgentPath in @(
+    (Join-Path $root "stage\reader-window.js"),
+    (Join-Path $root "stage\cli-managed.js"),
+    (Join-Path $root "stage-oracle.js")
+)) {
+    $agentParts.Add((Get-Content -LiteralPath $stageAgentPath -Raw))
+}
+$agent = $agentParts -join ([Environment]::NewLine)
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($agentPath, $prelude + [Environment]::NewLine + $agent, $utf8NoBom)
 

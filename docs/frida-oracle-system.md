@@ -505,6 +505,31 @@ transport, custom fixture promotion, or special native state lifetime handling,
 record that as a lab atom or split the hook boundary. Do not hide it inside a
 large transform-specific adapter.
 
+The Frida agent follows this split on disk:
+
+```text
+lab/frida/agent/stage-oracle.js
+lab/frida/agent/stage/reader-window.js
+lab/frida/agent/stage/cli-managed.js
+```
+
+`stage-oracle.js` owns the invariant lifecycle: validate the selected symbol
+map, wait for the module, attach hooks, track reader calls, write events, and
+fail closed. Files under `agent/stage/` own atom-family behavior. An atom module
+registers one or more capture names in `MSDELTA_STAGE_CAPTURE_ADAPTERS`; each
+adapter provides `captureInputs`, `readObject`, and `readPlan`. Shared mechanics
+such as BitReader replay live in their own module so PE, CLI, DPX, and rift
+atoms can reuse them without copying code.
+
+When adding another atom, prefer this checklist:
+
+1. Add or extend the symbol-map layout for the exact DLL hash.
+2. Add one focused `agent/stage/<family>.js` adapter module.
+3. Keep normalized object output stable and free of raw C++ object memory.
+4. Add contract tests that mention the adapter name, module file, and expected
+   fixture shape.
+5. Run one live Frida smoke capture before promoting fixtures.
+
 ## Clean-Room Boundary
 
 The capture output should contain behavior, not copied implementation text.

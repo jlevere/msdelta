@@ -179,6 +179,24 @@ missing, and the stage agent also rejects mismatched hashes or image sizes, so a
 future build should produce an unmapped preflight failure rather than corrupt
 fixtures.
 
+## Stage Agent Modules
+
+Stage capture is split into a generic hook runner and atom modules:
+
+```text
+agent/
+  stage-oracle.js              generic symbol-map validation and hook lifecycle
+  stage/
+    reader-window.js           BitReader snapshot, replay, and standalone stream capture
+    cli-managed.js             managed CLI metadata/map extraction adapters
+```
+
+Future atoms should follow the same shape. Keep private layout offsets in the
+symbol map, keep extraction code in one atom-family module, and register a named
+capture adapter through `MSDELTA_STAGE_CAPTURE_ADAPTERS`. The generic stage
+agent should not grow atom-specific branches beyond calling the adapter's
+`captureInputs`, `readObject`, and `readPlan` functions.
+
 ## Current Scope
 
 Supported now:
