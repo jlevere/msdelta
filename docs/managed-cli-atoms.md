@@ -780,6 +780,13 @@ apply-side models are stable.
 | `CliMapSequenceTables` | `ProcessSequenceTable`, `ProcessTripletTable` | Match metadata rows using schema-specific row keys. |
 | `GetPortableExecutableInfoManaged` | `GetPortableExecutableInfo`, `GetPortableExecutableInfoCli4` | Emit target PE info and target metadata for CreateDeltaB. |
 
+Current state: `pe::cli::create_map` now contains the first create-side
+building block. `CliMapStringsHash` parses `#Strings` heaps, matches exact byte
+string values from source to target, emits source-offset to target-offset rift
+entries, keeps `0 -> 0` for non-empty heaps, and uses the first target duplicate
+for deterministic unit coverage. Native hash collision and duplicate-selection
+behavior still need a fixture before this can feed `CliMapFromPEs`.
+
 ## Current Implementation Plan
 
 The old linear order is no longer accurate. Several early parser/model atoms
@@ -793,7 +800,7 @@ The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 23
 partial, 0 missing, and 0 rejected. All 24 remain `apply_policy=reject`.
 
 The broader managed workstream tracks 31 atoms including create-side map and
-encoder atoms. Current state: 1 supported, 23 partial, 7 missing, and 0
+encoder atoms. Current state: 1 supported, 24 partial, 6 missing, and 0
 rejected. All 31 remain `apply_policy=reject`.
 
 That is the important reading of current progress: the parser/context
