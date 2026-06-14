@@ -34,6 +34,62 @@ pub(crate) struct CliBlobAndRvaMaps {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CliSequenceTableSpec {
+    pub(crate) table_id: u8,
+    pub(crate) child_name_column: &'static str,
+    pub(crate) owner_table_id: u8,
+    pub(crate) owner_list_column: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CliSequenceTableMapStats {
+    pub(crate) owner_sequences: usize,
+    pub(crate) mapped_rows: usize,
+    pub(crate) skipped_owner_rows: usize,
+    pub(crate) missing_string_rows: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CliSequenceTableMap {
+    pub(crate) table_id: u8,
+    pub(crate) rift: RiftTable,
+    pub(crate) stats: CliSequenceTableMapStats,
+}
+
+pub(crate) const CLI_SEQUENCE_TABLE_SPECS: &[CliSequenceTableSpec] = &[
+    CliSequenceTableSpec {
+        table_id: 0x04,
+        child_name_column: "Name",
+        owner_table_id: 0x02,
+        owner_list_column: "FieldList",
+    },
+    CliSequenceTableSpec {
+        table_id: 0x06,
+        child_name_column: "Name",
+        owner_table_id: 0x02,
+        owner_list_column: "MethodList",
+    },
+    CliSequenceTableSpec {
+        table_id: 0x08,
+        child_name_column: "Name",
+        owner_table_id: 0x06,
+        owner_list_column: "ParamList",
+    },
+    CliSequenceTableSpec {
+        table_id: 0x14,
+        child_name_column: "Name",
+        owner_table_id: 0x12,
+        owner_list_column: "EventList",
+    },
+    CliSequenceTableSpec {
+        table_id: 0x17,
+        child_name_column: "Name",
+        owner_table_id: 0x15,
+        owner_list_column: "PropertyList",
+    },
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct StringsHeapEntry<'a> {
     offset: u32,
     value: &'a [u8],
@@ -113,6 +169,141 @@ pub(crate) fn build_cli_strings_heap_map(
             target_strings: target_entries.len(),
             matched_strings,
         },
+    })
+}
+
+pub(crate) fn build_cli_sequence_table_map(
+    source_image: &[u8],
+    source_metadata: &CliMetadataModel,
+    target_image: &[u8],
+    target_metadata: &CliMetadataModel,
+    strings_map: &RiftTable,
+    owner_table_map: &RiftTable,
+    child_table_map: &RiftTable,
+    table_id: u8,
+) -> Result<CliSequenceTableMap> {
+    let spec = cli_sequence_table_spec(table_id)
+        .ok_or(Error::Malformed("CLI sequence map: unsupported table"))?;
+    let mut rift = child_table_map.clone();
+    let mut stats = CliSequenceTableMapStats {
+        owner_sequences: 0,
+        mapped_rows: 0,
+        skipped_owner_rows: 0,
+        missing_string_rows: 0,
+    };
+
+    if owner_table_map.entries.is_empty() || child_table_map.entries.is_empty() {
+        return Ok(CliSequenceTableMap {
+            table_id,
+            rift,
+            stats,
+        });
+    }
+
+    let source_owner_count = source_metadata.row_counts[spec.owner_table_id as usize];
+    let target_owner_count = target_metadata.row_counts[spec.owner_table_id as usize];
+    let source_child_count = source_metadata.row_counts[spec.table_id as usize];
+    let target_child_count = target_metadata.row_counts[spec.table_id as usize];
+    if source_owner_count == 0 || source_child_count == 0 || target_child_count == 0 {
+        return Ok(CliSequenceTableMap {
+            table_id,
+            rift,
+            stats,
+        });
+    }
+
+    let mut target_names = vec![0u32; target_child_count as usize + 1];
+    for target_rid in 1..=target_child_count {
+        let row = target_metadata.table_row_by_id(target_image, spec.table_id, target_rid)?;
+        target_names[target_rid as usize] =
+            string_column_offset(row.column(spec.child_name_column)?)?;
+    }
+
+    for source_owner_rid in 1..=source_owner_count {
+        let Some(target_owner_rid) = exact_rift_target_value(owner_table_map, source_owner_rid)
+        else {
+            stats.skipped_owner_rows += 1;
+            continue;
+        };
+        if target_owner_rid == 0 || target_owner_rid > target_owner_count {
+            stats.skipped_owner_rows += 1;
+            continue;
+        }
+
+        let source_start = sequence_list_start(
+            source_image,
+            source_metadata,
+            spec.owner_table_id,
+            source_owner_rid,
+            spec.owner_list_column,
+        )?;
+        let target_start = sequence_list_start(
+            target_image,
+            target_metadata,
+            spec.owner_table_id,
+            target_owner_rid,
+            spec.owner_list_column,
+        )?;
+        let source_end = sequence_list_end(
+            source_image,
+            source_metadata,
+            spec.owner_table_id,
+            source_owner_rid,
+            source_owner_count,
+            source_child_count,
+            spec.owner_list_column,
+        )?;
+        let target_end = sequence_list_end(
+            target_image,
+            target_metadata,
+            spec.owner_table_id,
+            target_owner_rid,
+            target_owner_count,
+            target_child_count,
+            spec.owner_list_column,
+        )?;
+
+        if source_start == 0
+            || target_start == 0
+            || source_start >= source_end
+            || target_start >= target_end
+            || source_start > source_child_count
+            || target_start > target_child_count
+        {
+            stats.skipped_owner_rows += 1;
+            continue;
+        }
+
+        stats.owner_sequences += 1;
+        for source_child_rid in source_start..source_end {
+            if exact_rift_target_value(&rift, source_child_rid).is_some() {
+                break;
+            }
+
+            let source_row =
+                source_metadata.table_row_by_id(source_image, spec.table_id, source_child_rid)?;
+            let source_name = string_column_offset(source_row.column(spec.child_name_column)?)?;
+            let Some(target_name) = exact_rift_target_value(strings_map, source_name) else {
+                stats.missing_string_rows += 1;
+                continue;
+            };
+
+            for target_child_rid in target_start..target_end {
+                if target_names[target_child_rid as usize] == target_name {
+                    set_rift_entry(&mut rift, source_child_rid, target_child_rid);
+                    target_names[target_child_rid as usize] = 0;
+                    stats.mapped_rows += 1;
+                    break;
+                }
+            }
+        }
+    }
+
+    rift.entries.sort_by_key(|entry| entry.source);
+    Ok(CliSequenceTableMap {
+        table_id,
+        rift,
+        stats,
     })
 }
 
@@ -213,11 +404,30 @@ pub(crate) fn build_cli_blob_and_rva_maps(
 }
 
 fn exact_table_target_rid(table_map: &RiftTable, source_rid: u32) -> Option<u32> {
+    exact_rift_target_value(table_map, source_rid)
+}
+
+fn exact_rift_target_value(table_map: &RiftTable, source: u32) -> Option<u32> {
     let entry = table_map
         .entries
         .iter()
-        .find(|entry| entry.source == i64::from(source_rid))?;
+        .find(|entry| entry.source == i64::from(source))?;
     u32::try_from(entry.target).ok()
+}
+
+fn set_rift_entry(rift: &mut RiftTable, source: u32, target: u32) {
+    if let Some(entry) = rift
+        .entries
+        .iter_mut()
+        .find(|entry| entry.source == i64::from(source))
+    {
+        entry.target = i64::from(target);
+    } else {
+        rift.entries.push(RiftEntry {
+            source: i64::from(source),
+            target: i64::from(target),
+        });
+    }
 }
 
 fn blob_column_offset(value: CliColumnValue) -> Result<u32> {
@@ -230,11 +440,78 @@ fn blob_column_offset(value: CliColumnValue) -> Result<u32> {
     }
 }
 
+fn string_column_offset(value: CliColumnValue) -> Result<u32> {
+    match value {
+        CliColumnValue::Heap {
+            kind: HeapKind::Strings,
+            offset,
+        } => Ok(offset),
+        _ => Err(Error::Malformed(
+            "CLI sequence map: expected #Strings column",
+        )),
+    }
+}
+
 fn rva_column_value(value: CliColumnValue) -> Result<u32> {
     match value {
         CliColumnValue::Rva(value) => Ok(value),
         _ => Err(Error::Malformed("CLI map create: expected RVA column")),
     }
+}
+
+fn sequence_list_start(
+    image: &[u8],
+    metadata: &CliMetadataModel,
+    owner_table_id: u8,
+    owner_rid: u32,
+    owner_list_column: &str,
+) -> Result<u32> {
+    let row = metadata.table_row_by_id(image, owner_table_id, owner_rid)?;
+    table_column_rid(row.column(owner_list_column)?)
+}
+
+fn sequence_list_end(
+    image: &[u8],
+    metadata: &CliMetadataModel,
+    owner_table_id: u8,
+    owner_rid: u32,
+    owner_count: u32,
+    child_count: u32,
+    owner_list_column: &str,
+) -> Result<u32> {
+    let child_end = child_count.checked_add(1).ok_or(Error::Malformed(
+        "CLI sequence map: child row count overflow",
+    ))?;
+    if owner_rid >= owner_count {
+        return Ok(child_end);
+    }
+
+    let next = sequence_list_start(
+        image,
+        metadata,
+        owner_table_id,
+        owner_rid + 1,
+        owner_list_column,
+    )?;
+    if next == 0 || next > child_end {
+        Ok(child_end)
+    } else {
+        Ok(next)
+    }
+}
+
+fn table_column_rid(value: CliColumnValue) -> Result<u32> {
+    match value {
+        CliColumnValue::Table { rid, .. } => Ok(rid.map_or(0, |rid| rid.get())),
+        _ => Err(Error::Malformed("CLI sequence map: expected table column")),
+    }
+}
+
+fn cli_sequence_table_spec(table_id: u8) -> Option<CliSequenceTableSpec> {
+    CLI_SEQUENCE_TABLE_SPECS
+        .iter()
+        .copied()
+        .find(|spec| spec.table_id == table_id)
 }
 
 fn empty_strings_heap_map() -> CliStringsHeapMap {
@@ -480,6 +757,140 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn sequence_table_map_matches_children_by_owner_range_and_mapped_name() {
+        let heap_widths = narrow_heap_widths();
+        let source_type_rows = typedef_rows(1);
+        let source_method_rows = method_rows(2);
+        let target_type_rows = typedef_rows(1);
+        let target_method_rows = method_rows(2);
+        let type_row_size = row_size(0x02, &source_type_rows, heap_widths).unwrap();
+        let method_row_size = row_size(0x06, &source_method_rows, heap_widths).unwrap();
+        let mut source_image = vec![0u8; 0x100];
+        let mut target_image = vec![0u8; 0x140];
+
+        put_u16(&mut source_image, 0x2c, 1);
+        put_u16(&mut target_image, 0x6c, 1);
+        put_u16(&mut source_image, 0x88, 10);
+        put_u16(&mut source_image, 0x88 + method_row_size, 20);
+        put_u16(&mut target_image, 0xa8, 200);
+        put_u16(&mut target_image, 0xa8 + method_row_size, 100);
+
+        let source_metadata = metadata_with_tables(&[
+            (0x02, 1, type_row_size as u32, 0x20),
+            (0x06, 2, method_row_size as u32, 0x80),
+        ]);
+        let target_metadata = metadata_with_tables(&[
+            (
+                0x02,
+                1,
+                row_size(0x02, &target_type_rows, heap_widths).unwrap() as u32,
+                0x60,
+            ),
+            (
+                0x06,
+                2,
+                row_size(0x06, &target_method_rows, heap_widths).unwrap() as u32,
+                0xa0,
+            ),
+        ]);
+
+        let map = build_cli_sequence_table_map(
+            &source_image,
+            &source_metadata,
+            &target_image,
+            &target_metadata,
+            &rift(&[(0, 0), (10, 100), (20, 200)]),
+            &rift(&[(0, 0), (1, 1)]),
+            &rift(&[(0, 0)]),
+            0x06,
+        )
+        .unwrap();
+
+        assert_eq!(pairs(&map.rift), vec![(0, 0), (1, 2), (2, 1)]);
+        assert_eq!(map.stats.owner_sequences, 1);
+        assert_eq!(map.stats.mapped_rows, 2);
+        assert_eq!(map.stats.skipped_owner_rows, 0);
+    }
+
+    #[test]
+    fn sequence_table_map_stops_when_child_row_is_already_mapped() {
+        let heap_widths = narrow_heap_widths();
+        let type_row_size = row_size(0x02, &typedef_rows(1), heap_widths).unwrap();
+        let method_row_size = row_size(0x06, &method_rows(2), heap_widths).unwrap();
+        let mut source_image = vec![0u8; 0x100];
+        let mut target_image = vec![0u8; 0x140];
+
+        put_u16(&mut source_image, 0x2c, 1);
+        put_u16(&mut target_image, 0x6c, 1);
+        put_u16(&mut source_image, 0x88, 10);
+        put_u16(&mut source_image, 0x88 + method_row_size, 20);
+        put_u16(&mut target_image, 0xa8, 100);
+        put_u16(&mut target_image, 0xa8 + method_row_size, 200);
+
+        let source_metadata = metadata_with_tables(&[
+            (0x02, 1, type_row_size as u32, 0x20),
+            (0x06, 2, method_row_size as u32, 0x80),
+        ]);
+        let target_metadata = metadata_with_tables(&[
+            (0x02, 1, type_row_size as u32, 0x60),
+            (0x06, 2, method_row_size as u32, 0xa0),
+        ]);
+
+        let map = build_cli_sequence_table_map(
+            &source_image,
+            &source_metadata,
+            &target_image,
+            &target_metadata,
+            &rift(&[(0, 0), (10, 100), (20, 200)]),
+            &rift(&[(0, 0), (1, 1)]),
+            &rift(&[(0, 0), (1, 1)]),
+            0x06,
+        )
+        .unwrap();
+
+        assert_eq!(pairs(&map.rift), vec![(0, 0), (1, 1)]);
+        assert_eq!(map.stats.mapped_rows, 0);
+    }
+
+    #[test]
+    fn sequence_table_map_tracks_missing_string_mappings() {
+        let heap_widths = narrow_heap_widths();
+        let type_row_size = row_size(0x02, &typedef_rows(1), heap_widths).unwrap();
+        let method_row_size = row_size(0x06, &method_rows(1), heap_widths).unwrap();
+        let mut source_image = vec![0u8; 0x100];
+        let mut target_image = vec![0u8; 0x120];
+
+        put_u16(&mut source_image, 0x2c, 1);
+        put_u16(&mut target_image, 0x6c, 1);
+        put_u16(&mut source_image, 0x88, 10);
+        put_u16(&mut target_image, 0xa8, 100);
+
+        let source_metadata = metadata_with_tables(&[
+            (0x02, 1, type_row_size as u32, 0x20),
+            (0x06, 1, method_row_size as u32, 0x80),
+        ]);
+        let target_metadata = metadata_with_tables(&[
+            (0x02, 1, type_row_size as u32, 0x60),
+            (0x06, 1, method_row_size as u32, 0xa0),
+        ]);
+
+        let map = build_cli_sequence_table_map(
+            &source_image,
+            &source_metadata,
+            &target_image,
+            &target_metadata,
+            &rift(&[(0, 0)]),
+            &rift(&[(0, 0), (1, 1)]),
+            &rift(&[(0, 0)]),
+            0x06,
+        )
+        .unwrap();
+
+        assert_eq!(pairs(&map.rift), vec![(0, 0)]);
+        assert_eq!(map.stats.missing_string_rows, 1);
+    }
+
     fn metadata_with_strings(file_offset: usize, size: u32) -> CliMetadataModel {
         metadata_with_streams(
             CliStreamSet {
@@ -538,6 +949,42 @@ mod tests {
         )
     }
 
+    fn metadata_with_tables(tables: &[(usize, u32, u32, usize)]) -> CliMetadataModel {
+        let mut row_counts = [0u32; 64];
+        let mut row_sizes = [0u32; 64];
+        let mut table_file_offsets = [None; 64];
+        let mut tables_size = 0u32;
+        let mut tables_start = usize::MAX;
+        for &(table_id, row_count, row_size, table_file_offset) in tables {
+            row_counts[table_id] = row_count;
+            row_sizes[table_id] = row_size;
+            table_file_offsets[table_id] = Some(table_file_offset);
+            tables_size = tables_size.saturating_add(row_count.saturating_mul(row_size));
+            tables_start = tables_start.min(table_file_offset);
+        }
+
+        metadata_with_streams(
+            CliStreamSet {
+                strings: Some(CliStream {
+                    metadata_offset: 0,
+                    file_offset: 0,
+                    size: 0,
+                }),
+                user_strings: None,
+                blob: None,
+                guid: None,
+                tables: CliStream {
+                    metadata_offset: 0,
+                    file_offset: tables_start,
+                    size: tables_size,
+                },
+            },
+            row_counts,
+            row_sizes,
+            table_file_offsets,
+        )
+    }
+
     fn metadata_with_streams(
         streams: CliStreamSet,
         row_counts: [u32; 64],
@@ -575,6 +1022,12 @@ mod tests {
     fn method_rows(row_count: u32) -> [u32; 64] {
         let mut row_counts = [0u32; 64];
         row_counts[0x06] = row_count;
+        row_counts
+    }
+
+    fn typedef_rows(row_count: u32) -> [u32; 64] {
+        let mut row_counts = [0u32; 64];
+        row_counts[0x02] = row_count;
         row_counts
     }
 
