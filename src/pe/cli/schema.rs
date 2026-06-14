@@ -574,7 +574,11 @@ pub(crate) fn row_size(
     )
 }
 
-fn column_width(kind: ColumnKind, row_counts: &[u32; 64], heap_widths: HeapIndexWidths) -> u8 {
+pub(crate) fn column_width(
+    kind: ColumnKind,
+    row_counts: &[u32; 64],
+    heap_widths: HeapIndexWidths,
+) -> u8 {
     match kind {
         ColumnKind::U8 => 1,
         ColumnKind::U16 => 2,

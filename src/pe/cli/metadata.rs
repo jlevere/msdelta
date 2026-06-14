@@ -1,7 +1,15 @@
 //! Managed PE CLR metadata root and preprocess-bitstream parsing.
 
 use crate::bitstream::{BitReader, BitWriter};
-use crate::pe::cli::schema::{metadata_schema, row_size, CliSchemaFlavor, HeapIndexWidths};
+use crate::pe::cli::blob::read_compressed_u32;
+use crate::pe::cli::schema::{
+    coded_index_schema, column_width, metadata_schema, row_size, table_schema, CliSchemaFlavor,
+    CodedIndexKind, ColumnKind, HeapIndexWidths, HeapKind, TableSchema, TABLE_SENTINEL,
+};
+use crate::pe::cli::tokens::{
+    BlobHeapOffset, GuidHeapIndex, MetadataRid, MetadataTableId, StringsHeapOffset,
+    UserStringsHeapOffset,
+};
 use crate::pe::parse::{PeInfo, SectionInfo};
 use crate::{Error, Result};
 
@@ -40,6 +48,37 @@ pub(crate) struct CliMetadataModel {
     pub(crate) row_counts: [u32; 64],
     pub(crate) row_sizes: [u32; 64],
     pub(crate) table_file_offsets: [Option<usize>; 64],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CliTableRow<'a> {
+    table_id: MetadataTableId,
+    rid: MetadataRid,
+    schema: &'static TableSchema,
+    bytes: &'a [u8],
+    row_counts: [u32; 64],
+    heap_widths: HeapIndexWidths,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CliColumnValue {
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    Heap {
+        kind: HeapKind,
+        offset: u32,
+    },
+    Table {
+        table: MetadataTableId,
+        rid: Option<MetadataRid>,
+    },
+    Coded {
+        kind: CodedIndexKind,
+        raw: u32,
+        table: Option<MetadataTableId>,
+        rid: Option<MetadataRid>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,6 +159,158 @@ impl CliMetadataBitstreamStream {
             file_offset: 0,
             size: 0,
         }
+    }
+}
+
+impl CliMetadataModel {
+    pub(crate) fn table_row<'a>(
+        &self,
+        image: &'a [u8],
+        table_id: MetadataTableId,
+        rid: MetadataRid,
+    ) -> Result<CliTableRow<'a>> {
+        let table_index = table_id.get() as usize;
+        let row_count = self.row_counts[table_index];
+        if rid.get() > row_count {
+            return Err(Error::Malformed("CLI metadata: row RID is out of range"));
+        }
+
+        let row_size = self.row_sizes[table_index] as usize;
+        let table_file_offset = self.table_file_offsets[table_index]
+            .ok_or(Error::Malformed("CLI metadata: table is not present"))?;
+        let row_index = (rid.get() - 1) as usize;
+        let row_offset = table_file_offset
+            .checked_add(
+                row_size
+                    .checked_mul(row_index)
+                    .ok_or(Error::Malformed("CLI metadata: table row offset overflow"))?,
+            )
+            .ok_or(Error::Malformed("CLI metadata: table row offset overflow"))?;
+        let bytes = checked_slice(image, row_offset, row_size)?;
+        let schema = table_schema(table_id.get())
+            .ok_or(Error::Malformed("CLI metadata: unknown table schema"))?;
+
+        Ok(CliTableRow {
+            table_id,
+            rid,
+            schema,
+            bytes,
+            row_counts: self.row_counts,
+            heap_widths: self.heap_widths,
+        })
+    }
+
+    pub(crate) fn table_row_by_id<'a>(
+        &self,
+        image: &'a [u8],
+        table_id: u8,
+        rid: u32,
+    ) -> Result<CliTableRow<'a>> {
+        self.table_row(
+            image,
+            MetadataTableId::new(table_id)?,
+            MetadataRid::new(rid)?,
+        )
+    }
+
+    pub(crate) fn strings<'a>(
+        &self,
+        image: &'a [u8],
+        offset: StringsHeapOffset,
+    ) -> Result<&'a str> {
+        let Some(stream) = self.streams.strings else {
+            return Err(Error::Malformed("CLI metadata: missing #Strings stream"));
+        };
+        let heap = cli_heap_stream(image, stream)?;
+        let offset = offset.get() as usize;
+        if offset == 0 {
+            return Ok("");
+        }
+        let tail = heap.get(offset..).ok_or(Error::Malformed(
+            "CLI metadata: #Strings offset is out of range",
+        ))?;
+        let len = tail
+            .iter()
+            .position(|&byte| byte == 0)
+            .ok_or(Error::Malformed(
+                "CLI metadata: unterminated #Strings value",
+            ))?;
+        std::str::from_utf8(&tail[..len])
+            .map_err(|_| Error::Malformed("CLI metadata: #Strings value is not UTF-8"))
+    }
+
+    pub(crate) fn blob<'a>(&self, image: &'a [u8], offset: BlobHeapOffset) -> Result<&'a [u8]> {
+        let Some(stream) = self.streams.blob else {
+            return Err(Error::Malformed("CLI metadata: missing #Blob stream"));
+        };
+        read_length_prefixed_heap_value(cli_heap_stream(image, stream)?, offset.get())
+    }
+
+    pub(crate) fn user_string<'a>(
+        &self,
+        image: &'a [u8],
+        offset: UserStringsHeapOffset,
+    ) -> Result<&'a [u8]> {
+        let Some(stream) = self.streams.user_strings else {
+            return Err(Error::Malformed("CLI metadata: missing #US stream"));
+        };
+        read_length_prefixed_heap_value(cli_heap_stream(image, stream)?, offset.get())
+    }
+
+    pub(crate) fn guid<'a>(
+        &self,
+        image: &'a [u8],
+        index: GuidHeapIndex,
+    ) -> Result<Option<&'a [u8]>> {
+        let index = index.get();
+        if index == 0 {
+            return Ok(None);
+        }
+        let Some(stream) = self.streams.guid else {
+            return Err(Error::Malformed("CLI metadata: missing #GUID stream"));
+        };
+        let heap = cli_heap_stream(image, stream)?;
+        let offset = ((index - 1) as usize)
+            .checked_mul(16)
+            .ok_or(Error::Malformed("CLI metadata: #GUID index overflow"))?;
+        checked_slice(heap, offset, 16).map(Some)
+    }
+}
+
+impl<'a> CliTableRow<'a> {
+    pub(crate) const fn table_id(&self) -> MetadataTableId {
+        self.table_id
+    }
+
+    pub(crate) const fn rid(&self) -> MetadataRid {
+        self.rid
+    }
+
+    pub(crate) fn column(&self, name: &str) -> Result<CliColumnValue> {
+        let index = self
+            .schema
+            .columns
+            .iter()
+            .position(|column| column.name == name)
+            .ok_or(Error::Malformed("CLI metadata: unknown table column"))?;
+        self.column_by_index(index)
+    }
+
+    pub(crate) fn column_by_index(&self, index: usize) -> Result<CliColumnValue> {
+        let column = self
+            .schema
+            .columns
+            .get(index)
+            .ok_or(Error::Malformed("CLI metadata: unknown table column"))?;
+        let offset = self
+            .schema
+            .columns
+            .iter()
+            .take(index)
+            .map(|column| column_width(column.kind, &self.row_counts, self.heap_widths) as usize)
+            .sum::<usize>();
+        let width = column_width(column.kind, &self.row_counts, self.heap_widths);
+        read_column_value(column.kind, self.bytes, offset, width)
     }
 }
 
@@ -625,6 +816,90 @@ fn read_u64(data: &[u8], offset: usize) -> Result<u64> {
     Ok(u64::from_le_bytes(bytes.try_into().unwrap()))
 }
 
+fn read_column_value(
+    kind: ColumnKind,
+    row: &[u8],
+    offset: usize,
+    width: u8,
+) -> Result<CliColumnValue> {
+    let raw = read_column_unsigned(row, offset, width)?;
+    match kind {
+        ColumnKind::U8 => Ok(CliColumnValue::U8(raw as u8)),
+        ColumnKind::U16 => Ok(CliColumnValue::U16(raw as u16)),
+        ColumnKind::U32 => Ok(CliColumnValue::U32(raw)),
+        ColumnKind::Heap(kind) => Ok(CliColumnValue::Heap { kind, offset: raw }),
+        ColumnKind::Table(table_id) => {
+            let table = MetadataTableId::new(table_id)?;
+            let rid = if raw == 0 {
+                None
+            } else {
+                Some(MetadataRid::new(raw)?)
+            };
+            Ok(CliColumnValue::Table { table, rid })
+        }
+        ColumnKind::Coded(kind) => decode_coded_index(kind, raw),
+    }
+}
+
+fn decode_coded_index(kind: CodedIndexKind, raw: u32) -> Result<CliColumnValue> {
+    let schema = coded_index_schema(kind);
+    let tag_mask = (1u32 << schema.tag_bits) - 1;
+    let tag = (raw & tag_mask) as usize;
+    let rid_raw = raw >> schema.tag_bits;
+    let table_raw = *schema
+        .tag_to_table
+        .get(tag)
+        .ok_or(Error::Malformed("CLI metadata: invalid coded-index tag"))?;
+    if rid_raw == 0 {
+        return Ok(CliColumnValue::Coded {
+            kind,
+            raw,
+            table: None,
+            rid: None,
+        });
+    }
+    if table_raw == TABLE_SENTINEL {
+        return Err(Error::Malformed(
+            "CLI metadata: coded-index tag has no target table",
+        ));
+    }
+
+    Ok(CliColumnValue::Coded {
+        kind,
+        raw,
+        table: Some(MetadataTableId::new(table_raw)?),
+        rid: Some(MetadataRid::new(rid_raw)?),
+    })
+}
+
+fn read_column_unsigned(row: &[u8], offset: usize, width: u8) -> Result<u32> {
+    match width {
+        1 => Ok(*checked_slice(row, offset, 1)?.first().unwrap() as u32),
+        2 => Ok(read_u16(row, offset)? as u32),
+        4 => read_u32(row, offset),
+        _ => Err(Error::Malformed("CLI metadata: invalid column width")),
+    }
+}
+
+fn cli_heap_stream(image: &[u8], stream: CliStream) -> Result<&[u8]> {
+    checked_slice(image, stream.file_offset, stream.size as usize)
+}
+
+fn read_length_prefixed_heap_value(heap: &[u8], offset: u32) -> Result<&[u8]> {
+    let offset = offset as usize;
+    if offset == 0 {
+        return Ok(&heap[..0]);
+    }
+    let tail = heap.get(offset..).ok_or(Error::Malformed(
+        "CLI metadata: heap offset is out of range",
+    ))?;
+    let (len, header_len) = read_compressed_u32(tail)?;
+    let payload_offset = offset
+        .checked_add(header_len)
+        .ok_or(Error::Malformed("CLI metadata: heap value offset overflow"))?;
+    checked_slice(heap, payload_offset, len as usize)
+}
+
 fn checked_slice(data: &[u8], offset: usize, len: usize) -> Result<&[u8]> {
     let end = offset
         .checked_add(len)
@@ -663,7 +938,7 @@ mod tests {
         assert_eq!(model.row_sizes[0x02], 18);
         assert_eq!(model.row_sizes[0x06], 18);
         assert_eq!(model.streams.strings.unwrap().size, 32);
-        assert_eq!(model.streams.user_strings.unwrap().size, 4);
+        assert_eq!(model.streams.user_strings.unwrap().size, 7);
         assert_eq!(model.streams.blob.unwrap().size, 16);
         assert_eq!(model.streams.guid.unwrap().size, 16);
         assert!(model.table_file_offsets[0x02].is_some());
@@ -701,6 +976,86 @@ mod tests {
         assert!(matches!(
             parse_cli_metadata_from_pe(&truncated, CliSchemaFlavor::Classic),
             Err(Error::Truncated)
+        ));
+    }
+
+    #[test]
+    fn reads_typed_table_rows_and_heap_values() {
+        let image = synthetic_managed_pe(false, StreamMutation::None);
+        let model = parse_cli_metadata_from_pe(&image, CliSchemaFlavor::Classic).unwrap();
+
+        let method = model.table_row_by_id(&image, 0x06, 1).unwrap();
+        assert_eq!(method.table_id().get(), 0x06);
+        assert_eq!(method.rid().get(), 1);
+        assert_eq!(method.column("Rva").unwrap(), CliColumnValue::U32(0x2222));
+        assert_eq!(method.column("ImplFlags").unwrap(), CliColumnValue::U16(1));
+        assert_eq!(method.column("Flags").unwrap(), CliColumnValue::U16(6));
+        assert_eq!(
+            method.column("Name").unwrap(),
+            CliColumnValue::Heap {
+                kind: HeapKind::Strings,
+                offset: 25
+            }
+        );
+        assert_eq!(
+            method.column("Signature").unwrap(),
+            CliColumnValue::Heap {
+                kind: HeapKind::Blob,
+                offset: 1
+            }
+        );
+        assert_eq!(
+            model.strings(&image, StringsHeapOffset::new(25)).unwrap(),
+            "Method"
+        );
+        assert_eq!(
+            model.blob(&image, BlobHeapOffset::new(1)).unwrap(),
+            &[0x11, 0x22, 0x33]
+        );
+
+        let typedef = model.table_row_by_id(&image, 0x02, 1).unwrap();
+        assert_eq!(
+            typedef.column("Extends").unwrap(),
+            CliColumnValue::Coded {
+                kind: CodedIndexKind::TypeDefOrRef,
+                raw: 5,
+                table: Some(MetadataTableId::new(0x01).unwrap()),
+                rid: Some(MetadataRid::new(1).unwrap()),
+            }
+        );
+        assert_eq!(
+            model.strings(&image, StringsHeapOffset::new(17)).unwrap(),
+            "TypeDef"
+        );
+
+        let module = model.table_row_by_id(&image, 0x00, 1).unwrap();
+        assert_eq!(
+            module.column("Mvid").unwrap(),
+            CliColumnValue::Heap {
+                kind: HeapKind::Guid,
+                offset: 1
+            }
+        );
+        assert_eq!(
+            model.guid(&image, GuidHeapIndex::new(1)).unwrap().unwrap(),
+            &[0xab; 16]
+        );
+        assert_eq!(
+            model
+                .user_string(&image, UserStringsHeapOffset::new(1))
+                .unwrap(),
+            &[b'O', 0, b'K', 0, 0]
+        );
+    }
+
+    #[test]
+    fn rejects_typed_table_row_outside_present_range() {
+        let image = synthetic_managed_pe(false, StreamMutation::None);
+        let model = parse_cli_metadata_from_pe(&image, CliSchemaFlavor::Classic).unwrap();
+
+        assert!(matches!(
+            model.table_row_by_id(&image, 0x06, 5),
+            Err(Error::Malformed("CLI metadata: row RID is out of range"))
         ));
     }
 
@@ -891,23 +1246,23 @@ mod tests {
         let stream_specs = match mutation {
             StreamMutation::DuplicateStrings => vec![
                 ("#~", table_stream.clone()),
-                ("#Strings", vec![0u8; 32]),
+                ("#Strings", strings_heap()),
                 ("#Strings", vec![0u8; 8]),
-                ("#Blob", vec![0u8; 16]),
-                ("#GUID", vec![0u8; 16]),
+                ("#Blob", blob_heap()),
+                ("#GUID", guid_heap()),
             ],
             StreamMutation::MissingTables => vec![
-                ("#Strings", vec![0u8; 32]),
-                ("#US", vec![0u8; 4]),
-                ("#Blob", vec![0u8; 16]),
-                ("#GUID", vec![0u8; 16]),
+                ("#Strings", strings_heap()),
+                ("#US", user_strings_heap()),
+                ("#Blob", blob_heap()),
+                ("#GUID", guid_heap()),
             ],
             _ => vec![
                 ("#~", table_stream),
-                ("#Strings", vec![0u8; 32]),
-                ("#US", vec![0u8; 4]),
-                ("#Blob", vec![0u8; 16]),
-                ("#GUID", vec![0u8; 16]),
+                ("#Strings", strings_heap()),
+                ("#US", user_strings_heap()),
+                ("#Blob", blob_heap()),
+                ("#GUID", guid_heap()),
             ],
         };
 
@@ -963,6 +1318,24 @@ mod tests {
         root
     }
 
+    fn strings_heap() -> Vec<u8> {
+        b"\0Module\0TypeName\0TypeDef\0Method\0".to_vec()
+    }
+
+    fn user_strings_heap() -> Vec<u8> {
+        vec![0, 5, b'O', 0, b'K', 0, 0]
+    }
+
+    fn blob_heap() -> Vec<u8> {
+        let mut heap = vec![0, 3, 0x11, 0x22, 0x33];
+        heap.resize(16, 0);
+        heap
+    }
+
+    fn guid_heap() -> Vec<u8> {
+        vec![0xab; 16]
+    }
+
     fn build_tables_stream(truncated: bool) -> Vec<u8> {
         let mut tables = Vec::new();
         tables.extend_from_slice(&0u32.to_le_bytes());
@@ -978,12 +1351,34 @@ mod tests {
         }
 
         let full_rows_len = 12 + 2 * 10 + 3 * 18 + 4 * 18;
-        let rows_len = if truncated {
-            full_rows_len - 1
-        } else {
-            full_rows_len
-        };
-        tables.resize(tables.len() + rows_len, 0);
+        let mut rows = vec![0u8; full_rows_len];
+
+        put_u16(&mut rows, 0, 1);
+        put_u32(&mut rows, 2, 1);
+        put_u16(&mut rows, 6, 1);
+
+        let type_ref0 = 12;
+        put_u32(&mut rows, type_ref0 + 2, 8);
+
+        let type_def0 = 12 + 2 * 10;
+        put_u32(&mut rows, type_def0, 0x0012_3456);
+        put_u32(&mut rows, type_def0 + 4, 17);
+        put_u16(&mut rows, type_def0 + 12, (1 << 2) | 1);
+        put_u16(&mut rows, type_def0 + 14, 1);
+        put_u16(&mut rows, type_def0 + 16, 1);
+
+        let method0 = 12 + 2 * 10 + 3 * 18;
+        put_u32(&mut rows, method0, 0x2222);
+        put_u16(&mut rows, method0 + 4, 1);
+        put_u16(&mut rows, method0 + 6, 6);
+        put_u32(&mut rows, method0 + 8, 25);
+        put_u32(&mut rows, method0 + 12, 1);
+        put_u16(&mut rows, method0 + 16, 1);
+
+        if truncated {
+            rows.pop();
+        }
+        tables.extend_from_slice(&rows);
         tables
     }
 
