@@ -537,10 +537,12 @@ mod tests {
 
     #[test]
     fn roundtrips_heap_table_and_guid_maps() {
-        let mut model = CliMapModel::default();
-        model.strings = rift(&[(3, 7), (8, 9)]);
-        model.blob = rift(&[(0x20, 0x28)]);
-        model.guid = rift(&[(1, 3)]);
+        let mut model = CliMapModel {
+            strings: rift(&[(3, 7), (8, 9)]),
+            blob: rift(&[(0x20, 0x28)]),
+            guid: rift(&[(1, 3)]),
+            ..CliMapModel::default()
+        };
         model.tables[TYPE_REF as usize] = rift(&[(5, 9), (10, 20)]);
 
         let decoded = roundtrip_cli_map(&model);
