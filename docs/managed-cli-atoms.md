@@ -711,11 +711,11 @@ the release gate below is satisfied.
 
 ### Readiness Snapshot
 
-The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 9
-partial, 13 missing, and 1 rejected. All 24 remain `apply_policy=reject`.
+The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 10
+partial, 12 missing, and 1 rejected. All 24 remain `apply_policy=reject`.
 
 The broader managed workstream tracks 31 atoms including create-side map and
-encoder atoms. Current state: 1 supported, 9 partial, 20 missing, and 1
+encoder atoms. Current state: 1 supported, 10 partial, 19 missing, and 1
 rejected. All 31 remain `apply_policy=reject`.
 
 That is the important reading of current progress: the parser/context
@@ -738,6 +738,7 @@ These atoms are useful building blocks today, but not all are release gates:
 | `CliCodedTokenMap` | Win26100 call-record fixtures | targeted non-identity `MapCoded` native case |
 | `TransformContextManaged` | unit validation plus managed native corpus construction | native fixture proving actual transform slot attachment |
 | `CliBlobCompressedInteger` | synthetic boundary tests plus Win26100 successful 1-byte `GetBlobContent` fixtures | native 2-byte, 4-byte, malformed, and non-canonical `GetNumber` behavior |
+| `CliHeapRift` | pure unit tests plus managed native corpus construction | native `AddHeapMap` or `FromCliMap` rift-output parity before final rift use |
 
 Treat these as the base for the next phase. Do not re-implement them as part of
 larger atoms; improve their fixture coverage when a downstream atom exposes a
