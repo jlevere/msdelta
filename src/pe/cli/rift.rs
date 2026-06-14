@@ -113,6 +113,27 @@ pub(crate) fn build_cli_compression_rift_with_source_fill_offset(
     )
 }
 
+pub(crate) fn build_cli_compression_rift_from_transformed_source(
+    source_metadata: &CliMetadataModel,
+    target_metadata: &CliMetadataBitstreamRecord,
+    cli_map: &CliMapModel,
+    transformed_source: &[u8],
+) -> RiftTable {
+    build_cli_compression_rift_with_source_fill_offset(
+        source_metadata,
+        target_metadata,
+        cli_map,
+        cli_source_widening_fill_offset(transformed_source),
+    )
+}
+
+pub(crate) fn cli_source_widening_fill_offset(transformed_source: &[u8]) -> i64 {
+    transformed_source
+        .windows(2)
+        .position(|window| window == [0, 0])
+        .unwrap_or(transformed_source.len()) as i64
+}
+
 fn build_cli_compression_rift_impl(
     source_metadata: &CliMetadataModel,
     target_metadata: &CliMetadataBitstreamRecord,
@@ -720,6 +741,16 @@ mod tests {
     }
 
     #[test]
+    fn source_widening_fill_offset_uses_first_adjacent_zero_pair() {
+        assert_eq!(cli_source_widening_fill_offset(&[]), 0);
+        assert_eq!(cli_source_widening_fill_offset(&[0]), 1);
+        assert_eq!(cli_source_widening_fill_offset(&[1, 2, 3]), 3);
+        assert_eq!(cli_source_widening_fill_offset(&[0, 0, 3]), 0);
+        assert_eq!(cli_source_widening_fill_offset(&[1, 0, 0, 3]), 1);
+        assert_eq!(cli_source_widening_fill_offset(&[1, 2, 0, 0]), 2);
+    }
+
+    #[test]
     fn heap_compression_rift_composes_strings_user_strings_and_blob_streams() {
         let source_metadata = source_metadata_model();
         let target_metadata = target_metadata_record();
@@ -824,6 +855,42 @@ mod tests {
                 (0x661c, 0x9900),
                 (0x661e, 0x551a),
             ]
+        );
+    }
+
+    #[test]
+    fn cli_compression_rift_from_transformed_source_derives_width_hole_fill_offset() {
+        let heap_widths = narrow_heap_widths();
+        let mut source_metadata = source_metadata_model();
+        source_metadata.heap_widths = heap_widths;
+        source_metadata.valid_table_mask = 1 << 0x02;
+        source_metadata.row_counts[0x02] = 1;
+        source_metadata.row_sizes[0x02] =
+            row_size(0x02, &source_metadata.row_counts, heap_widths).unwrap() as u32;
+        source_metadata.table_file_offsets[0x02] = Some(0x5500);
+
+        let mut target_metadata = target_metadata_record();
+        target_metadata.streams.strings.size = 0;
+        target_metadata.streams.user_strings.size = 0;
+        target_metadata.streams.blob.size = 0;
+        target_metadata.heap_widths = heap_widths;
+        target_metadata.valid_table_mask = (1 << 0x02) | (1 << 0x04);
+        target_metadata.row_counts[0x02] = 1;
+        target_metadata.row_counts[0x04] = 1 << 16;
+        target_metadata.row_sizes[0x02] =
+            row_size(0x02, &target_metadata.row_counts, heap_widths).unwrap() as u32;
+        target_metadata.table_file_offsets[0x02] = Some(0x6600);
+
+        let table = build_cli_compression_rift_from_transformed_source(
+            &source_metadata,
+            &target_metadata,
+            &CliMapModel::default(),
+            &[0xaa, 0xbb, 0, 0, 0xcc],
+        );
+
+        assert_eq!(
+            pairs(&table),
+            vec![(0x6600, 0x5500), (0x660c, 2), (0x660e, 0x550c)]
         );
     }
 
