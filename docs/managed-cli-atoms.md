@@ -271,7 +271,7 @@ Inputs: preprocess bitstream and managed branch.
 Transition: parse PE target info, target RVA-to-file-offset rift, and the
 correct target metadata object.
 
-Outputs: typed `ManagedPeInfo { image_base, field1, time_date_stamp,
+Outputs: typed `ManagedPeInfo { image_base, checksum, time_date_stamp,
 target_rva_to_file_offset, target_metadata }`.
 
 Failure conditions: truncated scalar fields, malformed rift table, malformed
@@ -279,6 +279,12 @@ metadata bitstream.
 
 Oracle strategy: parser round-trip first; then native stage dump comparing the
 target info split fields and rift entries.
+
+Current state: `src/pe/cli/context.rs` defines `ManagedPeInfoBitstream`, and
+`src/pa30/preprocess.rs` now parses the PA30 PE target-info prefix into that
+typed model instead of exposing loose PA30 fields. Classic CLI target metadata
+from the bitstream is attached here. CLI4 still needs its own bitstream fixture
+and branch-specific parser entry point.
 
 ### CliMetadataStaticSchema
 
@@ -510,6 +516,12 @@ from slot `0x78`, and `CliMap` from slot `0x88` in native object terms.
 Done when: a lab build can report the selected managed branch and enabled CLI
 flags before running apply.
 
+Current state: `TransformContextManaged` is a typed partial model that validates
+source metadata flavor, target metadata flavor, target PE info, used rift, and
+`CliMap` all belong to the same managed branch. `PePreprocess` exposes
+`managed_transform_context` as the PA30 glue point. Apply still rejects managed
+state until the first transform atom consumes this context with native fixtures.
+
 ### MarkNonExeCliMethods
 
 Native reference: `MarkNonExe::RunCli`, `MarkNonExe::RunCli4`
@@ -733,10 +745,11 @@ later transforms will call thousands of times.
 
 ### Phase 2: Build the Managed Context
 
-Implement `ManagedPeInfoBitstream` and `TransformContextManaged` as glue atoms,
+`ManagedPeInfoBitstream` and `TransformContextManaged` now exist as glue atoms,
 not as transforms. Their job is to prove that source metadata, target metadata,
 the used rift, and `CliMap` are all attached to the same managed branch before
-any byte mutation happens.
+any byte mutation happens. The remaining Phase 2 work is fixture-backed native
+slot attachment and CLI4 target-info coverage.
 
 Done when a fixture can show:
 

@@ -1,5 +1,8 @@
 //! PE preprocessing for PA30 deltas.
 
+use crate::pe::cli::context::{ManagedPeInfoBitstream, TransformContextManaged};
+use crate::pe::cli::metadata::CliMetadataModel;
+use crate::pe::cli::schema::CliSchemaFlavor;
 use crate::Result;
 
 /// Parsed PE preprocess buffer from the delta.
@@ -7,11 +10,7 @@ use crate::Result;
 /// From decompiled PreProcessPEForApply + PortableExecutableInfo::FromBitReader.
 #[allow(dead_code)]
 pub(crate) struct PePreprocess {
-    pub(crate) target_image_base: u64,
-    pub(crate) target_field1: u32,
-    pub(crate) target_timestamp: u32,
-    pub(crate) pe_rift: crate::lzx::rift::RiftTable,
-    pub(crate) target_cli_metadata: crate::pe::cli::metadata::CliMetadataBitstreamRecord,
+    pub(crate) target_info: ManagedPeInfoBitstream,
     // Second rift table (from PreProcessPEForApply, separate from PE info rift)
     pub(crate) preprocess_rift: crate::lzx::rift::RiftTable,
     pub(crate) cli_map: crate::pe::cli::map::CliMapModel,
@@ -19,7 +18,21 @@ pub(crate) struct PePreprocess {
 
 impl PePreprocess {
     pub(crate) fn has_managed_cli_state(&self) -> bool {
-        !self.target_cli_metadata.is_empty() || !self.cli_map.is_empty()
+        self.target_info.has_target_metadata() || !self.cli_map.is_empty()
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn managed_transform_context(
+        &self,
+        source_metadata: CliMetadataModel,
+    ) -> Result<TransformContextManaged> {
+        TransformContextManaged::new(
+            self.target_info.flavor,
+            source_metadata,
+            self.target_info.clone(),
+            self.preprocess_rift.clone(),
+            self.cli_map.clone(),
+        )
     }
 }
 
@@ -47,7 +60,7 @@ pub(crate) fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
 
     let target_cli_metadata = crate::pe::cli::metadata::read_cli_metadata_bitstream(
         &mut reader,
-        crate::pe::cli::schema::CliSchemaFlavor::Classic,
+        CliSchemaFlavor::Classic,
     )?;
 
     // Second rift table from PreProcessPEForApply
@@ -60,11 +73,14 @@ pub(crate) fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
     };
 
     Ok(PePreprocess {
-        target_image_base,
-        target_field1,
-        target_timestamp,
-        pe_rift,
-        target_cli_metadata,
+        target_info: ManagedPeInfoBitstream::new(
+            CliSchemaFlavor::Classic,
+            target_image_base,
+            target_field1,
+            target_timestamp,
+            pe_rift,
+            target_cli_metadata,
+        )?,
         preprocess_rift,
         cli_map,
     })
@@ -88,9 +104,7 @@ pub(crate) fn build_pe_preprocess(
     pe_rift.to_writer(&mut writer);
     crate::pe::cli::metadata::write_cli_metadata_bitstream(
         &mut writer,
-        &crate::pe::cli::metadata::CliMetadataBitstreamRecord::empty(
-            crate::pe::cli::schema::CliSchemaFlavor::Classic,
-        ),
+        &crate::pe::cli::metadata::CliMetadataBitstreamRecord::empty(CliSchemaFlavor::Classic),
     );
     preprocess_rift.to_writer(&mut writer);
     crate::pe::cli::map::write_cli_map_bitstream(
@@ -114,11 +128,11 @@ pub(crate) fn apply_pe_timestamp_fixup(
     output: &mut [u8],
 ) -> Result<()> {
     let source_timestamp = pe_timestamp(reference);
-    if source_timestamp == 0 || source_timestamp == pp.target_timestamp {
+    if source_timestamp == 0 || source_timestamp == pp.target_info.time_date_stamp {
         return Ok(());
     }
 
-    let new_bytes = pp.target_timestamp.to_le_bytes();
+    let new_bytes = pp.target_info.time_date_stamp.to_le_bytes();
 
     for off in pe_timestamp_offsets(output) {
         if off + 4 <= output.len() {
@@ -138,6 +152,102 @@ fn pe_timestamp(data: &[u8]) -> u32 {
 
 fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
     crate::pe::transform::pe_timestamp_offsets(data)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::lzx::rift::{RiftEntry, RiftTable};
+    use crate::pe::cli::context::ManagedPeInfoBitstream;
+    use crate::pe::cli::map::CliMapModel;
+    use crate::pe::cli::metadata::{
+        CliMetadataBitstreamRecord, CliMetadataModel, CliStream, CliStreamSet,
+    };
+    use crate::pe::cli::schema::{CliSchemaFlavor, CodedIndexKind, HeapIndexWidths};
+
+    fn empty_source_metadata() -> CliMetadataModel {
+        CliMetadataModel {
+            flavor: CliSchemaFlavor::Classic,
+            metadata_rva: 0x2000,
+            metadata_file_offset: 0x400,
+            metadata_size: 0x100,
+            version: "v4.0.30319".to_owned(),
+            streams: CliStreamSet {
+                strings: None,
+                user_strings: None,
+                blob: None,
+                guid: None,
+                tables: CliStream {
+                    metadata_offset: 0,
+                    file_offset: 0x400,
+                    size: 24,
+                },
+            },
+            heap_widths: HeapIndexWidths {
+                strings: 2,
+                guid: 2,
+                blob: 2,
+            },
+            valid_table_mask: 0,
+            sorted_table_mask: 0,
+            row_counts: [0; 64],
+            row_sizes: [0; 64],
+            table_file_offsets: [None; 64],
+        }
+    }
+
+    #[test]
+    fn builds_managed_transform_context_from_preprocess_state() {
+        let target_info = ManagedPeInfoBitstream::new(
+            CliSchemaFlavor::Classic,
+            0x140000000,
+            0x2222,
+            0x12345678,
+            RiftTable {
+                entries: vec![RiftEntry {
+                    source: 0x2000,
+                    target: 0x600,
+                }],
+            },
+            CliMetadataBitstreamRecord::empty(CliSchemaFlavor::Classic),
+        )
+        .unwrap();
+        let preprocess_rift = RiftTable {
+            entries: vec![RiftEntry {
+                source: 0x2000,
+                target: 0x3000,
+            }],
+        };
+        let mut cli_map = CliMapModel::default();
+        cli_map.tables[0x01] = RiftTable {
+            entries: vec![RiftEntry {
+                source: 1,
+                target: 2,
+            }],
+        };
+        let preprocess = super::PePreprocess {
+            target_info,
+            preprocess_rift: preprocess_rift.clone(),
+            cli_map: cli_map.clone(),
+        };
+
+        let context = preprocess
+            .managed_transform_context(empty_source_metadata())
+            .unwrap();
+
+        assert_eq!(context.flavor, CliSchemaFlavor::Classic);
+        assert_eq!(context.target_info.image_base, 0x140000000);
+        assert_eq!(context.used_rift, preprocess_rift);
+        assert_eq!(context.cli_map, cli_map);
+        assert!(context.has_cli_state());
+
+        let token_map = context.cli_map.coded_token_map().unwrap();
+        assert_eq!(
+            token_map
+                .map_coded_token((1 << 2) | 1, CodedIndexKind::TypeDefOrRef)
+                .unwrap(),
+            (2 << 2) | 1
+        );
+    }
 }
 
 #[cfg(test)]
@@ -183,19 +293,29 @@ mod genuine_pe_tests {
 
         let gp = super::parse_pe_preprocess(&g.preprocess).unwrap();
         let op = super::parse_pe_preprocess(&o.preprocess).unwrap();
-        assert_eq!(op.target_image_base, gp.target_image_base, "image_base");
-        assert_eq!(op.target_field1, gp.target_field1, "preprocess field1");
-        assert_eq!(op.target_timestamp, gp.target_timestamp, "timestamp");
         assert_eq!(
-            op.pe_rift.entries.len(),
-            gp.pe_rift.entries.len(),
+            op.target_info.image_base, gp.target_info.image_base,
+            "image_base"
+        );
+        assert_eq!(
+            op.target_info.checksum, gp.target_info.checksum,
+            "preprocess field1"
+        );
+        assert_eq!(
+            op.target_info.time_date_stamp, gp.target_info.time_date_stamp,
+            "timestamp"
+        );
+        assert_eq!(
+            op.target_info.target_rva_to_file_offset.entries.len(),
+            gp.target_info.target_rva_to_file_offset.entries.len(),
             "rift entry count"
         );
         for (i, (a, b)) in op
-            .pe_rift
+            .target_info
+            .target_rva_to_file_offset
             .entries
             .iter()
-            .zip(gp.pe_rift.entries.iter())
+            .zip(gp.target_info.target_rva_to_file_offset.entries.iter())
             .enumerate()
         {
             assert_eq!(a.source, b.source, "rift[{i}].source");

@@ -42,9 +42,10 @@ use crate::{Error, Result};
 /// offset == RVA). On i386 (FileAlignment 0x200 != SectionAlignment) the TARGET
 /// file offset of an RVA-preserved tail section differs from the SOURCE file
 /// offset, so the input side must use the TARGET file-offset <-> RVA map. We
-/// have it: `pp.pe_rift` is the target RVA -> target file-offset map, so its
-/// reverse is the target `io2rva`. Using the target map on the input side and
-/// the source map on the output side makes the relayout exact for both arches:
+/// have it: `pp.target_info.target_rva_to_file_offset` is the target RVA ->
+/// target file-offset map, so its reverse is the target `io2rva`. Using the
+/// target map on the input side and the source map on the output side makes the
+/// relayout exact for both arches:
 ///
 ///   final(target_fo) = io2rva_src^-1( rift_B^-1( io2rva_tgt(target_fo) ) )
 fn build_pe_copy_rift(
@@ -57,7 +58,7 @@ fn build_pe_copy_rift(
     let Ok(src_pe) = crate::pe::parse::PeInfo::parse_lenient(reference) else {
         // Reference is not a parseable PE: fall back to the RVA-domain
         // concatenation (pe_rift then preprocess_rift), sorted by source.
-        let mut combined = pp.pe_rift.clone();
+        let mut combined = pp.target_info.target_rva_to_file_offset.clone();
         for e in &pp.preprocess_rift.entries {
             combined.entries.push(*e);
         }
@@ -86,7 +87,7 @@ fn build_pe_copy_rift(
     // genuine working-buffer interval logic, which a naive swap cannot.
     let forward = io2rva_src
         .multiply(&pp.preprocess_rift)
-        .multiply(&pp.pe_rift);
+        .multiply(&pp.target_info.target_rva_to_file_offset);
     let composed = forward.reverse();
 
     // composed maps target file offset -> source file offset. Fold into the
@@ -213,8 +214,8 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
                 &src_pe,
                 &pp.preprocess_rift,
                 parsed.header.flags as u64,
-                pp.target_image_base,
-                pp.target_timestamp,
+                pp.target_info.image_base,
+                pp.target_info.time_date_stamp,
             );
         }
         pe_ref = r;
@@ -695,13 +696,28 @@ mod tests {
             &empty_rift,
         );
         let parsed = preprocess::parse_pe_preprocess(&buf).unwrap();
-        assert_eq!(parsed.target_image_base, 0x140000000);
-        assert_eq!(parsed.target_timestamp, 0x12345678);
-        assert_eq!(parsed.pe_rift.entries.len(), 2);
-        assert_eq!(parsed.pe_rift.entries[0].source, 0);
-        assert_eq!(parsed.pe_rift.entries[0].target, 0);
-        assert_eq!(parsed.pe_rift.entries[1].source, 0x1000);
-        assert_eq!(parsed.pe_rift.entries[1].target, 0x1200);
+        assert_eq!(parsed.target_info.image_base, 0x140000000);
+        assert_eq!(parsed.target_info.time_date_stamp, 0x12345678);
+        assert_eq!(
+            parsed.target_info.target_rva_to_file_offset.entries.len(),
+            2
+        );
+        assert_eq!(
+            parsed.target_info.target_rva_to_file_offset.entries[0].source,
+            0
+        );
+        assert_eq!(
+            parsed.target_info.target_rva_to_file_offset.entries[0].target,
+            0
+        );
+        assert_eq!(
+            parsed.target_info.target_rva_to_file_offset.entries[1].source,
+            0x1000
+        );
+        assert_eq!(
+            parsed.target_info.target_rva_to_file_offset.entries[1].target,
+            0x1200
+        );
         assert!(parsed.preprocess_rift.entries.is_empty());
     }
 
@@ -1141,9 +1157,9 @@ mod tests {
                 eprintln!(
                     "{label}: src_base={:#x} tgt_base={:#x} rift_entries={} pe_rift={}",
                     spe0.image_base,
-                    pp.target_image_base,
+                    pp.target_info.image_base,
                     pp.preprocess_rift.entries.len(),
-                    pp.pe_rift.entries.len()
+                    pp.target_info.target_rva_to_file_offset.entries.len()
                 );
                 for e in pp.preprocess_rift.entries.iter().take(12) {
                     eprintln!(
@@ -1184,8 +1200,8 @@ mod tests {
                 &spe,
                 &pp.preprocess_rift,
                 parsed.header.flags as u64,
-                pp.target_image_base,
-                pp.target_timestamp,
+                pp.target_info.image_base,
+                pp.target_info.time_date_stamp,
             );
 
             let sec_of = |fo: usize| -> String {
@@ -1300,8 +1316,8 @@ mod tests {
             &spe,
             &pp.preprocess_rift,
             parsed.header.flags as u64,
-            pp.target_image_base,
-            pp.target_timestamp,
+            pp.target_info.image_base,
+            pp.target_info.time_date_stamp,
         );
         dump("mine T(source)", &mine);
         // First divergence in .reloc between mine and truth.
@@ -1655,8 +1671,8 @@ mod tests {
                 &spe,
                 &pp.preprocess_rift,
                 parsed.header.flags as u64,
-                pp.target_image_base,
-                pp.target_timestamp,
+                pp.target_info.image_base,
+                pp.target_info.time_date_stamp,
             );
             std::fs::write(&path, &t).unwrap();
             eprintln!("wrote our T(source) to {path} ({} bytes)", t.len());
@@ -1758,13 +1774,16 @@ mod tests {
                     for e in &io2rva_src.entries {
                         eprintln!("  {:x},{:x}", e.source, e.target);
                     }
-                    eprintln!("pe_rift ({} entries):", pp.pe_rift.entries.len());
-                    for e in &pp.pe_rift.entries {
+                    eprintln!(
+                        "pe_rift ({} entries):",
+                        pp.target_info.target_rva_to_file_offset.entries.len()
+                    );
+                    for e in &pp.target_info.target_rva_to_file_offset.entries {
                         eprintln!("  {:x},{:x}", e.source, e.target);
                     }
                     let fwd = io2rva_src
                         .multiply(&pp.preprocess_rift)
-                        .multiply(&pp.pe_rift);
+                        .multiply(&pp.target_info.target_rva_to_file_offset);
                     eprintln!(
                         "forward_chain ({} entries) [source_fo,target_fo]:",
                         fwd.entries.len()

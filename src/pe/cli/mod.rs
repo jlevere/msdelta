@@ -6,6 +6,7 @@
 //! namespace instead of adding more PE-level byte-offset code.
 
 pub(crate) mod blob;
+pub(crate) mod context;
 pub(crate) mod map;
 pub(crate) mod metadata;
 pub(crate) mod schema;
