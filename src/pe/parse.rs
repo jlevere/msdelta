@@ -525,38 +525,87 @@ impl PeInfo {
     /// the transforms need (image base, size, sections, data directories) by
     /// walking the headers directly. Supports PE32 and PE32+.
     pub fn parse_lenient(data: &[u8]) -> Result<Self> {
-        let pe = PeView::parse(data).ok_or(Error::Malformed("PE: bad headers"))?;
+        if let Some(pe) = PeView::parse(data) {
+            let data_directories = (0..16)
+                .map(|i| {
+                    pe.data_directory(i)
+                        .map(|d| (d.virtual_address.get(), d.size.get()))
+                        .unwrap_or((0, 0))
+                })
+                .collect();
 
-        let data_directories = (0..16)
-            .map(|i| {
-                pe.data_directory(i)
-                    .map(|d| (d.virtual_address.get(), d.size.get()))
-                    .unwrap_or((0, 0))
-            })
-            .collect();
+            let sections = pe
+                .sections()
+                .map(|s| {
+                    let len = s.name.iter().position(|&b| b == 0).unwrap_or(8);
+                    SectionInfo {
+                        name: String::from_utf8_lossy(&s.name[..len]).into_owned(),
+                        virtual_size: s.virtual_size.get(),
+                        virtual_address: s.virtual_address.get(),
+                        raw_size: s.size_of_raw_data.get(),
+                        raw_offset: s.pointer_to_raw_data.get(),
+                        characteristics: s.characteristics.get(),
+                    }
+                })
+                .collect();
 
-        let sections = pe
-            .sections()
-            .map(|s| {
-                let len = s.name.iter().position(|&b| b == 0).unwrap_or(8);
-                SectionInfo {
-                    name: String::from_utf8_lossy(&s.name[..len]).into_owned(),
-                    virtual_size: s.virtual_size.get(),
-                    virtual_address: s.virtual_address.get(),
-                    raw_size: s.size_of_raw_data.get(),
-                    raw_offset: s.pointer_to_raw_data.get(),
-                    characteristics: s.characteristics.get(),
-                }
-            })
-            .collect();
+            return Ok(PeInfo {
+                image_base: pe.image_base(),
+                size_of_image: pe.size_of_image(),
+                timestamp: pe.timestamp(),
+                checksum: pe.check_sum(),
+                is_64bit: pe.is_64bit(),
+                machine: PeMachine::from_raw(pe.machine()),
+                sections,
+                data_directories,
+            });
+        }
+
+        let layout = PeHeaderLayout::parse(data)?;
+        let read32_or_zero = |offset: usize| read_u32(data, offset).unwrap_or(0);
+        let read64_or_zero = |offset: usize| read_u64(data, offset).unwrap_or(0);
+
+        let timestamp = layout.timestamp_offset().map(read32_or_zero).unwrap_or(0);
+        let image_base = if layout.is_64bit() {
+            layout.image_base_offset().map(read64_or_zero).unwrap_or(0)
+        } else {
+            layout.image_base_offset().map(read32_or_zero).unwrap_or(0) as u64
+        };
+        let size_of_image = layout
+            .size_of_image_offset()
+            .map(read32_or_zero)
+            .unwrap_or(0);
+        let checksum = layout.checksum_offset().map(read32_or_zero).unwrap_or(0);
+
+        let mut data_directories = vec![(0u32, 0u32); DataDirectoryKind::COUNT];
+        for (index, slot) in data_directories
+            .iter_mut()
+            .enumerate()
+            .take(layout.number_of_rva_and_sizes.min(DataDirectoryKind::COUNT))
+        {
+            let Some(offset) = DataDirectoryKind::from_index(index)
+                .and_then(|kind| layout.data_directory_offset(kind))
+            else {
+                continue;
+            };
+            *slot = (read32_or_zero(offset), read32_or_zero(offset + 4));
+        }
+
+        let mut sections = Vec::with_capacity(layout.number_of_sections);
+        for index in 0..layout.number_of_sections {
+            let Some(section) = layout.section(data, index) else {
+                break;
+            };
+            sections.push(section);
+        }
 
         Ok(PeInfo {
-            image_base: pe.image_base(),
-            size_of_image: pe.size_of_image(),
-            timestamp: pe.timestamp(),
-            checksum: pe.check_sum(),
-            is_64bit: pe.is_64bit(),
-            machine: PeMachine::from_raw(pe.machine()),
+            image_base,
+            size_of_image,
+            timestamp,
+            checksum,
+            is_64bit: layout.is_64bit(),
+            machine: layout.machine,
             sections,
             data_directories,
         })
