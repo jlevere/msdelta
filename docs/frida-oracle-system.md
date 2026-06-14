@@ -559,6 +559,7 @@ these internal atoms:
 | `CliMapBitstream` | `compo::CliMap::FromBitReader` | normalized object plus replay-checked reader window |
 | `CliCodedTokenMap` | `compo::CliMap::MapCoded` / `MapCodedExact` | call input, return value, and normalized `CliMap` snapshot |
 | `CliBlobCompressedInteger` | `compo::CliMetadata::GetBlobContent` | call input and decoded blob-length result from real metadata blobs |
+| `CliCompressionRift` | `CompressionRiftTableFromCliMap::Generate` | transformed source buffer size, derived source-fill offset, and normalized result `RiftTable` |
 
 The lab lane should now optimize for repeatability and smaller atom fixtures:
 

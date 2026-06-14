@@ -327,6 +327,11 @@ fn frida_stage_oracle_fails_closed_and_normalizes_cli_metadata() {
         "pointerDistance",
         "readCliBlobGetContentCallRecord",
         "unsupported capture adapter",
+        "cli_compression_rift_generate",
+        "CliCompressionRiftRecord",
+        "captureCliCompressionRiftGenerateInputs",
+        "readCliCompressionRiftGenerateRecord",
+        "source_widening_fill_offset",
         "readPlan:",
         "readPlanForObject",
         "replayed reader state does not match native exit state",
@@ -409,12 +414,56 @@ fn win26100_msdelta_symbol_map_names_first_managed_atom() {
         "\"blob_stream_offset_offset\": 52",
         "\"blob_stream_size_offset\": 56",
         "\"max_prefix_bytes\": 4",
+        "\"atom\": \"CliCompressionRift\"",
+        "\"name\": \"CompressionRiftTableFromCliMap::Generate\"",
+        "\"legacy_name\": \"CompressionRiftTableCli::FromCliMap\"",
+        "\"rva\": \"0xa46a4\"",
+        "\"capture\": \"cli_compression_rift_generate\"",
+        "\"name\": \"msdelta-win26100-compression-rift-from-cli-map-generate-call-v1\"",
+        "\"source_buffer_size_offset\": 48",
+        "\"name\": \"msdelta-win26100-compression-rift-from-cli-map-v1\"",
+        "\"source_fill_offset_offset\": 64",
     ] {
         assert!(
             WIN26100_MSDELTA_STAGE_MAP.contains(required),
             "stage symbol map should contain {required}"
         );
     }
+}
+
+#[test]
+fn win26100_msdelta_symbol_map_json_is_structural() {
+    let map: serde_json::Value =
+        serde_json::from_str(WIN26100_MSDELTA_STAGE_MAP).expect("valid stage symbol map JSON");
+    assert_eq!(map["schema"], 1);
+    assert_eq!(map["module"], "msdelta.dll");
+
+    let functions = map["functions"]
+        .as_array()
+        .expect("symbol map functions are an array");
+    let mut hooks = std::collections::HashSet::new();
+    for function in functions {
+        let name = function["name"].as_str().expect("function has a name");
+        let rva = function["rva"].as_str().expect("function has an rva");
+        assert!(
+            hooks.insert((name, rva)),
+            "duplicate stage hook for {name} at {rva}"
+        );
+    }
+
+    let cli_compression_rift = functions
+        .iter()
+        .find(|function| function["capture"] == "cli_compression_rift_generate")
+        .expect("CliCompressionRift stage hook is present");
+    assert_eq!(cli_compression_rift["atom"], "CliCompressionRift");
+    assert_eq!(
+        cli_compression_rift["object_layout"]["source_fill_offset_offset"],
+        64
+    );
+    assert_eq!(
+        cli_compression_rift["object_layout"]["rift_table_layout"]["entry_size"],
+        16
+    );
 }
 
 #[test]

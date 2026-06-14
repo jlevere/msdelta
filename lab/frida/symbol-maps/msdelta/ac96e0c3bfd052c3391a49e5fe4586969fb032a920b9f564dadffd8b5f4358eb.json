@@ -93,6 +93,34 @@
       }
     },
     {
+      "atom": "CliCompressionRift",
+      "name": "CompressionRiftTableFromCliMap::Generate",
+      "legacy_name": "CompressionRiftTableCli::FromCliMap",
+      "rva": "0xa46a4",
+      "abi": "ms-x64-thiscall",
+      "capture": "cli_compression_rift_generate",
+      "call_layout": {
+        "name": "msdelta-win26100-compression-rift-from-cli-map-generate-call-v1",
+        "source_buffer_size_offset": 48
+      },
+      "object_layout": {
+        "name": "msdelta-win26100-compression-rift-from-cli-map-v1",
+        "source_fill_offset_offset": 64,
+        "rift_table_layout": {
+          "name": "msdelta-win26100-compo-rift-table-v1",
+          "initialized_offset": 8,
+          "count_offset": 16,
+          "capacity_offset": 24,
+          "entries_offset": 32,
+          "sorted_offset": 40,
+          "entry_size": 16,
+          "entry_source_offset": 0,
+          "entry_target_offset": 8,
+          "max_entries": 1048576
+        }
+      }
+    },
+    {
       "atom": "CliMapBitstream",
       "name": "compo::CliMap::FromBitReader",
       "legacy_name": "CliMap::FromBitReader",

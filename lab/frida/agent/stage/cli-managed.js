@@ -333,6 +333,50 @@ function readCliCodedTokenMapCallRecord(fn, callContext, retval) {
   };
 }
 
+function captureCliCompressionRiftGenerateInputs(fn, args) {
+  const layout = fn.call_layout || {};
+  const bufferPtr = args[1];
+  let size = null;
+  let sizeError = null;
+  if (!bufferPtr.isNull() && Number.isInteger(layout.source_buffer_size_offset)) {
+    try {
+      size = readU64Number(bufferPtr.add(layout.source_buffer_size_offset), "source buffer size");
+    } catch (error) {
+      sizeError = String(error && error.stack ? error.stack : error);
+    }
+  }
+
+  return {
+    this_ptr: args[0].toString(),
+    source_buffer: {
+      ptr: bufferPtr.toString(),
+      size,
+      error: sizeError,
+    },
+  };
+}
+
+function readCliCompressionRiftGenerateRecord(fn, callContext, retval) {
+  const layout = fn.object_layout || {};
+  const sourceFillOffset =
+    Number.isInteger(layout.source_fill_offset_offset)
+      ? readU64Number(
+          callContext.this_ptr.add(layout.source_fill_offset_offset),
+          "CLI compression rift source fill offset"
+        )
+      : null;
+
+  return {
+    type: "CliCompressionRiftRecord",
+    native_layout: layout.name || "msdelta-cli-compression-rift-v1",
+    source_buffer: callContext.inputs.source_buffer,
+    source_widening_fill_offset: sourceFillOffset,
+    rift: retval.isNull()
+      ? null
+      : readRiftTableRecord(retval, layout.rift_table_layout, "CLI compression rift result"),
+  };
+}
+
 function captureReaderInputs(_fn, args) {
   return {
     this_ptr: args[0].toString(),
@@ -370,6 +414,12 @@ registerStageCaptureAdapter("cli_blob_get_content_call", {
   captureState: captureCliBlobGetContentState,
   captureInputs: captureCliBlobGetContentInputs,
   readObject: readCliBlobGetContentCallRecord,
+  readPlan: () => null,
+});
+
+registerStageCaptureAdapter("cli_compression_rift_generate", {
+  captureInputs: captureCliCompressionRiftGenerateInputs,
+  readObject: readCliCompressionRiftGenerateRecord,
   readPlan: () => null,
 });
 
