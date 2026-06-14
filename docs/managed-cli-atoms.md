@@ -283,8 +283,10 @@ target info split fields and rift entries.
 Current state: `src/pe/cli/context.rs` defines `ManagedPeInfoBitstream`, and
 `src/pa30/preprocess.rs` now parses the PA30 PE target-info prefix into that
 typed model instead of exposing loose PA30 fields. Classic CLI target metadata
-from the bitstream is attached here. CLI4 still needs its own bitstream fixture
-and branch-specific parser entry point.
+from the bitstream is attached here. The CLI4 parser entry point reads target
+info, target `Cli4Metadata`, both rifts, and `CliMap` from the same synthetic
+preprocess shape. CLI4 still needs native `PortableExecutableInfoCli4` fixture
+parity before this can be trusted in apply.
 
 ### CliMetadataStaticSchema
 
@@ -787,11 +789,11 @@ the release gate below is satisfied.
 
 ### Readiness Snapshot
 
-The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 22
-partial, 0 missing, and 1 rejected. All 24 remain `apply_policy=reject`.
+The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 23
+partial, 0 missing, and 0 rejected. All 24 remain `apply_policy=reject`.
 
 The broader managed workstream tracks 31 atoms including create-side map and
-encoder atoms. Current state: 1 supported, 22 partial, 7 missing, and 1
+encoder atoms. Current state: 1 supported, 23 partial, 7 missing, and 0
 rejected. All 31 remain `apply_policy=reject`.
 
 That is the important reading of current progress: the parser/context
@@ -806,6 +808,7 @@ These atoms are useful building blocks today, but not all are release gates:
 |---|---|---|
 | `ManagedFileTypeBranch` | exhaustive unit tests | wire branch diagnostics into every managed rejection |
 | `PePreprocessManagedClassic` | managed native corpus preprocess/context test | consume the context in native-backed rift and transform atoms; keep CLI4 separate |
+| `PePreprocessManagedCli4` | synthetic target-info, Cli4Metadata, rift, and CliMap bitstream test | native `PortableExecutableInfoCli4::FromBitReader` fixture parity |
 | `CliMetadataStaticSchema` | Rust schema self-checks | native `CheckStaticData` parity hook |
 | `CliMetadataFromPe` | synthetic PE32/PE32+ tests | native `CliMetadata::Init` object oracle |
 | `Cli4MetadataFromPe` | CLI4-specific raw PE and existing-`PeInfo` parser tests | native `Cli4Metadata::Init` object oracle |

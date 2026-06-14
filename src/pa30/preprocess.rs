@@ -37,6 +37,18 @@ impl PePreprocess {
 }
 
 pub(crate) fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
+    parse_pe_preprocess_for_flavor(preprocess, CliSchemaFlavor::Classic)
+}
+
+#[allow(dead_code)]
+pub(crate) fn parse_cli4_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
+    parse_pe_preprocess_for_flavor(preprocess, CliSchemaFlavor::Cli4)
+}
+
+fn parse_pe_preprocess_for_flavor(
+    preprocess: &[u8],
+    flavor: CliSchemaFlavor,
+) -> Result<PePreprocess> {
     use crate::bitstream::BitReader;
 
     let mut reader = BitReader::new(preprocess)?;
@@ -58,10 +70,8 @@ pub(crate) fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
 
     let pe_rift = crate::lzx::rift::RiftTable::from_reader(&mut reader)?;
 
-    let target_cli_metadata = crate::pe::cli::metadata::read_cli_metadata_bitstream(
-        &mut reader,
-        CliSchemaFlavor::Classic,
-    )?;
+    let target_cli_metadata =
+        crate::pe::cli::metadata::read_cli_metadata_bitstream(&mut reader, flavor)?;
 
     // Second rift table from PreProcessPEForApply
     let preprocess_rift = crate::lzx::rift::RiftTable::from_reader(&mut reader)?;
@@ -74,7 +84,7 @@ pub(crate) fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
 
     Ok(PePreprocess {
         target_info: ManagedPeInfoBitstream::new(
-            CliSchemaFlavor::Classic,
+            flavor,
             target_image_base,
             target_field1,
             target_timestamp,
@@ -156,11 +166,13 @@ fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
+    use crate::bitstream::BitWriter;
     use crate::lzx::rift::{RiftEntry, RiftTable};
     use crate::pe::cli::context::ManagedPeInfoBitstream;
     use crate::pe::cli::map::CliMapModel;
     use crate::pe::cli::metadata::{
-        parse_cli_metadata_from_pe, CliMetadataBitstreamRecord, CliMetadataModel, CliStream,
+        parse_cli_metadata_from_pe, write_cli4_metadata_bitstream, CliMetadataBitstreamRecord,
+        CliMetadataBitstreamStream, CliMetadataBitstreamStreams, CliMetadataModel, CliStream,
         CliStreamSet,
     };
     use crate::pe::cli::schema::{CliSchemaFlavor, CodedIndexKind, HeapIndexWidths};
@@ -265,6 +277,100 @@ mod tests {
                 .unwrap(),
             (2 << 2) | 1
         );
+    }
+
+    #[test]
+    fn cli4_managed_preprocess_parses_target_metadata_and_map() {
+        let pe_rift = RiftTable {
+            entries: vec![RiftEntry {
+                source: 0x200,
+                target: 0x1000,
+            }],
+        };
+        let preprocess_rift = RiftTable {
+            entries: vec![RiftEntry {
+                source: 0x300,
+                target: 0x2000,
+            }],
+        };
+        let mut cli_map = CliMapModel::default();
+        cli_map.tables[0x06] = RiftTable {
+            entries: vec![RiftEntry {
+                source: 1,
+                target: 3,
+            }],
+        };
+        let mut row_counts = [0u32; 64];
+        row_counts[0x06] = 2;
+        let target_metadata = CliMetadataBitstreamRecord {
+            flavor: CliSchemaFlavor::Cli4,
+            present: true,
+            metadata_file_offset: 0x100,
+            metadata_size: 0x400,
+            metadata_rva: 0x2000,
+            stream_count: 5,
+            stream_headers_end: 0x160,
+            streams: CliMetadataBitstreamStreams {
+                strings: CliMetadataBitstreamStream {
+                    file_offset: 0x200,
+                    size: 0x20,
+                },
+                user_strings: CliMetadataBitstreamStream {
+                    file_offset: 0,
+                    size: 0,
+                },
+                blob: CliMetadataBitstreamStream {
+                    file_offset: 0x230,
+                    size: 0x20,
+                },
+                guid: CliMetadataBitstreamStream {
+                    file_offset: 0x260,
+                    size: 0x10,
+                },
+                tables: CliMetadataBitstreamStream {
+                    file_offset: 0x180,
+                    size: 0x100,
+                },
+            },
+            heap_widths: HeapIndexWidths {
+                strings: 2,
+                guid: 2,
+                blob: 2,
+            },
+            valid_table_mask: 1 << 0x06,
+            row_counts,
+            row_sizes: [0; 64],
+            table_file_offsets: [None; 64],
+        };
+
+        let mut writer = BitWriter::new();
+        writer.write_bits(0x1800_0000u64, 64);
+        writer.write_bits(0x4444, 32);
+        writer.write_bits(0x5566_7788, 32);
+        pe_rift.to_writer(&mut writer);
+        write_cli4_metadata_bitstream(&mut writer, &target_metadata).unwrap();
+        preprocess_rift.to_writer(&mut writer);
+        crate::pe::cli::map::write_cli_map_bitstream(&mut writer, &cli_map);
+
+        let parsed = super::parse_cli4_pe_preprocess(&writer.finish()).unwrap();
+
+        assert_eq!(parsed.target_info.flavor, CliSchemaFlavor::Cli4);
+        assert_eq!(parsed.target_info.image_base, 0x1800_0000);
+        assert_eq!(parsed.target_info.checksum, 0x4444);
+        assert_eq!(parsed.target_info.time_date_stamp, 0x5566_7788);
+        assert_eq!(parsed.target_info.target_rva_to_file_offset, pe_rift);
+        assert_eq!(parsed.preprocess_rift, preprocess_rift);
+        assert_eq!(parsed.cli_map, cli_map);
+        assert_eq!(
+            parsed.target_info.target_metadata.flavor,
+            CliSchemaFlavor::Cli4
+        );
+        assert_eq!(parsed.target_info.target_metadata.row_sizes[0x06], 14);
+        assert_eq!(
+            parsed.target_info.target_metadata.table_file_offsets[0x06],
+            Some(0x19c)
+        );
+        assert!(parsed.has_managed_cli_state());
     }
 
     #[test]
