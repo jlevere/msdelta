@@ -460,7 +460,7 @@ fn transform_source_resources(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, mar
         return;
     };
     let dirbase = rsrc_rva as i64;
-    let base_map = map_rva(rift, dirbase); // MapRva(dirbase): the uVar3 subtractor.
+    let base_map = map_rva(rift, dirbase);
     let end = (base_fo + rsrc_size as usize).min(buf.len());
 
     use crate::pe::structs::{self, ImageResourceDirectoryEntry as ResEntry};
@@ -721,7 +721,7 @@ fn branch_target_reachable(pe: &PeInfo, target: u32) -> bool {
 }
 
 /// Marker index for a branch target: rebased to a file offset when it lands in
-/// a section, else the RVA itself (matches the decompiled `uVar9`).
+/// a section, else the RVA itself.
 fn target_marker_index(pe: &PeInfo, target: u32) -> i64 {
     if (target as i64) < first_section_rva(pe) {
         target as i64

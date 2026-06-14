@@ -253,9 +253,9 @@ impl RiftTable {
             let mut img = last_off.wrapping_add(i64::MIN);
             let (mut b_off, mut b_break) = b.get_rift(img);
             out.add(i64::MIN, b_off.wrapping_add(img));
-            // `region` is the remaining width of the pre-first region (as the
-            // decompile's unsigned `uVar2`); `step` the width B's current segment
-            // covers. Advance source by `step + 1` each time B's offset changes.
+            // `region` is the remaining width of the pre-first region; `step`
+            // is the width covered by B's current segment. Advance source by
+            // `step + 1` each time B's offset changes.
             let mut src_pos = i64::MIN;
             let mut region = (a_first.wrapping_add(i64::MAX)) as u64;
             let mut step = (b_break.wrapping_sub(img)) as u64;
@@ -271,10 +271,9 @@ impl RiftTable {
             }
         }
 
-        // Main per-segment walk (decompile lines 71-143). Each A segment covers
-        // `[seg_src, seg_break]` in A's source domain; its image is split at
-        // every B breakpoint. Duplicate-source A entries are skipped (the
-        // `lVar6 == lVar8` continue).
+        // Main per-segment walk. Each A segment covers `[seg_src, seg_break]`
+        // in A's source domain; its image is split at every B breakpoint.
+        // Duplicate-source A entries are skipped.
         for i in 0..a.len() {
             let seg_src = a[i].source;
             let seg_break = if i + 1 < a.len() {
@@ -324,9 +323,9 @@ impl RiftTable {
     /// emits an `Add(image_pos, source_pos)` pair. This reproduces both the adsnt
     /// overlap topology and the pku2u gap topology exactly.
     ///
-    /// Buffer slot layout matches the decompile: a pair `(f0, f1)` where the
-    /// search/iteration key is `f1` (the `+8` field) and `f0` (`+0`) the image
-    /// start of the covered interval.
+    /// The working buffer stores covered image intervals as two parallel
+    /// arrays: interval starts and interval ends. The end array is the sorted
+    /// search key.
     pub fn reverse(&self) -> RiftTable {
         let n = self.entries.len() as u64;
         if n == 0 {
@@ -353,167 +352,182 @@ impl RiftTable {
             return out;
         }
 
-        // Working buffer of covered image intervals as parallel (f0, f1) arrays.
-        // `f1` is the sorted search key. `live` (== decompile `local_res18`) is
-        // the number of live slots.
+        // Working buffer of covered image intervals as parallel arrays.
+        // `interval_end` is the sorted search key; `interval_start` is used for
+        // overlap checks.
         let cap = (2 * n) as usize;
-        let mut f0: Vec<i64> = vec![0; cap];
-        let mut f1: Vec<i64> = vec![0; cap];
-        let mut live: u64 = 0;
+        let mut interval_start: Vec<i64> = vec![0; cap];
+        let mut interval_end: Vec<i64> = vec![0; cap];
+        let mut interval_count: u64 = 0;
 
-        // Wrap start: first index whose source is positive; if none (or it lands
-        // at 0) the whole table is the wrap region (`local_90 = n`). The pre-first
-        // region (sources <= 0, i.e. the segment that wraps to the end) is then
-        // processed first by seeding `local_88 = local_90 - 1`.
-        let mut local_90: u64 = 0;
+        // Start at the first positive source. If the first entry is already
+        // positive, or no positive source exists, process the final segment first
+        // because it represents the wrapped pre-first source region.
+        let mut first_positive_segment: u64 = 0;
         loop {
-            if src(local_90) > 0 {
+            if src(first_positive_segment) > 0 {
                 break;
             }
-            local_90 += 1;
-            if n <= local_90 {
+            first_positive_segment += 1;
+            if n <= first_positive_segment {
                 break;
             }
         }
-        if local_90 == 0 {
-            local_90 = n;
+        if first_positive_segment == 0 {
+            first_positive_segment = n;
         }
-        let mut term_idx: u64 = local_90 - 1; // decompile `uVar10` exit comparator
-        let mut local_98: i64 = 0;
-        local_90 = if local_90 < n { local_90 } else { 0 };
-        let mut u_var7: u64 = local_90;
-        let mut local_88: u64 = term_idx;
-        let restart_88: u64 = term_idx;
+        let stop_segment = first_positive_segment - 1;
+        let mut source_cursor: i64 = 0;
+        let mut boundary_segment: u64 = if first_positive_segment < n {
+            first_positive_segment
+        } else {
+            0
+        };
+        let mut active_segment: u64 = stop_segment;
 
         loop {
-            // Inner do-while: walk the image of segment `local_88` from `local_98`
-            // up to `src(u_var7)` (the next segment's source), splitting at the
-            // current segment's image extent each iteration.
+            // Walk the active segment from the current source cursor up to the
+            // next segment boundary, splitting against covered image intervals.
             loop {
                 // Two's-complement (wrapping) arithmetic throughout: the working
                 // buffer carries i64::MIN/MAX sentinels and the genuine C does
                 // these on unsigned values, so plain +/- would overflow-panic in
                 // debug while wrapping (correct) in release.
-                let seg_off = tgt(local_88).wrapping_sub(src(local_88));
-                let end_idx = u_var7;
-                let mut span = src(u_var7).wrapping_sub(local_98);
-                let lo = seg_off.wrapping_add(local_98); // image start
-                if lo != i64::MIN {
-                    let clamp = (i64::MIN.wrapping_sub(seg_off)).wrapping_sub(local_98);
-                    if (clamp as u64) < (span as u64) {
-                        span = clamp;
+                let segment_offset = tgt(active_segment).wrapping_sub(src(active_segment));
+                let end_segment = boundary_segment;
+                let mut source_span = src(boundary_segment).wrapping_sub(source_cursor);
+                let image_start = segment_offset.wrapping_add(source_cursor);
+                if image_start != i64::MIN {
+                    let clamped_span =
+                        (i64::MIN.wrapping_sub(segment_offset)).wrapping_sub(source_cursor);
+                    if (clamped_span as u64) < (source_span as u64) {
+                        source_span = clamped_span;
                     }
                 }
-                if span != 0 {
-                    let hi = lo.wrapping_add(span); // image end (exclusive bound value)
-                                                    // First buffer index whose key (f1) is >= lo or a sentinel.
-                    let mut start: u64 = 0;
-                    if live != 0 {
+                if source_span != 0 {
+                    let image_end = image_start.wrapping_add(source_span);
+
+                    // First interval whose end key is at or after the image
+                    // start, or whose key is the sentinel.
+                    let mut first_overlap: u64 = 0;
+                    if interval_count != 0 {
                         let mut k = 0u64;
                         loop {
-                            start = k;
-                            let key = f1[k as usize];
-                            if lo <= key || key == i64::MIN {
+                            first_overlap = k;
+                            let key = interval_end[k as usize];
+                            if image_start <= key || key == i64::MIN {
                                 break;
                             }
                             k += 1;
-                            start = k;
-                            if k >= live {
+                            first_overlap = k;
+                            if k >= interval_count {
                                 break;
                             }
                         }
                     }
-                    let mut ins = start;
-                    let mut stop = start;
-                    let mut val = hi;
-                    if start < live {
-                        // Extend `stop` past every interval the image overlaps.
-                        // The end scan compares the image END `hi` against each
-                        // interval's image START (`f0`, the `+0` field) -- NOT its
-                        // end (`f1`) -- matching the decompile's `plVar8 =
-                        // local_c8 + start*0x10` base and `lVar9 < *plVar5`.
-                        let mut k = start;
+                    let mut insert_at = first_overlap;
+                    let mut overlap_end = first_overlap;
+                    let mut new_interval_end = image_end;
+                    if first_overlap < interval_count {
+                        // Extend `overlap_end` past every interval touched by
+                        // this image span. The comparison is against interval
+                        // starts, not interval ends.
+                        let mut k = first_overlap;
                         loop {
-                            let key = f0[k as usize];
-                            if hi != i64::MIN && hi < key {
+                            let key = interval_start[k as usize];
+                            if image_end != i64::MIN && image_end < key {
                                 break;
                             }
-                            stop += 1;
+                            overlap_end += 1;
                             k += 1;
-                            if stop >= live {
+                            if overlap_end >= interval_count {
                                 break;
                             }
                         }
-                        if start == stop {
+                        if first_overlap == overlap_end {
                             // No overlap: pure insert.
-                            out.add(lo, local_98);
-                            Self::shift_for_insert(&mut f0, &mut f1, ins, stop, live);
-                            live = live.wrapping_add(ins.wrapping_sub(stop)).wrapping_add(1);
-                            f0[ins as usize] = lo;
-                            f1[ins as usize] = val;
-                            term_idx = restart_88;
+                            out.add(image_start, source_cursor);
+                            Self::replace_reverse_interval(
+                                &mut interval_start,
+                                &mut interval_end,
+                                &mut interval_count,
+                                insert_at,
+                                overlap_end,
+                                image_start,
+                                new_interval_end,
+                            );
                         } else {
-                            // Compare `lo` against the first overlapping interval's
-                            // image START (`f0`, the `+0` field), per the decompile's
-                            // `if (lVar15 < *plVar8)` where `plVar8` = slot `start`
-                            // base. When `lo` already lies at/after that start, no
-                            // boundary `Add` is emitted (the spurious half of the
-                            // overlap pair) and `lo` is pulled back to the interval
-                            // start instead.
-                            let buf_lo = f0[start as usize];
-                            let mut lo_m = lo;
-                            if lo < buf_lo {
-                                out.add(lo, local_98);
+                            // If the image starts before the first overlapping
+                            // interval, emit the leading boundary. Otherwise
+                            // merge back to the existing interval start.
+                            let overlapped_start = interval_start[first_overlap as usize];
+                            let mut merged_start = image_start;
+                            if image_start < overlapped_start {
+                                out.add(image_start, source_cursor);
                             } else {
-                                lo_m = buf_lo;
+                                merged_start = overlapped_start;
                             }
-                            val = seg_off;
-                            if ins < stop - 1 {
+                            new_interval_end = segment_offset;
+                            if insert_at < overlap_end - 1 {
                                 // Emit one boundary `Add` per fully-covered
-                                // interior interval (`start ..= stop-2`), using
-                                // its image end (`f1`) and the segment offset.
-                                for idx in start..(stop - 1) {
-                                    let v = f1[idx as usize];
-                                    out.add(v, v.wrapping_sub(val));
+                                // interior interval, using its image end and
+                                // the segment offset.
+                                for idx in first_overlap..(overlap_end - 1) {
+                                    let interval_boundary = interval_end[idx as usize];
+                                    out.add(
+                                        interval_boundary,
+                                        interval_boundary.wrapping_sub(new_interval_end),
+                                    );
                                 }
-                                ins = start;
-                                u_var7 = local_90;
+                                insert_at = first_overlap;
                             }
-                            let last_key = f1[(stop - 1) as usize];
-                            val = last_key;
-                            if last_key != i64::MIN && (hi == i64::MIN || last_key < hi) {
-                                out.add(last_key, last_key.wrapping_sub(seg_off));
-                                val = hi;
+                            let last_interval_end = interval_end[(overlap_end - 1) as usize];
+                            new_interval_end = last_interval_end;
+                            if last_interval_end != i64::MIN
+                                && (image_end == i64::MIN || last_interval_end < image_end)
+                            {
+                                out.add(
+                                    last_interval_end,
+                                    last_interval_end.wrapping_sub(segment_offset),
+                                );
+                                new_interval_end = image_end;
                             }
-                            Self::shift_for_insert(&mut f0, &mut f1, ins, stop, live);
-                            live = live.wrapping_add(ins.wrapping_sub(stop)).wrapping_add(1);
-                            f0[ins as usize] = lo_m;
-                            f1[ins as usize] = val;
-                            term_idx = restart_88;
+                            Self::replace_reverse_interval(
+                                &mut interval_start,
+                                &mut interval_end,
+                                &mut interval_count,
+                                insert_at,
+                                overlap_end,
+                                merged_start,
+                                new_interval_end,
+                            );
                         }
                     } else {
-                        // start >= live: append.
-                        out.add(lo, local_98);
-                        Self::shift_for_insert(&mut f0, &mut f1, ins, stop, live);
-                        live = live.wrapping_add(ins.wrapping_sub(stop)).wrapping_add(1);
-                        f0[ins as usize] = lo;
-                        f1[ins as usize] = val;
-                        term_idx = restart_88;
+                        // No live interval starts after this image span: append.
+                        out.add(image_start, source_cursor);
+                        Self::replace_reverse_interval(
+                            &mut interval_start,
+                            &mut interval_end,
+                            &mut interval_count,
+                            insert_at,
+                            overlap_end,
+                            image_start,
+                            new_interval_end,
+                        );
                     }
                 }
-                local_98 = local_98.wrapping_add(span);
-                if local_98 == src(end_idx) {
+                source_cursor = source_cursor.wrapping_add(source_span);
+                if source_cursor == src(end_segment) {
                     break;
                 }
             }
-            local_88 = u_var7;
-            if term_idx != u_var7 {
-                local_90 = if u_var7.wrapping_add(1) < n {
-                    u_var7.wrapping_add(1)
+            active_segment = boundary_segment;
+            if stop_segment != boundary_segment {
+                boundary_segment = if boundary_segment.wrapping_add(1) < n {
+                    boundary_segment.wrapping_add(1)
                 } else {
                     0
                 };
-                u_var7 = local_90;
                 continue;
             }
             break;
@@ -545,31 +559,57 @@ impl RiftTable {
         self.entries = kept;
     }
 
-    /// Working-buffer element move for `Reverse`. When `ins + 1 != stop` and
-    /// `stop < live`, slide the tail `[stop, live)` to start at `ins + 1`,
-    /// matching the displacement loop in the decompile (`uVar10 < uVar4 - 1`
-    /// region and its `local_res18`-bounded memmove). For the pure-insert case
-    /// (`ins == stop`) this is the upward shift that opens one slot at `ins`.
-    fn shift_for_insert(f0: &mut [i64], f1: &mut [i64], ins: u64, stop: u64, live: u64) {
-        if ins == stop {
-            // Open a single slot at `ins`: shift [ins, live) up by one.
-            if ins < live {
-                let mut j = live;
-                while j > ins {
-                    f0[j as usize] = f0[(j - 1) as usize];
-                    f1[j as usize] = f1[(j - 1) as usize];
+    fn replace_reverse_interval(
+        interval_start: &mut [i64],
+        interval_end: &mut [i64],
+        interval_count: &mut u64,
+        insert_at: u64,
+        overlap_end: u64,
+        new_start: i64,
+        new_end: i64,
+    ) {
+        Self::shift_for_insert(
+            interval_start,
+            interval_end,
+            insert_at,
+            overlap_end,
+            *interval_count,
+        );
+        *interval_count = (*interval_count)
+            .wrapping_add(insert_at.wrapping_sub(overlap_end))
+            .wrapping_add(1);
+        interval_start[insert_at as usize] = new_start;
+        interval_end[insert_at as usize] = new_end;
+    }
+
+    /// Working-buffer element move for `Reverse`. For a pure insert, open one
+    /// slot. For a merge, slide the tail after the consumed overlap range so
+    /// that the replacement interval lands at `insert_at`.
+    fn shift_for_insert(
+        interval_start: &mut [i64],
+        interval_end: &mut [i64],
+        insert_at: u64,
+        overlap_end: u64,
+        interval_count: u64,
+    ) {
+        if insert_at == overlap_end {
+            if insert_at < interval_count {
+                let mut j = interval_count;
+                while j > insert_at {
+                    interval_start[j as usize] = interval_start[(j - 1) as usize];
+                    interval_end[j as usize] = interval_end[(j - 1) as usize];
                     j -= 1;
                 }
             }
             return;
         }
-        if ins + 1 != stop && stop < live {
-            let shift = (ins as i64) - (stop as i64) + 1;
-            let mut j = stop;
-            while j < live {
+        if insert_at + 1 != overlap_end && overlap_end < interval_count {
+            let shift = (insert_at as i64) - (overlap_end as i64) + 1;
+            let mut j = overlap_end;
+            while j < interval_count {
                 let dst = (j as i64 + shift) as u64;
-                f0[dst as usize] = f0[j as usize];
-                f1[dst as usize] = f1[j as usize];
+                interval_start[dst as usize] = interval_start[j as usize];
+                interval_end[dst as usize] = interval_end[j as usize];
                 j += 1;
             }
         }
