@@ -9,6 +9,7 @@ pub(crate) mod blob;
 pub(crate) mod context;
 pub(crate) mod map;
 pub(crate) mod metadata;
+pub(crate) mod method;
 pub(crate) mod rift;
 pub(crate) mod schema;
 pub(crate) mod tokens;

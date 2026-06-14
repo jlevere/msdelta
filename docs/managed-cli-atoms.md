@@ -535,8 +535,15 @@ hint map.
 
 Outputs: updated hint/marker map for later transforms and LZX matching.
 
+Current state: `pe::cli::method` enumerates classic CLI MethodDef rows through
+typed metadata, maps each method RVA through the source section table, parses
+tiny and fat method-body headers, and accounts for fat extra sections. The
+transform layer can now build a CLI marker map where every corpus method-body
+range is marked as owned.
+
 Done when: fixtures prove method bodies are marked by metadata-derived RVA
-ranges, not just by PE section characteristics.
+ranges, not just by PE section characteristics, and CLI4 method-body coverage
+uses the same helper.
 
 ### TransformCliDisasm
 

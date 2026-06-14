@@ -6,6 +6,8 @@
 //! the PE's image range and rebases them using the rift table.
 
 use super::parse::{DataDirectoryKind, PeHeaderLayout, PeInfo, PeMachine, PeOptionalHeaderKind};
+use crate::pe::cli::metadata::CliMetadataModel;
+use crate::pe::cli::method::{cli_method_bodies, CliMethodBody};
 use crate::Result;
 
 /// MSDelta file type flags.
@@ -556,6 +558,43 @@ fn mark_non_executable(buf: &[u8], pe: &PeInfo, marker: &mut [u8]) {
         for m in &mut marker[a..end] {
             *m &= !1;
         }
+    }
+}
+
+pub(crate) fn build_cli_mark_non_exe_marker_map(
+    buf: &[u8],
+    pe: &PeInfo,
+    metadata: &CliMetadataModel,
+) -> Vec<u8> {
+    let mut marker = vec![0u8; buf.len()];
+    mark_non_executable(buf, pe, &mut marker);
+    mark_cli_method_bodies(buf, pe, metadata, &mut marker);
+    marker
+}
+
+pub(crate) fn mark_cli_method_bodies(
+    buf: &[u8],
+    pe: &PeInfo,
+    metadata: &CliMetadataModel,
+    marker: &mut [u8],
+) -> Vec<CliMethodBody> {
+    let bodies = cli_method_bodies(buf, pe, metadata);
+    for body in &bodies {
+        mark_marker_range(marker, body.file_offset, body.total_size, 3);
+    }
+    bodies
+}
+
+fn mark_marker_range(marker: &mut [u8], start: usize, len: usize, value: u8) {
+    let Some(end) = start.checked_add(len) else {
+        return;
+    };
+    let end = end.min(marker.len());
+    if start >= end {
+        return;
+    }
+    for byte in &mut marker[start..end] {
+        *byte |= value;
     }
 }
 
@@ -1637,6 +1676,26 @@ pub(crate) fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pe::cli::metadata::parse_cli_metadata_from_pe;
+    use crate::pe::cli::method::cli_method_bodies;
+    use crate::pe::cli::schema::CliSchemaFlavor;
+    use std::path::PathBuf;
+
+    const MANAGED_NATIVE_CASES: &[&str] = &[
+        "cli-const-string",
+        "cli-add-method",
+        "cli-generics-signature",
+        "cli-custom-attribute",
+        "cli-resource",
+        "cli-platform-x64",
+    ];
+
+    fn managed_native_corpus_dir() -> PathBuf {
+        PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/atoms/ManagedNativeCorpus"
+        ))
+    }
 
     fn put_u16(data: &mut [u8], offset: usize, value: u16) {
         data[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
@@ -1786,6 +1845,45 @@ mod tests {
                 "file_type {file_type:#x} is not a managed PE branch"
             );
         }
+    }
+
+    #[test]
+    fn cli_mark_non_exe_marker_map_marks_method_bodies_from_corpus() {
+        let root = managed_native_corpus_dir();
+        if !root.exists() {
+            return;
+        }
+
+        let mut cases_with_methods = 0usize;
+        for case in MANAGED_NATIVE_CASES {
+            let source = std::fs::read(root.join(case).join("source.dll"))
+                .expect("read managed source fixture");
+            let pe = PeInfo::parse_lenient(&source).expect("parse managed source PE");
+            let metadata = parse_cli_metadata_from_pe(&source, CliSchemaFlavor::Classic)
+                .expect("parse source CLI metadata");
+            let bodies = cli_method_bodies(&source, &pe, &metadata);
+            if bodies.is_empty() {
+                continue;
+            }
+
+            cases_with_methods += 1;
+            let marker = build_cli_mark_non_exe_marker_map(&source, &pe, &metadata);
+            for body in bodies {
+                let end = body.file_offset + body.total_size;
+                assert!(
+                    marker[body.file_offset..end]
+                        .iter()
+                        .all(|byte| byte & 3 == 3),
+                    "{case}: MethodDef RID {} body range should be method-marked",
+                    body.rid
+                );
+            }
+        }
+
+        assert!(
+            cases_with_methods > 0,
+            "managed corpus should include markable CLI method bodies"
+        );
     }
 
     /// Pin the amd64 length-disassembler against the representative opcode forms
