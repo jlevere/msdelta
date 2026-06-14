@@ -13,4 +13,5 @@ pub(crate) mod metadata;
 pub(crate) mod method;
 pub(crate) mod rift;
 pub(crate) mod schema;
+pub(crate) mod signature;
 pub(crate) mod tokens;

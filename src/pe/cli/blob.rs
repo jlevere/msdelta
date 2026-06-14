@@ -31,6 +31,32 @@ pub(crate) fn read_compressed_u32(input: &[u8]) -> Result<(u32, usize)> {
     ))
 }
 
+pub(crate) fn write_compressed_u32_preserving_width(
+    output: &mut [u8],
+    width: usize,
+    value: u32,
+) -> bool {
+    match width {
+        1 if value < 0x80 && !output.is_empty() => {
+            output[0] = value as u8;
+            true
+        }
+        2 if value < 0x4000 && output.len() >= 2 => {
+            output[0] = ((value >> 8) as u8) | 0x80;
+            output[1] = value as u8;
+            true
+        }
+        4 if value < 0x2000_0000 && output.len() >= 4 => {
+            output[0] = ((value >> 24) as u8) | 0xc0;
+            output[1] = (value >> 16) as u8;
+            output[2] = (value >> 8) as u8;
+            output[3] = value as u8;
+            true
+        }
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,6 +104,33 @@ mod tests {
         assert!(matches!(
             read_compressed_u32(&[0xff, 0xff, 0xff, 0xff]),
             Err(Error::Malformed(_))
+        ));
+    }
+
+    #[test]
+    fn writes_compressed_integer_without_widening() {
+        let mut one = [0xff];
+        assert!(write_compressed_u32_preserving_width(&mut one, 1, 0x7f));
+        assert_eq!(one, [0x7f]);
+        assert!(!write_compressed_u32_preserving_width(&mut one, 1, 0x80));
+        assert_eq!(one, [0x7f]);
+
+        let mut two = [0, 0];
+        assert!(write_compressed_u32_preserving_width(&mut two, 2, 0x1234));
+        assert_eq!(two, [0x92, 0x34]);
+        assert!(!write_compressed_u32_preserving_width(&mut two, 2, 0x4000));
+
+        let mut four = [0, 0, 0, 0];
+        assert!(write_compressed_u32_preserving_width(
+            &mut four,
+            4,
+            0x0123_4567
+        ));
+        assert_eq!(four, [0xc1, 0x23, 0x45, 0x67]);
+        assert!(!write_compressed_u32_preserving_width(
+            &mut four,
+            4,
+            0x2000_0000
         ));
     }
 }

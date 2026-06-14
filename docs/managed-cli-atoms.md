@@ -614,8 +614,14 @@ Outputs: mutated signature blob bytes.
 Failure conditions: malformed signatures stop the current blob transform
 without failing the whole apply.
 
-Done when: synthetic signatures exercise primitive types, class/value type
-tokens, arrays/generic shapes, sentinels, custom modifiers, and varargs.
+Current state: `pe::cli::signature` walks method, field, property, and TypeSpec
+signature blobs, remaps embedded `TypeDefOrRef` coded tokens through `CliMap`,
+and preserves native's in-place compressed-integer width rule. Unit coverage
+includes custom modifiers, generic instances, and no-growth cases where a mapped
+token would require a wider compressed integer.
+
+Done when: native `CliBlobTransformer` fixtures prove TypeDef, TypeRef, and
+TypeSpec remaps across the same signature forms.
 
 ### TransformCliMetadata
 
