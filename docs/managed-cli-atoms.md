@@ -638,8 +638,15 @@ run `CliBlobTypeTokenRemap` on each unique blob.
 Outputs: source metadata tables and selected blob signatures rewritten in
 place.
 
-Done when: table-column tests cover all schema column kinds used by
-`CheckStaticData`, and blob transform tests are independent of full PE apply.
+Current state: `pe::cli::metadata_transform` walks typed metadata schemas and
+rewrites heap indexes, direct table indexes, coded indexes, and selected source
+signature blobs through `CliMap`. Unit coverage exercises heap, table,
+TypeDefOrRef coded, and MethodDef signature blob rewrites in one synthetic
+metadata image.
+
+Done when: native `TransformCliMetadata::Run` entry/exit fixtures prove table
+column parity across the managed corpus, and blob transform coverage expands
+beyond the current focused signature forms.
 
 ### CliHeapRift
 

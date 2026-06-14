@@ -224,15 +224,15 @@ fn managed_cli_readiness_counts_are_explicit() {
 
     assert_eq!(cli_rows.len(), 24, "CLI-layer atom count changed");
     assert_eq!(count_by(&cli_rows, |row| row.status, "supported"), 1);
-    assert_eq!(count_by(&cli_rows, |row| row.status, "partial"), 16);
-    assert_eq!(count_by(&cli_rows, |row| row.status, "missing"), 6);
+    assert_eq!(count_by(&cli_rows, |row| row.status, "partial"), 17);
+    assert_eq!(count_by(&cli_rows, |row| row.status, "missing"), 5);
     assert_eq!(count_by(&cli_rows, |row| row.status, "rejected"), 1);
     assert_eq!(count_by(&cli_rows, |row| row.apply_policy, "reject"), 24);
     assert_eq!(count_by(&cli_rows, |row| row.oracle_level, "curated"), 6);
-    assert_eq!(count_by(&cli_rows, |row| row.oracle_level, "unit"), 11);
+    assert_eq!(count_by(&cli_rows, |row| row.oracle_level, "unit"), 12);
     assert_eq!(
         count_by(&cli_rows, |row| row.oracle_level, "needs_fixture"),
-        7
+        6
     );
 }
 
@@ -249,13 +249,13 @@ fn managed_workstream_readiness_counts_are_explicit() {
 
     assert_eq!(rows.len(), REQUIRED_MANAGED_ATOMS.len());
     assert_eq!(count_by(&rows, |row| row.status, "supported"), 1);
-    assert_eq!(count_by(&rows, |row| row.status, "partial"), 16);
-    assert_eq!(count_by(&rows, |row| row.status, "missing"), 13);
+    assert_eq!(count_by(&rows, |row| row.status, "partial"), 17);
+    assert_eq!(count_by(&rows, |row| row.status, "missing"), 12);
     assert_eq!(count_by(&rows, |row| row.status, "rejected"), 1);
     assert_eq!(count_by(&rows, |row| row.apply_policy, "reject"), 31);
     assert_eq!(count_by(&rows, |row| row.oracle_level, "curated"), 6);
-    assert_eq!(count_by(&rows, |row| row.oracle_level, "unit"), 11);
-    assert_eq!(count_by(&rows, |row| row.oracle_level, "needs_fixture"), 14);
+    assert_eq!(count_by(&rows, |row| row.oracle_level, "unit"), 12);
+    assert_eq!(count_by(&rows, |row| row.oracle_level, "needs_fixture"), 13);
 }
 
 #[test]

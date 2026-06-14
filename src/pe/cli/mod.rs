@@ -10,6 +10,7 @@ pub(crate) mod context;
 pub(crate) mod disasm;
 pub(crate) mod map;
 pub(crate) mod metadata;
+pub(crate) mod metadata_transform;
 pub(crate) mod method;
 pub(crate) mod rift;
 pub(crate) mod schema;
