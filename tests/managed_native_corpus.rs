@@ -28,6 +28,26 @@ const CASES: &[(&str, &str)] = &[
         "managed-cli/manifest-resource-and-method-body",
     ),
     ("cli-platform-x64", "managed-cli/amd64-managed-pe"),
+    (
+        "cli-properties-events",
+        "managed-cli/properties-events-semantics",
+    ),
+    (
+        "cli-interface-impl",
+        "managed-cli/interface-implementation-and-methodimpl",
+    ),
+    (
+        "cli-exception-switch",
+        "managed-cli/exception-handlers-and-switch-il",
+    ),
+    (
+        "cli-pinvoke-module",
+        "managed-cli/pinvoke-module-and-marshal",
+    ),
+    (
+        "cli-nested-struct-enum-array",
+        "managed-cli/nested-types-structs-enums-arrays",
+    ),
 ];
 
 #[test]

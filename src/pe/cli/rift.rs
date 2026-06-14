@@ -568,6 +568,19 @@ mod tests {
         "cli-custom-attribute",
         "cli-resource",
         "cli-platform-x64",
+        "cli-properties-events",
+        "cli-interface-impl",
+        "cli-exception-switch",
+        "cli-pinvoke-module",
+        "cli-nested-struct-enum-array",
+    ];
+    const MANAGED_STAGE_RIFT_CASES: &[&str] = &[
+        "cli-const-string",
+        "cli-add-method",
+        "cli-generics-signature",
+        "cli-custom-attribute",
+        "cli-resource",
+        "cli-platform-x64",
     ];
 
     fn rift(entries: &[(i64, i64)]) -> RiftTable {
@@ -1084,7 +1097,7 @@ mod tests {
         }
 
         let mut rust_shapes = BTreeSet::new();
-        for case in MANAGED_NATIVE_CASES {
+        for case in MANAGED_STAGE_RIFT_CASES {
             let case_dir = corpus_root.join(case);
             let source =
                 std::fs::read(case_dir.join("source.dll")).expect("read managed source fixture");

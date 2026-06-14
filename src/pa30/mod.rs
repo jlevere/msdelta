@@ -439,6 +439,11 @@ mod tests {
         "cli-custom-attribute",
         "cli-resource",
         "cli-platform-x64",
+        "cli-properties-events",
+        "cli-interface-impl",
+        "cli-exception-switch",
+        "cli-pinvoke-module",
+        "cli-nested-struct-enum-array",
     ];
 
     fn fixture_paths() -> Vec<PathBuf> {

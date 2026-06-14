@@ -185,6 +185,11 @@ fn managed_corpus_generator_creates_native_oracle_jobs() {
         "cli-custom-attribute",
         "cli-resource",
         "cli-platform-x64",
+        "cli-properties-events",
+        "cli-interface-impl",
+        "cli-exception-switch",
+        "cli-pinvoke-module",
+        "cli-nested-struct-enum-array",
     ] {
         assert!(
             MANAGED_CORPUS.contains(required) || LAB_README.contains(required),

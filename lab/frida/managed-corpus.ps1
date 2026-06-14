@@ -395,6 +395,277 @@ $case = New-CorpusCase $compiler $root "cli-platform-x64" "amd64-managed-pe" "x6
 $cases += $case.job
 $manifestCases += $case.manifest
 
+$source = @"
+using System;
+
+namespace ManagedFixture {
+    public sealed class Notifier {
+        public event EventHandler Changed;
+        private int count;
+
+        public int Count {
+            get { return count; }
+            set {
+                count = value;
+                OnChanged();
+            }
+        }
+
+        private void OnChanged() {
+            EventHandler handler = Changed;
+            if (handler != null) {
+                handler(this, EventArgs.Empty);
+            }
+        }
+    }
+}
+"@
+$target = @"
+using System;
+
+namespace ManagedFixture {
+    public sealed class Notifier {
+        public event EventHandler Changed;
+        public event EventHandler Reset;
+        private int count;
+
+        public int Count {
+            get { return count; }
+            set {
+                count = value;
+                OnChanged();
+            }
+        }
+
+        public string Name { get; set; }
+
+        public void Clear() {
+            count = 0;
+            EventHandler handler = Reset;
+            if (handler != null) {
+                handler(this, EventArgs.Empty);
+            }
+            OnChanged();
+        }
+
+        private void OnChanged() {
+            EventHandler handler = Changed;
+            if (handler != null) {
+                handler(this, EventArgs.Empty);
+            }
+        }
+    }
+}
+"@
+$case = New-CorpusCase $compiler $root "cli-properties-events" "properties-events-semantics" "anycpu" $source $target
+$cases += $case.job
+$manifestCases += $case.manifest
+
+$source = @"
+namespace ManagedFixture {
+    public interface IWorker {
+        int Work(int value);
+    }
+
+    public sealed class Worker : IWorker {
+        public int Work(int value) {
+            return value + 1;
+        }
+    }
+}
+"@
+$target = @"
+using System;
+
+namespace ManagedFixture {
+    public interface IWorker {
+        int Work(int value);
+    }
+
+    public interface INamed {
+        string Name { get; }
+    }
+
+    public sealed class Worker : IWorker, INamed, IComparable<Worker> {
+        public string Name {
+            get { return "worker"; }
+        }
+
+        public int Work(int value) {
+            return value + Name.Length;
+        }
+
+        int IComparable<Worker>.CompareTo(Worker other) {
+            if (other == null) {
+                return 1;
+            }
+            return Name.Length - other.Name.Length;
+        }
+    }
+}
+"@
+$case = New-CorpusCase $compiler $root "cli-interface-impl" "interface-implementation-and-methodimpl" "anycpu" $source $target
+$cases += $case.job
+$manifestCases += $case.manifest
+
+$source = @"
+using System;
+
+namespace ManagedFixture {
+    public sealed class ControlFlow {
+        public int Classify(int value) {
+            try {
+                switch (value) {
+                    case 0:
+                        return 10;
+                    case 1:
+                        return 20;
+                    default:
+                        return 30 / value;
+                }
+            } catch (DivideByZeroException) {
+                return -1;
+            }
+        }
+    }
+}
+"@
+$target = @"
+using System;
+
+namespace ManagedFixture {
+    public sealed class ControlFlow {
+        public int Classify(int value) {
+            int result = 0;
+            try {
+                switch (value) {
+                    case 0:
+                        result = 11;
+                        break;
+                    case 1:
+                        result = 21;
+                        break;
+                    case 2:
+                    case 3:
+                        result = 40 + value;
+                        break;
+                    default:
+                        result = 120 / value;
+                        break;
+                }
+            } catch (DivideByZeroException) {
+                result = -2;
+            } finally {
+                result += 1;
+            }
+            return result;
+        }
+    }
+}
+"@
+$case = New-CorpusCase $compiler $root "cli-exception-switch" "exception-handlers-and-switch-il" "anycpu" $source $target
+$cases += $case.job
+$manifestCases += $case.manifest
+
+$source = @"
+using System.Runtime.InteropServices;
+
+namespace ManagedFixture {
+    internal static class NativeMethods {
+        [DllImport("kernel32.dll")]
+        internal static extern uint GetTickCount();
+    }
+
+    public sealed class NativeUser {
+        public uint Read() {
+            return NativeMethods.GetTickCount();
+        }
+    }
+}
+"@
+$target = @"
+using System.Runtime.InteropServices;
+
+namespace ManagedFixture {
+    internal static class NativeMethods {
+        [DllImport("kernel32.dll")]
+        internal static extern uint GetTickCount();
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool QueryPerformanceCounter(out long value);
+    }
+
+    public sealed class NativeUser {
+        public long Read() {
+            long value;
+            if (NativeMethods.QueryPerformanceCounter(out value)) {
+                return value;
+            }
+            return NativeMethods.GetTickCount();
+        }
+    }
+}
+"@
+$case = New-CorpusCase $compiler $root "cli-pinvoke-module" "pinvoke-module-and-marshal" "anycpu" $source $target
+$cases += $case.job
+$manifestCases += $case.manifest
+
+$source = @"
+namespace ManagedFixture {
+    public enum Mode : short {
+        Source = 1,
+        Shared = 2
+    }
+
+    public struct Point {
+        public int X;
+        public int Y;
+    }
+
+    public sealed class Shape {
+        public Point[] Points() {
+            return new Point[] { new Point { X = 1, Y = 2 } };
+        }
+    }
+}
+"@
+$target = @"
+using System;
+
+namespace ManagedFixture {
+    public enum Mode : short {
+        Source = 1,
+        Shared = 2,
+        Target = 3
+    }
+
+    public struct Point {
+        public int X;
+        public int Y;
+        public int Z;
+    }
+
+    public sealed class Shape {
+        public enum Quality : byte {
+            Low = 1,
+            High = 2
+        }
+
+        public Tuple<Mode, Point[]> Build() {
+            Point[] points = new Point[] {
+                new Point { X = 1, Y = 2, Z = 3 },
+                new Point { X = 5, Y = 8, Z = 13 }
+            };
+            return Tuple.Create(Mode.Target, points);
+        }
+    }
+}
+"@
+$case = New-CorpusCase $compiler $root "cli-nested-struct-enum-array" "nested-types-structs-enums-arrays" "anycpu" $source $target
+$cases += $case.job
+$manifestCases += $case.manifest
+
 $job = [ordered]@{
     schema_version = 1
     domain = "msdelta"

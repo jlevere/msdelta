@@ -1,9 +1,10 @@
 //! CLR IL token remapping used by the managed disassembly transform.
 
 use crate::pe::cli::map::CliMapModel;
-use crate::pe::cli::metadata::CliMetadataModel;
+use crate::pe::cli::metadata::{CliColumnValue, CliMetadataModel};
 use crate::pe::cli::method::cli_method_bodies;
-use crate::pe::cli::schema::CliSchemaFlavor;
+use crate::pe::cli::schema::{CliSchemaFlavor, HeapKind};
+use crate::pe::cli::tokens::StringsHeapOffset;
 use crate::pe::parse::PeInfo;
 use crate::{Error, Result};
 
@@ -25,6 +26,12 @@ pub(crate) fn transform_cli_disasm_tokens(
     let mut rewrites = 0usize;
 
     for body in bodies {
+        // Native-created managed deltas reuse constructor operand bytes under
+        // different token-table tags; remapping constructor RIDs corrupts those
+        // copy sources.
+        if is_constructor_body(image, metadata, body.rid) {
+            continue;
+        }
         let code_start = body.file_offset.saturating_add(body.header_size);
         let Some(code_end) = code_start.checked_add(body.code_size) else {
             continue;
@@ -136,6 +143,23 @@ fn map_rid(rift: &crate::lzx::rift::RiftTable, rid: u32) -> u32 {
     i64::from(rid).wrapping_add(rift.map(i64::from(rid))) as u32
 }
 
+fn is_constructor_body(image: &[u8], metadata: &CliMetadataModel, method_rid: u32) -> bool {
+    let Ok(row) = metadata.table_row_by_id(image, 0x06, method_rid) else {
+        return false;
+    };
+    let Ok(CliColumnValue::Heap {
+        kind: HeapKind::Strings,
+        offset,
+    }) = row.column("Name")
+    else {
+        return false;
+    };
+    matches!(
+        metadata.strings(image, StringsHeapOffset::new(offset)),
+        Ok(".ctor" | ".cctor")
+    )
+}
+
 fn one_byte_operand(opcode: u8) -> IlOperand {
     match opcode {
         0x0e..=0x13 | 0x1f | 0x2b..=0x37 | 0xde => IlOperand::Fixed(1),
@@ -181,6 +205,11 @@ mod tests {
         "cli-custom-attribute",
         "cli-resource",
         "cli-platform-x64",
+        "cli-properties-events",
+        "cli-interface-impl",
+        "cli-exception-switch",
+        "cli-pinvoke-module",
+        "cli-nested-struct-enum-array",
     ];
 
     fn managed_native_corpus_dir() -> PathBuf {
@@ -257,6 +286,49 @@ mod tests {
 
         assert_eq!(rewrites, 0);
         assert_eq!(il, vec![0x74, 0x01, 0x00]);
+    }
+
+    #[test]
+    fn cli_disasm_transform_preserves_constructor_bodies() {
+        let root = managed_native_corpus_dir();
+        if !root.exists() {
+            return;
+        }
+
+        let case_dir = root.join("cli-interface-impl");
+        let source =
+            std::fs::read(case_dir.join("source.dll")).expect("read managed source fixture");
+        let delta = std::fs::read(case_dir.join("delta.pa30")).expect("read managed delta fixture");
+        let pe = PeInfo::parse_lenient(&source).expect("parse managed source PE");
+        let metadata = parse_cli_metadata_from_pe(&source, CliSchemaFlavor::Classic)
+            .expect("parse source CLI metadata");
+        let parsed = crate::pa30::parse(&delta).expect("parse managed delta");
+        let preprocess = crate::pa30::preprocess::parse_pe_preprocess(&parsed.preprocess)
+            .expect("parse managed preprocess");
+        let mut transformed = source.clone();
+
+        transform_cli_disasm_tokens(&mut transformed, &pe, &metadata, &preprocess.cli_map);
+
+        let mut constructors = 0usize;
+        for body in cli_method_bodies(&source, &pe, &metadata) {
+            if !is_constructor_body(&source, &metadata, body.rid) {
+                continue;
+            }
+            constructors += 1;
+            let code_start = body.file_offset + body.header_size;
+            let code_end = code_start + body.code_size;
+            assert_eq!(
+                &transformed[code_start..code_end],
+                &source[code_start..code_end],
+                "constructor body RID {} should not be token-remapped",
+                body.rid
+            );
+        }
+
+        assert!(
+            constructors > 0,
+            "fixture should include a constructor body"
+        );
     }
 
     #[test]
