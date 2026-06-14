@@ -195,7 +195,19 @@ Not supported yet:
 
 - x86 process ABI.
 - Automatic fixture promotion.
+- Normalized native-vs-Rust stage diffing.
+- Windows/DLL version matrix capture.
 - CLI compression-rift object normalization.
+
+Near-term lab priorities:
+
+1. Promote stage captures with a reusable command instead of one-off scripts.
+2. Add targeted harnesses for narrow evidence gaps, starting with
+   non-identity `CliMap::MapCoded`.
+3. Add object normalizers for PE info, CLI4 metadata/map, and CLI compression
+   rift builders.
+4. Re-run the same capture set across another Windows build and compare drift
+   by atom.
 
 ## Contract Notes
 

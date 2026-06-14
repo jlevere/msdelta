@@ -37,6 +37,7 @@ Failure conditions:
 Oracle strategy:
 Fixture packet:
 Fuzz/property checks:
+Promotion gate:
 Done when:
 ```
 
@@ -44,6 +45,12 @@ The most important fields are `State before`, `Transition`, `State after`, and
 `Address domain`. Most bugs in this project come from proving the wrong state
 transition, or mixing source RVA, target RVA, source file offset, and target
 file offset.
+
+`Promotion gate` is the evidence required before the atom may be used by a
+larger atom. A pure finite classifier can promote on exhaustive unit tests. A
+parser needs a native reader-window fixture. A transform needs an entry/exit
+fixture at the transform boundary. A rift producer needs the native rift before
+it is summed into a later copy map.
 
 ## Layers
 
@@ -108,6 +115,24 @@ current evidence, not every test that exists.
 | `curated` | checked against curated real fixtures or native dumps |
 | `bulk` | broad corpus evidence exists |
 | `release` | covered by normal release workspace tests |
+
+## Readiness Gates
+
+Track each atom by the strongest thing it can safely do today:
+
+| Gate | Meaning |
+|---|---|
+| `observed` | native symbol or graph is known, but the transition is not isolated |
+| `specified` | inputs, state transition, outputs, and failure policy are written down |
+| `modeled` | Rust has a typed representation and synthetic tests |
+| `fixture-backed` | curated native fixture replay validates the atom boundary |
+| `composed` | a parent atom uses it while preserving fail-loud diagnostics |
+| `released` | normal apply/create may rely on it for supported file types |
+
+Do not skip gates for large state machines. If an atom cannot be independently
+fixture-backed, that is a signal to split it or to move the boundary to the
+nearest observable native function. `bulk` evidence can raise confidence after
+composition, but it does not replace a fixture-backed atom contract.
 
 ## Native Oracles
 
@@ -189,11 +214,12 @@ When starting an atom:
 
 1. Add or update the row in `docs/feature-atoms.tsv`.
 2. Write the atom contract using the template above.
-3. Build the smallest synthetic test that exercises the transition.
-4. Capture or create an oracle fixture packet.
-5. Implement the atom behind fail-loud gating.
-6. Promote the registry status only after the atom passes its stage oracle.
-7. Run the broad corpus and update the classifier buckets.
+3. Decide the promotion gate before implementation starts.
+4. Build the smallest synthetic test that exercises the transition.
+5. Capture or create an oracle fixture packet.
+6. Implement the atom behind fail-loud gating.
+7. Promote the registry status only after the atom passes its stage oracle.
+8. Run the broad corpus and update the classifier buckets.
 
 The fail-loud rule is mandatory: if a delta requires an atom that is not
 supported, normal `apply()` should return `Error::Unsupported` with the atom
@@ -224,6 +250,39 @@ of the atom contract machinery because they make future captures reproducible.
 
 When a lesson is local to one atom, put it in that atom's doc. When it changes
 how every future atom should be approached, update this file.
+
+## Work Lanes
+
+The project should now move in lanes instead of a single queue. Each lane feeds
+the others, and each can make progress without pretending a whole file type is
+done.
+
+| Lane | Purpose | Current rule |
+|---|---|---|
+| Lab/oracle lane | Frida capture, promotion, version matrix, native diffing | Improve this before adding many more undocumented atoms |
+| Model/parser lane | typed wire/object models and reader-window fixtures | Keep parser atoms fixture-backed before using them in transforms |
+| Algebra/rift lane | pure maps, heap/table rifts, rift composition | Prefer small call-record fixtures and property tests |
+| Transform lane | PE/IL/metadata byte mutation | Do not start broad transform work until input models and maps are stable |
+| Release gate lane | apply/create dispatch and unsupported diagnostics | Fail loud until every required atom for a file type is composed |
+
+This is the practical planning unit: choose the next atom from the lane that
+removes the most ambiguity for the others. Right now that usually means
+improving the lab/oracle lane or a pure rift/model atom before writing another
+large transform.
+
+## Next Atom Selection
+
+Pick the next atom by asking:
+
+1. Can we isolate a native boundary for it?
+2. Can the Rust behavior be replayed against a small fixture?
+3. Does it unblock several later atoms?
+4. Can it be tested without full `ApplyDeltaB` success?
+5. Will failure produce a useful atom-level diagnostic?
+
+If the answer to any of the first three questions is no, spend the turn on the
+lab harness, symbol map, object normalizer, or atom split first. This keeps
+reverse-engineering effort from turning into untestable production code.
 
 ## First Atom Pattern
 
@@ -307,13 +366,25 @@ Use this shape for future oracle atoms:
 
 ## Near-Term Milestones
 
-1. Fix debug/release parity for `RiftTable::reverse`.
-2. Turn the TSV into an in-crate feature gate used by `apply()`.
-3. Add a bulk mismatch classifier that maps each failure to likely atoms and
-   byte ranges.
-4. Finish the remaining native i386/amd64 apply atoms.
-5. Start managed support with the pure parser/model atoms in
-   `docs/managed-cli-atoms.md`.
-6. Build the Frida oracle loop for `CliMetadata`, `CliMap`, and CLI rift
-   captures.
-7. Add ARM64 classification and fixtures before implementing ARM64 transforms.
+1. Fix debug/release parity for `RiftTable::reverse`; it is now blocking broad
+   confidence checks even when the active atom is unrelated.
+2. Turn the TSV into an in-crate feature gate used by `apply()` so unsupported
+   paths identify the missing atom instead of collapsing into generic failure.
+3. Make fixture promotion repeatable for internal stage captures. The current
+   manual curation worked, but it will not scale to many CLI rift and transform
+   atoms.
+4. Add `NativeOracleDiff`: a normalized-object comparator that can replay Rust
+   stage output against promoted native stage captures.
+5. Close the current managed parser/model gaps: native `CliMetadata::Init`,
+   CLI4 metadata bitstream, targeted non-identity `CliCodedTokenMap`, and
+   native `CliBlobTransformer::GetNumber`.
+6. Build the first managed rift producer ladder:
+   `CliHeapRift` -> `CliTableRift` -> `CliCompressionRift` ->
+   `FinalPeCopyRiftManaged`.
+7. Only after the rift ladder is fixture-backed, start the managed transform
+   ladder: `TransformContextManaged`, `MarkNonExeCliMethods`,
+   `TransformCliDisasm`, `CliBlobTypeTokenRemap`, and
+   `TransformCliMetadata`.
+8. Run the bulk classifier after each composed milestone and update the registry
+   buckets by atom, section, flag, and byte range.
+9. Add ARM64 classification and fixtures before implementing ARM64 transforms.

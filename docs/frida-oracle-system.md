@@ -478,28 +478,38 @@ Allowed fixture data:
 Do not commit decompiler output, disassembly snippets, or copied proprietary
 source text into fixtures, comments, or reports.
 
-## First Milestone
+## Current Oracle Plan
 
-The first milestone after this scaffold is the smallest export-capture loop:
+The first export-capture loop is complete enough to support atom work:
+`frida-inject.exe` file-sink transport is repeatable, export captures normalize
+into fixture-shaped buffers, and internal hooks are selected by module hash.
+The managed corpus wrapper now selects the Win26100 `msdelta.dll` symbol map
+with `Get-FileHash`, waits for both export and stage Frida agents, and captures
+these internal atoms:
 
-1. Run `pnpm install` and `pnpm check` on the Windows lab host.
-2. Wrap `crates/oracle/lab/oracle_harness.ps1` with
-   `pnpm capture:export -- ...`.
-3. Promote one tiny RAW export fixture.
-4. Add one native PE x64 export fixture.
-5. Add module hash detection and symbol-map selection for internal hooks.
+| Atom | Native boundary | Fixture shape |
+|---|---|---|
+| `CliMetadataBitstream` | `compo::CliMetadata::InternalFromBitReader` | normalized object plus replay-checked reader window |
+| `CliMapBitstream` | `compo::CliMap::FromBitReader` | normalized object plus replay-checked reader window |
+| `CliCodedTokenMap` | `compo::CliMap::MapCoded` / `MapCodedExact` | call input, return value, and normalized `CliMap` snapshot |
 
-The managed corpus wrapper now starts that internal-hook lane by selecting the
-Win26100 `msdelta.dll` symbol map with `Get-FileHash`, waiting for both export
-and stage Frida agents, and capturing normalized `CliMetadataBitstream` objects
-plus replay-checked standalone reader bitstreams from
-`compo::CliMetadata::InternalFromBitReader` and `compo::CliMap::FromBitReader`.
-It also captures `CliCodedTokenMap` call records from
-`compo::CliMap::MapCoded` and `compo::CliMap::MapCodedExact`, where the stable
-fixture is the logical call input/output plus a `CliMap` snapshot rather than a
-reader-window blob. Next hooks should be `compo::Cli4Map::InternalFromBitReader`
-and the CLI compression-rift builders, so the first real managed rift oracle
-exists before any IL or metadata rewriting work begins.
+The lab lane should now optimize for repeatability and smaller atom fixtures:
+
+1. Turn the current ad hoc fixture promotion steps into a reusable promotion
+   command for stage objects, reader-window blobs, and call records.
+2. Add `NativeOracleDiff`, a normalized-object comparator that can replay Rust
+   output against promoted native captures without a full apply run.
+3. Add targeted call/object harnesses for evidence gaps such as non-identity
+   `MapCoded` and compressed-integer edge cases.
+4. Add object normalizers for PE info, CLI4 metadata/map, and CLI compression
+   rift builders.
+5. Run the same capture set on a second Windows/DLL build and record drift by
+   atom, not by whole corpus result.
+
+New hooks should be chosen by the managed phase they unblock. For the current
+plan, prefer `CliMetadata::Init`, `CliBlobTransformer::GetNumber`, CLI4
+metadata/map readers, and `CompressionRiftTableCli[4]::FromCliMap` before IL or
+metadata transform entry/exit hooks.
 
 ## Managed Corpus
 

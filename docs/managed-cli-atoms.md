@@ -622,28 +622,100 @@ apply-side models are stable.
 | `CliMapSequenceTables` | `ProcessSequenceTable`, `ProcessTripletTable` | Match metadata rows using schema-specific row keys. |
 | `GetPortableExecutableInfoManaged` | `GetPortableExecutableInfo`, `GetPortableExecutableInfoCli4` | Emit target PE info and target metadata for CreateDeltaB. |
 
-## First Implementation Order
+## Current Implementation Plan
 
-1. Implement `ManagedFileTypeBranch` as a pure classifier and use it in the
-   fail-loud managed rejection path.
-2. Implement pure schema/model atoms first: `CliMetadataStaticSchema`,
-   `CliMetadataFromPe`, `CliBlobCompressedInteger`, and `CliCodedTokenMap`.
-3. Add `CliMapModel` and the shared-format rift reader needed by
-   `CliMapBitstream`.
-4. Implement `CliMetadataBitstream` and `ManagedPeInfoBitstream` parser
-   round-trips.
-5. Implement `CliMapBitstream` parser round-trips.
-6. Implement `CliHeapRift`, then `CliTableRift`, then `CliCompressionRift`.
-7. Add native stage fixtures for `CliMetadataBitstream`, `CliMapBitstream`,
-   `CliCompressionRift`, and `FinalPeCopyRiftManaged`.
-8. Implement `MarkNonExeCliMethods`.
-9. Implement `TransformCliDisasm`.
-10. Implement `CliBlobTypeTokenRemap`.
-11. Implement `TransformCliMetadata`.
-12. Only then remove the managed `Error::Unsupported` gate for covered
-    branches.
+The old linear order is no longer accurate. Several early parser/model atoms
+now exist, and the remaining risk is mostly about proving the right state
+boundary before composing larger transforms. Keep managed apply rejected until
+the release gate below is satisfied.
 
-This order keeps the early atoms almost pure: they do not need to run LZX,
-apply a full delta, or mutate a PE image. Native Frida work should run in
-parallel starting with `CliMetadata::FromBitReader` object normalization, then
-`CliMap::FromBitReader`, then `CompressionRiftTableCli[4]::FromCliMap`.
+### Established Foundation
+
+These atoms are useful building blocks today, but not all are release gates:
+
+| Atom | Evidence | Remaining gap |
+|---|---|---|
+| `ManagedFileTypeBranch` | exhaustive unit tests | wire branch diagnostics into every managed rejection |
+| `CliMetadataStaticSchema` | Rust schema self-checks | native `CheckStaticData` parity hook |
+| `CliMetadataFromPe` | synthetic PE32/PE32+ tests | native `CliMetadata::Init` object oracle |
+| `CliMetadataBitstream` | Win26100 reader-window fixtures | CLI4 equivalent and transform-context wiring |
+| `CliMapBitstream` | Win26100 reader-window fixtures | native-like writer canonicalization for encode |
+| `CliCodedTokenMap` | Win26100 call-record fixtures | targeted non-identity `MapCoded` native case |
+| `CliBlobCompressedInteger` | synthetic boundary tests | native non-canonical `GetNumber` behavior |
+
+Treat these as the base for the next phase. Do not re-implement them as part of
+larger atoms; improve their fixture coverage when a downstream atom exposes a
+specific gap.
+
+### Phase 1: Close Evidence Gaps
+
+1. Add a targeted native `CliCodedTokenMap` call where non-exact `MapCoded`
+   changes the raw token.
+2. Add a native `CliMetadata::Init` or equivalent object oracle for metadata
+   parsed directly from source PE bytes.
+3. Add a native `CliBlobTransformer::GetNumber` oracle for malformed and
+   non-canonical compressed integers.
+4. Add a CLI4 metadata bitstream fixture or explicitly record the native symbol
+   and layout gap blocking it.
+
+This phase is deliberately small. It improves confidence in the pure atoms that
+later transforms will call thousands of times.
+
+### Phase 2: Build the Managed Context
+
+Implement `ManagedPeInfoBitstream` and `TransformContextManaged` as glue atoms,
+not as transforms. Their job is to prove that source metadata, target metadata,
+the used rift, and `CliMap` are all attached to the same managed branch before
+any byte mutation happens.
+
+Done when a fixture can show:
+
+1. selected classic or CLI4 branch,
+2. source metadata model from the PE image,
+3. target metadata model from the preprocess bitstream,
+4. parsed `CliMap`,
+5. transform objects receiving the expected metadata/map slots.
+
+### Phase 3: Produce the CLI Compression Rift
+
+Build this ladder before broad IL or metadata rewriting:
+
+1. `CliHeapRift`
+2. `CliTableRift`
+3. `CliCompressionRift`
+4. `FinalPeCopyRiftManaged`
+
+The rift ladder is the highest-leverage managed work because it can be tested
+against native sorted rift objects without requiring full target equality. It
+also tells us whether metadata row/heap offset models are good enough before we
+mutate method bodies or signatures.
+
+### Phase 4: Implement Managed Source Transforms
+
+After the context and rift ladder have fixtures, implement transforms in this
+order:
+
+1. `MarkNonExeCliMethods`
+2. `TransformCliDisasm`
+3. `CliBlobTypeTokenRemap`
+4. `TransformCliMetadata`
+
+Each transform needs an entry/exit fixture at its own boundary. Full
+`ApplyDeltaB` success is not a substitute for proving which bytes the transform
+owns.
+
+### Phase 5: Release Gate
+
+Remove the managed `Error::Unsupported` gate for a branch only when all of
+these are true for that branch:
+
+1. source and target metadata parse through native-backed models,
+2. `CliMap` parses and coded-token remapping has the required native cases,
+3. the managed context fixture proves the right objects are attached,
+4. CLI compression rift output matches native before final rift summing,
+5. enabled source transforms match native entry/exit buffers,
+6. bulk corpus failures are either gone or bucketed to atoms outside the branch.
+
+Classic CLI should reach this gate before CLI4 unless the native evidence makes
+CLI4 cheaper for a specific atom. Create-side atoms stay deferred until the
+apply-side models and rifts are stable.

@@ -39,26 +39,26 @@ DisasmARM	arm	source_transform	0x40	0x80000	TransformDisasmARM::Run	missing	reje
 PdataARM	arm	source_transform	0x40	0x100000	TransformPdataARM::Run	missing	reject	needs_fixture	Acquire ARMNT fixture with populated pdata
 DisasmARM64	arm64	source_transform	0x80	0x800000	TransformDisasmARM64::Run	missing	reject	needs_fixture	Implement ARM64 file_type 0xf5 plumbing before transform work
 PdataARM64	arm64	source_transform	0x80	0x1000000	TransformPdataARM64::Run	missing	reject	needs_fixture	Start with 8-byte pdata entry remap before full disasm
-CliMetadataStaticSchema	cli	parser	pe,cli	-	CliMetadata::CheckStaticData and Cli4Metadata::CheckStaticData	partial	reject	unit	Add native object-normalizer check for CheckStaticData schema parity
-CliMetadataFromPe	cli	parser	0x2,0x4,0x8	-	CliMetadata::Init	partial	reject	unit	Add curated managed fixture and native CliMetadata::Init object oracle
-Cli4MetadataFromPe	cli	parser	0x10,0x20,0x40,0x80	-	Cli4Metadata::Init	missing	reject	needs_fixture	Build source CLI4 metadata model from CLR metadata root
-CliMetadataBitstream	cli	parser	0x2,0x4,0x8	0x8000	CliMetadata::FromBitReader / compo::CliMetadata::InternalFromBitReader	partial	reject	curated	Native reader-window fixture validates parser; wire parsed target metadata into managed transform context after CliMap parity
-Cli4MetadataBitstream	cli	parser	0x10,0x20,0x40,0x80	0x400000	PortableExecutableInfoCli4::FromBitReader and CliMetadata::FromBitReader	missing	reject	needs_fixture	Parse CLI4 target metadata record from preprocess bitstream
-CliMapBitstream	cli	parser	pe,cli	-	CliMap::FromBitReader	partial	reject	curated	Native reader-window fixture validates parser; populated-map writer is decode-equivalent but not native bit-identical until IntFormat canonicalization
-CliCodedTokenMap	cli	algebra	pe,cli	-	CliMap::MapCoded and CliMap::MapCodedExact	partial	reject	curated	Native call fixture replays natural MapCoded identity cases and MapCodedExact hit/miss cases; add targeted non-identity MapCoded oracle
-TransformContextManaged	cli	pipeline	pe,cli	-	TransformBase::SetCliMetadata SetCli4Metadata SetCliMap	missing	reject	needs_fixture	Attach source/target metadata and CliMap to every transform before execution
-MarkNonExeCliMethods	cli	source_transform	pe,cli	0x2	MarkNonExe::RunCli and MarkNonExe::RunCli4	missing	reject	needs_fixture	Mark method bodies from MethodDef rows in the hint map
-TransformCliDisasm	cli	source_transform	0x2,0x4,0x8	0x4000	TransformCliDisasm::Run	missing	reject	needs_fixture	Remap IL metadata-token and user-string operands through CliMap
-TransformCli4Disasm	cli	source_transform	0x10,0x20,0x40,0x80	0x200000	TransformCli4Disasm::Run	missing	reject	needs_fixture	Same as CLI disasm, using CLI4 metadata source
-CliBlobCompressedInteger	cli	parser	pe,cli	-	CliBlobTransformer::GetNumber and CliMetadata::GetBlobContent	partial	reject	unit	Add native GetNumber oracle for non-canonical encoding behavior
-CliBlobTypeTokenRemap	cli	source_transform	pe,cli	-	CliBlobTransformer::TransformTypeDef TransformType TransformParam TransformSentinel	missing	reject	needs_fixture	Remap TypeDefOrRef coded tokens inside signature blobs
-TransformCliMetadata	cli	source_transform	0x2,0x4,0x8	0x8000	TransformCliMetadata::Run	missing	reject	needs_fixture	Remap metadata table columns and signature blobs after schema and CliMap atoms
-TransformCli4Metadata	cli	source_transform	0x10,0x20,0x40,0x80	0x400000	TransformCli4Metadata::Run	missing	reject	needs_fixture	CLI4 metadata-table and signature-blob remap using CLI4 schema
-CliHeapRift	cli	producer	pe,cli	-	CompressionRiftTableCli::AddHeapMap	missing	reject	needs_fixture	Generate heap rift entries for Strings UserStrings and Blob maps
-CliTableRift	cli	producer	pe,cli	-	CompressionRiftTableCli::AddTableMap	missing	reject	needs_fixture	Generate table rift entries including 2-byte and 4-byte column width changes
-CliCompressionRift	cli	producer	0x2,0x4,0x8	-	CompressionRiftTableCli::FromCliMap	missing	reject	needs_fixture	Compose classic CLI heap/table rifts and compare native sorted output
-Cli4CompressionRift	cli	producer	0x10,0x20,0x40,0x80	-	CompressionRiftTableCli4::FromCli4Map	missing	reject	needs_fixture	Compose CLI4 heap/table rifts and compare native sorted output
-FinalPeCopyRiftManaged	cli	producer	pe,cli	-	PreProcessPEForApply and RiftTable::Sum	missing	reject	needs_fixture	Sum native PE-copy rift with CLI compression rift
+CliMetadataStaticSchema	cli	parser	pe,cli	-	CliMetadata::CheckStaticData and Cli4Metadata::CheckStaticData	partial	reject	unit	Phase 1 evidence gap: add native object-normalizer check for CheckStaticData schema parity
+CliMetadataFromPe	cli	parser	0x2,0x4,0x8	-	CliMetadata::Init	partial	reject	unit	Phase 1 evidence gap: promote managed PE snapshot and native CliMetadata::Init object oracle
+Cli4MetadataFromPe	cli	parser	0x10,0x20,0x40,0x80	-	Cli4Metadata::Init	missing	reject	needs_fixture	Phase 1 evidence gap: build source CLI4 metadata model from CLR metadata root
+CliMetadataBitstream	cli	parser	0x2,0x4,0x8	0x8000	CliMetadata::FromBitReader / compo::CliMetadata::InternalFromBitReader	partial	reject	curated	Phase 2 context input: wire parsed target metadata into ManagedPeInfoBitstream and TransformContextManaged
+Cli4MetadataBitstream	cli	parser	0x10,0x20,0x40,0x80	0x400000	PortableExecutableInfoCli4::FromBitReader and CliMetadata::FromBitReader	missing	reject	needs_fixture	Phase 1 evidence gap: capture CLI4 target metadata record from preprocess bitstream
+CliMapBitstream	cli	parser	pe,cli	-	CliMap::FromBitReader	partial	reject	curated	Phase 2 context input: use parser output for apply; defer native-bit-identical writer canonicalization to encode lane
+CliCodedTokenMap	cli	algebra	pe,cli	-	CliMap::MapCoded and CliMap::MapCodedExact	partial	reject	curated	Phase 1 evidence gap: add targeted non-identity MapCoded oracle before relying on it in transform atoms
+TransformContextManaged	cli	pipeline	pe,cli	-	TransformBase::SetCliMetadata SetCli4Metadata SetCliMap	missing	reject	needs_fixture	Phase 2 glue: attach source metadata, target metadata, used rift, and CliMap before byte transforms
+MarkNonExeCliMethods	cli	source_transform	pe,cli	0x2	MarkNonExe::RunCli and MarkNonExe::RunCli4	missing	reject	needs_fixture	Phase 4 transform ladder: mark method bodies from MethodDef rows after managed context is proven
+TransformCliDisasm	cli	source_transform	0x2,0x4,0x8	0x4000	TransformCliDisasm::Run	missing	reject	needs_fixture	Phase 4 transform ladder: remap IL metadata-token and user-string operands through CliMap
+TransformCli4Disasm	cli	source_transform	0x10,0x20,0x40,0x80	0x200000	TransformCli4Disasm::Run	missing	reject	needs_fixture	Phase 4 transform ladder: port CLI disasm behavior to CLI4 metadata source after classic path
+CliBlobCompressedInteger	cli	parser	pe,cli	-	CliBlobTransformer::GetNumber and CliMetadata::GetBlobContent	partial	reject	unit	Phase 1 evidence gap: add native GetNumber oracle for malformed and non-canonical encodings
+CliBlobTypeTokenRemap	cli	source_transform	pe,cli	-	CliBlobTransformer::TransformTypeDef TransformType TransformParam TransformSentinel	missing	reject	needs_fixture	Phase 4 transform ladder: remap TypeDefOrRef coded tokens inside signature blobs
+TransformCliMetadata	cli	source_transform	0x2,0x4,0x8	0x8000	TransformCliMetadata::Run	missing	reject	needs_fixture	Phase 4 transform ladder: remap metadata table columns and signature blobs after rift/context atoms
+TransformCli4Metadata	cli	source_transform	0x10,0x20,0x40,0x80	0x400000	TransformCli4Metadata::Run	missing	reject	needs_fixture	Phase 4 transform ladder: port metadata-table and signature-blob remap to CLI4 schema
+CliHeapRift	cli	producer	pe,cli	-	CompressionRiftTableCli::AddHeapMap	missing	reject	needs_fixture	Phase 3 rift ladder: generate heap rift entries for Strings UserStrings and Blob maps
+CliTableRift	cli	producer	pe,cli	-	CompressionRiftTableCli::AddTableMap	missing	reject	needs_fixture	Phase 3 rift ladder: generate table rifts including 2-byte and 4-byte column width changes
+CliCompressionRift	cli	producer	0x2,0x4,0x8	-	CompressionRiftTableCli::FromCliMap	missing	reject	needs_fixture	Phase 3 rift ladder: compose classic CLI heap/table rifts and compare native sorted output
+Cli4CompressionRift	cli	producer	0x10,0x20,0x40,0x80	-	CompressionRiftTableCli4::FromCli4Map	missing	reject	needs_fixture	Phase 3 rift ladder: compose CLI4 heap/table rifts after classic path is understood
+FinalPeCopyRiftManaged	cli	producer	pe,cli	-	PreProcessPEForApply and RiftTable::Sum	missing	reject	needs_fixture	Phase 3 release input: sum native PE-copy rift with CLI compression rift and fixture the result
 CreateRaw	create	create	0x1	-	CreateDeltaB RAW path	supported	allow	release	Keep Windows oracle on raw PA30/PA31 cases
 CreatePeNative	create	create	0x2,0x8	-	CreateDeltaB native PE path	partial	allow	curated	Add transform-aware T(source) create-side checks
 CreateCliMapFromPEs	create	create	0x2,0x4,0x8	-	CliMapFromPEs::Run	missing	reject	needs_fixture	Defer until apply-side CliMap and metadata atoms pass
@@ -71,11 +71,11 @@ CreateCli4	create	create	0x10,0x20,0x40,0x80	-	CreateDeltaB managed CLI4 graph	m
 CreateArm64	create	create	0x80	-	CreateDeltaB file_type_set 0xf5 path	missing	reject	needs_fixture	Do not start until ARM64 apply atoms pass
 UnsupportedFeatureGate	pipeline	gate	all	-	apply feature dispatch policy	partial	allow	unit	Generate fail-loud diagnostics from this registry
 FridaExportOracle	lab	fixture	all	-	ApplyDeltaB ApplyDeltaGetReverseB CreateDeltaB exports	partial	lab_only	curated	Add reverse/CreateDeltaB smoke captures after RAW ApplyDeltaB fixture
-FridaSymbolMap	lab	fixture	all	-	module hash plus internal RVA hook map	partial	lab_only	curated	Add maps for CliMap and compression-rift functions across DLL builds
-FridaStageCapture	lab	fixture	pe,cli	-	internal function entry and exit hooks	partial	lab_only	curated	Parser atoms capture normalized objects plus replay-checked reader bitstreams for CliMetadata and CliMap
-FridaCallStageCapture	lab	fixture	pe,cli	-	internal pure-method entry and exit hooks	partial	lab_only	curated	CliCodedTokenMap captures stable call inputs, return values, and object snapshots; generalize for more algebra atoms
-FridaObjectNormalizer	lab	fixture	pe,cli	-	Frida logical object readers	partial	lab_only	curated	Add PE info, CLI4 map, and compression-rift normalizers
-FridaFixturePromotion	lab	fixture	all	-	capture to atom fixture promotion	partial	lab_only	curated	Generalize first promoted export packet into a reusable promotion tool
-WindowsVersionMatrix	lab	fixture	all	-	Windows build and DLL hash matrix	missing	lab_only	none	Run the same capture set across builds and group drift by atom
-NativeOracleDiff	lab	fixture	all	-	normalized native capture comparator	missing	lab_only	none	Compare Rust stage outputs against normalized native capture objects
-BulkFailureClassifier	lab	fixture	all	-	corpus failure bucketing	missing	lab_only	none	Bucket native mismatches by atom, section, flags, and byte range
+FridaSymbolMap	lab	fixture	all	-	module hash plus internal RVA hook map	partial	lab_only	curated	Add maps for PE info, CLI4 metadata/map, and compression-rift functions across DLL builds
+FridaStageCapture	lab	fixture	pe,cli	-	internal function entry and exit hooks	partial	lab_only	curated	Generalize parser object plus reader-window capture for PE info, CLI4, and compression rift stages
+FridaCallStageCapture	lab	fixture	pe,cli	-	internal pure-method entry and exit hooks	partial	lab_only	curated	Add targeted call harnesses for non-identity MapCoded and GetNumber edge cases
+FridaObjectNormalizer	lab	fixture	pe,cli	-	Frida logical object readers	partial	lab_only	curated	Add PE info, CLI4 metadata/map, and compression-rift normalizers before broad transform hooks
+FridaFixturePromotion	lab	fixture	all	-	capture to atom fixture promotion	partial	lab_only	curated	Turn ad hoc stage fixture curation into a reusable promotion command
+WindowsVersionMatrix	lab	fixture	all	-	Windows build and DLL hash matrix	missing	lab_only	none	After promotion tooling, run the same capture set across another Windows build and group drift by atom
+NativeOracleDiff	lab	fixture	all	-	normalized native capture comparator	missing	lab_only	none	Build comparator for Rust stage outputs against promoted native capture objects before CLI rift work scales up
+BulkFailureClassifier	lab	fixture	all	-	corpus failure bucketing	missing	lab_only	none	After each composed milestone, bucket native mismatches by atom, section, flags, and byte range
