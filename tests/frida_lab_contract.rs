@@ -99,6 +99,7 @@ fn stage_fixture_promoter_has_first_call_record_mode() {
     for required in [
         "promote-stage-fixture.mjs",
         "--mode cli-blob-compressed-integer",
+        "--mode cli-compression-rift",
         "--normalized <normalized-dir>",
         "--source-case <id>",
         "--case-id <id>",
@@ -109,6 +110,11 @@ fn stage_fixture_promoter_has_first_call_record_mode() {
         "encoded-width/decoded-length/encoded-prefix",
         "selectCliBlobCompressedIntegerCalls",
         "stableCliBlobObject",
+        "CliCompressionRift",
+        "CliCompressionRiftRecord",
+        "selectCliCompressionRiftRecords",
+        "stableCliCompressionRiftObject",
+        "source-size/fill-offset/rift-entry",
         "stage_leave_object_count",
         "one_byte_width_count",
         "two_byte_width_count",
@@ -288,6 +294,7 @@ fn frida_stage_oracle_fails_closed_and_normalizes_cli_metadata() {
         "stage capture disabled",
         "selected module hash does not match symbol map",
         "mapped image size does not match symbol map",
+        "RVA outside mapped image",
         "cli_metadata_internal_from_bitreader",
         "CliMetadataBitstreamRecord",
         "metadata_file_offset",
@@ -417,12 +424,13 @@ fn win26100_msdelta_symbol_map_names_first_managed_atom() {
         "\"atom\": \"CliCompressionRift\"",
         "\"name\": \"CompressionRiftTableFromCliMap::Generate\"",
         "\"legacy_name\": \"CompressionRiftTableCli::FromCliMap\"",
-        "\"rva\": \"0xa46a4\"",
+        "\"rva\": \"0x1da60\"",
         "\"capture\": \"cli_compression_rift_generate\"",
-        "\"name\": \"msdelta-win26100-compression-rift-from-cli-map-generate-call-v1\"",
-        "\"source_buffer_size_offset\": 48",
         "\"name\": \"msdelta-win26100-compression-rift-from-cli-map-v1\"",
-        "\"source_fill_offset_offset\": 64",
+        "\"source_buffer_data_offset\": 56",
+        "\"source_buffer_size_offset\": 64",
+        "\"source_fill_offset_offset\": 72",
+        "\"result_rift_table_ptr_offset\": 80",
     ] {
         assert!(
             WIN26100_MSDELTA_STAGE_MAP.contains(required),
@@ -456,9 +464,22 @@ fn win26100_msdelta_symbol_map_json_is_structural() {
         .find(|function| function["capture"] == "cli_compression_rift_generate")
         .expect("CliCompressionRift stage hook is present");
     assert_eq!(cli_compression_rift["atom"], "CliCompressionRift");
+    assert_eq!(cli_compression_rift["rva"], "0x1da60");
+    assert_eq!(
+        cli_compression_rift["object_layout"]["source_buffer_data_offset"],
+        56
+    );
+    assert_eq!(
+        cli_compression_rift["object_layout"]["source_buffer_size_offset"],
+        64
+    );
     assert_eq!(
         cli_compression_rift["object_layout"]["source_fill_offset_offset"],
-        64
+        72
+    );
+    assert_eq!(
+        cli_compression_rift["object_layout"]["result_rift_table_ptr_offset"],
+        80
     );
     assert_eq!(
         cli_compression_rift["object_layout"]["rift_table_layout"]["entry_size"],

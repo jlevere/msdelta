@@ -1,0 +1,73 @@
+{
+  "type": "CliCompressionRiftRecord",
+  "native_layout": "msdelta-win26100-compression-rift-from-cli-map-v1",
+  "source_buffer": {
+    "size": 3072
+  },
+  "source_widening_fill_offset": 5,
+  "rift": {
+    "entries": [
+      {
+        "source": 856,
+        "target": 812
+      },
+      {
+        "source": 866,
+        "target": 822
+      },
+      {
+        "source": 896,
+        "target": 846
+      },
+      {
+        "source": 924,
+        "target": 874
+      },
+      {
+        "source": 952,
+        "target": 902
+      },
+      {
+        "source": 982,
+        "target": 926
+      },
+      {
+        "source": 988,
+        "target": 932
+      },
+      {
+        "source": 1002,
+        "target": 944
+      },
+      {
+        "source": 1024,
+        "target": 966
+      },
+      {
+        "source": 1044,
+        "target": 986
+      },
+      {
+        "source": 1064,
+        "target": 1000
+      },
+      {
+        "source": 1356,
+        "target": 1281
+      },
+      {
+        "source": 1384,
+        "target": 1308
+      },
+      {
+        "source": 1392,
+        "target": 1316
+      },
+      {
+        "source": 1408,
+        "target": 1332
+      }
+    ],
+    "sorted": true
+  }
+}

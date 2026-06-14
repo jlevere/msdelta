@@ -228,8 +228,8 @@ fn managed_cli_readiness_counts_are_explicit() {
     assert_eq!(count_by(&cli_rows, |row| row.status, "missing"), 10);
     assert_eq!(count_by(&cli_rows, |row| row.status, "rejected"), 1);
     assert_eq!(count_by(&cli_rows, |row| row.apply_policy, "reject"), 24);
-    assert_eq!(count_by(&cli_rows, |row| row.oracle_level, "curated"), 5);
-    assert_eq!(count_by(&cli_rows, |row| row.oracle_level, "unit"), 8);
+    assert_eq!(count_by(&cli_rows, |row| row.oracle_level, "curated"), 6);
+    assert_eq!(count_by(&cli_rows, |row| row.oracle_level, "unit"), 7);
     assert_eq!(
         count_by(&cli_rows, |row| row.oracle_level, "needs_fixture"),
         11
@@ -253,8 +253,8 @@ fn managed_workstream_readiness_counts_are_explicit() {
     assert_eq!(count_by(&rows, |row| row.status, "missing"), 17);
     assert_eq!(count_by(&rows, |row| row.status, "rejected"), 1);
     assert_eq!(count_by(&rows, |row| row.apply_policy, "reject"), 31);
-    assert_eq!(count_by(&rows, |row| row.oracle_level, "curated"), 5);
-    assert_eq!(count_by(&rows, |row| row.oracle_level, "unit"), 8);
+    assert_eq!(count_by(&rows, |row| row.oracle_level, "curated"), 6);
+    assert_eq!(count_by(&rows, |row| row.oracle_level, "unit"), 7);
     assert_eq!(count_by(&rows, |row| row.oracle_level, "needs_fixture"), 18);
 }
 

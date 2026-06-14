@@ -108,6 +108,10 @@ function parseRva(value) {
   return parsed;
 }
 
+function rvaIsOutsideMappedImage(moduleInfo, rva) {
+  return Number.isInteger(moduleInfo.size) && rva >= moduleInfo.size;
+}
+
 const STAGE_CAPTURE_ADAPTERS = globalThis.MSDELTA_STAGE_CAPTURE_ADAPTERS || Object.freeze({});
 
 function stageReaderRuntime() {
@@ -366,6 +370,15 @@ function installReaderReadHook(moduleInfo) {
     });
     return;
   }
+  if (rvaIsOutsideMappedImage(moduleInfo, rva)) {
+    log("error", "reader hook skipped: RVA outside mapped image", {
+      module: moduleInfo.name,
+      symbol: fn.name,
+      rva: fn.rva,
+      mapped_image_size: moduleInfo.size,
+    });
+    return;
+  }
 
   const address = moduleInfo.base.add(rva);
   Interceptor.attach(address, {
@@ -457,6 +470,15 @@ function installStageHook(moduleInfo, fn) {
       symbol: fn.name,
       rva: fn.rva,
       error: String(error),
+    });
+    return;
+  }
+  if (rvaIsOutsideMappedImage(moduleInfo, rva)) {
+    log("error", "stage hook skipped: RVA outside mapped image", {
+      module: moduleInfo.name,
+      symbol: fn.name,
+      rva: fn.rva,
+      mapped_image_size: moduleInfo.size,
     });
     return;
   }

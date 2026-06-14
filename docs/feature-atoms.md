@@ -492,9 +492,9 @@ header.
    known overlap, gap, and wrap vectors now use explicit wrapping arithmetic.
 2. Turn the TSV into an in-crate feature gate used by `apply()` so unsupported
    paths identify the missing atom instead of collapsing into generic failure.
-3. Make fixture promotion repeatable for internal stage captures. The current
-   manual curation worked, but it will not scale to many CLI rift and transform
-   atoms.
+3. Continue expanding repeatable fixture promotion for internal stage captures.
+   `CliBlobCompressedInteger` and `CliCompressionRift` now have promoter modes;
+   reader-window blobs and later transform-stage atoms still need the same path.
 4. Add `NativeOracleDiff`: a normalized-object comparator that can replay Rust
    stage output against promoted native stage captures.
 5. Close the current managed parser/model gaps: native `CliMetadata::Init`

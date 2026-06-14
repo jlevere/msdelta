@@ -96,16 +96,15 @@
       "atom": "CliCompressionRift",
       "name": "CompressionRiftTableFromCliMap::Generate",
       "legacy_name": "CompressionRiftTableCli::FromCliMap",
-      "rva": "0xa46a4",
+      "rva": "0x1da60",
       "abi": "ms-x64-thiscall",
       "capture": "cli_compression_rift_generate",
-      "call_layout": {
-        "name": "msdelta-win26100-compression-rift-from-cli-map-generate-call-v1",
-        "source_buffer_size_offset": 48
-      },
       "object_layout": {
         "name": "msdelta-win26100-compression-rift-from-cli-map-v1",
-        "source_fill_offset_offset": 64,
+        "source_buffer_data_offset": 56,
+        "source_buffer_size_offset": 64,
+        "source_fill_offset_offset": 72,
+        "result_rift_table_ptr_offset": 80,
         "rift_table_layout": {
           "name": "msdelta-win26100-compo-rift-table-v1",
           "initialized_offset": 8,

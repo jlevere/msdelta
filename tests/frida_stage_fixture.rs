@@ -20,6 +20,10 @@ const CLI_BLOB_COMPRESSED_INTEGER_FIXTURE_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/tests/fixtures/atoms/FridaStageCapture/cli-blob-compressed-integer-win26100"
 );
+const CLI_COMPRESSION_RIFT_FIXTURE_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/atoms/FridaStageCapture/cli-compression-rift-win26100"
+);
 
 #[test]
 fn cli_metadata_stage_fixture_is_curated_from_live_lab_capture() {
@@ -741,6 +745,225 @@ fn cli_blob_compressed_integer_stage_objects_are_hashed_and_semantic() {
         "\"value\": 2",
         "\"decoded_length\": 2",
         "\"encoded_width\": 1",
+    ] {
+        assert!(first.contains(required), "first object missing {required}");
+    }
+}
+
+#[test]
+fn cli_compression_rift_stage_fixture_is_curated_from_live_lab_capture() {
+    let fixture = Path::new(CLI_COMPRESSION_RIFT_FIXTURE_DIR);
+    let case = fs::read_to_string(fixture.join("case.toml")).expect("read case.toml");
+    let capture = fs::read_to_string(fixture.join("capture.json")).expect("read capture.json");
+
+    for required in [
+        "atom = \"FridaStageCapture\"",
+        "case = \"cli-compression-rift-win26100\"",
+        "source_case = \"managed-corpus-msdelta\"",
+        "module = \"msdelta.dll\"",
+        "module_sha256 = \"ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb\"",
+        "symbol = \"CompressionRiftTableFromCliMap::Generate\"",
+        "legacy_symbol = \"CompressionRiftTableCli::FromCliMap\"",
+        "rva = \"0x1da60\"",
+        "abi = \"ms-x64-thiscall\"",
+        "capture_adapter = \"cli_compression_rift_generate\"",
+        "object_layout = \"msdelta-win26100-compression-rift-from-cli-map-v1\"",
+        "target_atom = \"CliCompressionRift\"",
+        "transport = \"frida-inject\"",
+        "selection = \"one representative per source-size/fill-offset/rift-entry tuple observed in the managed corpus\"",
+        "coverage_note = \"current managed corpus covers source fill offset 5 and classic CLI compression rifts only\"",
+        "normalization_error_count = 0",
+    ] {
+        assert!(case.contains(required), "case.toml missing {required}");
+    }
+
+    assert_eq!(read_usize(&case, "export_event_count"), 36);
+    assert_eq!(read_usize(&case, "source_stage_event_count"), 144);
+    assert_eq!(read_usize(&case, "stage_event_count"), 12);
+    assert_eq!(read_usize(&case, "stage_leave_object_count"), 6);
+    assert_eq!(read_usize(&case, "stage_leave_blob_count"), 0);
+    assert_eq!(read_usize(&case, "distinct_object_hash_count"), 6);
+    assert_eq!(read_usize(&case, "distinct_source_buffer_size_count"), 3);
+    assert_eq!(read_usize(&case, "source_fill_offset_count"), 1);
+    assert_eq!(read_usize(&case, "zero_entry_rift_count"), 1);
+    assert_eq!(read_usize(&case, "non_empty_rift_count"), 5);
+    assert_eq!(read_usize(&case, "sorted_rift_count"), 6);
+
+    for volatile in [
+        "file_sink_path",
+        ".claude",
+        "lab/frida/out",
+        "this_ptr",
+        "reader_ptr",
+        "\"ptr\"",
+        "\"retval\"",
+        "timestamp_ms",
+        "thread_id",
+    ] {
+        assert!(
+            !capture.contains(volatile),
+            "curated stage fixture should not retain volatile field {volatile}"
+        );
+    }
+
+    assert!(capture.contains("\"target_atom\": \"CliCompressionRift\""));
+    assert!(capture.contains("\"symbol\": \"CompressionRiftTableFromCliMap::Generate\""));
+    assert!(capture.contains("\"capture\": \"cli_compression_rift_generate\""));
+    assert!(capture.contains("\"source_buffer\""));
+    assert_eq!(capture.matches("\"phase\": \"enter\"").count(), 6);
+    assert_eq!(capture.matches("\"phase\": \"leave\"").count(), 6);
+    assert_eq!(
+        capture
+            .matches("\"type\": \"CliCompressionRiftRecord\"")
+            .count(),
+        6
+    );
+    assert!(
+        !capture.contains("\"error\""),
+        "curated rift fixture should not contain capture errors"
+    );
+}
+
+#[test]
+fn cli_compression_rift_stage_objects_are_hashed_and_semantic() {
+    let fixture = Path::new(CLI_COMPRESSION_RIFT_FIXTURE_DIR);
+    let case = fs::read_to_string(fixture.join("case.toml")).expect("read case.toml");
+    let capture = fs::read_to_string(fixture.join("capture.json")).expect("read capture.json");
+    let object_dir = fixture.join("objects");
+
+    let mut objects = fs::read_dir(&object_dir)
+        .expect("read objects dir")
+        .map(|entry| entry.expect("read object entry").path())
+        .collect::<Vec<_>>();
+    objects.sort();
+    assert_eq!(objects.len(), read_usize(&case, "stage_leave_object_count"));
+
+    let mut distinct_hashes = BTreeSet::new();
+    let mut source_sizes = BTreeSet::new();
+    let mut fill_offsets = BTreeSet::new();
+    let mut zero_entry_rifts = 0usize;
+    let mut non_empty_rifts = 0usize;
+    let mut sorted_rifts = 0usize;
+    let mut min_entry_count = usize::MAX;
+    let mut max_entry_count = 0usize;
+
+    for object_path in objects {
+        let text = fs::read_to_string(&object_path)
+            .unwrap_or_else(|error| panic!("read {}: {error}", object_path.display()));
+        let hash = sha256_file(&object_path);
+        distinct_hashes.insert(hash.clone());
+        assert!(
+            capture.contains(&hash),
+            "capture should reference hash for {}",
+            object_path.display()
+        );
+
+        for required in [
+            "\"type\": \"CliCompressionRiftRecord\"",
+            "\"native_layout\": \"msdelta-win26100-compression-rift-from-cli-map-v1\"",
+            "\"source_buffer\"",
+            "\"size\"",
+            "\"source_widening_fill_offset\"",
+            "\"rift\"",
+            "\"entries\"",
+            "\"sorted\": true",
+        ] {
+            assert!(
+                text.contains(required),
+                "{} missing {required}",
+                object_path.display()
+            );
+        }
+        for volatile in ["this_ptr", "\"ptr\"", "\"retval\"", "\"error\""] {
+            assert!(
+                !text.contains(volatile),
+                "{} should not contain volatile field {volatile}",
+                object_path.display()
+            );
+        }
+
+        let value: Value = serde_json::from_str(&text)
+            .unwrap_or_else(|error| panic!("parse {}: {error}", object_path.display()));
+        assert_eq!(value["type"].as_str(), Some("CliCompressionRiftRecord"));
+        assert_eq!(
+            value["native_layout"].as_str(),
+            Some("msdelta-win26100-compression-rift-from-cli-map-v1")
+        );
+
+        let source_size = value["source_buffer"]["size"]
+            .as_u64()
+            .expect("source buffer size should be numeric");
+        let fill_offset = value["source_widening_fill_offset"]
+            .as_u64()
+            .expect("source fill offset should be numeric");
+        let entries = value["rift"]["entries"]
+            .as_array()
+            .expect("rift entries should be an array");
+        assert_eq!(value["rift"]["sorted"].as_bool(), Some(true));
+        assert!(
+            fill_offset <= source_size,
+            "source fill offset should be within the transformed source buffer"
+        );
+
+        source_sizes.insert(source_size);
+        fill_offsets.insert(fill_offset);
+        min_entry_count = min_entry_count.min(entries.len());
+        max_entry_count = max_entry_count.max(entries.len());
+        if entries.is_empty() {
+            zero_entry_rifts += 1;
+        } else {
+            non_empty_rifts += 1;
+        }
+        sorted_rifts += 1;
+
+        let mut last_source = None;
+        for entry in entries {
+            let source = entry["source"]
+                .as_i64()
+                .expect("rift source should be numeric");
+            let target = entry["target"]
+                .as_i64()
+                .expect("rift target should be numeric");
+            if let Some(previous) = last_source {
+                assert!(source >= previous, "rift entries should be source-sorted");
+            }
+            assert!(
+                source >= 0,
+                "managed compression rift source offsets should be non-negative"
+            );
+            assert!(
+                target >= 0,
+                "managed compression rift target offsets should be non-negative"
+            );
+            last_source = Some(source);
+        }
+    }
+
+    assert_eq!(
+        distinct_hashes.len(),
+        read_usize(&case, "distinct_object_hash_count")
+    );
+    assert_eq!(
+        source_sizes.len(),
+        read_usize(&case, "distinct_source_buffer_size_count")
+    );
+    assert_eq!(
+        fill_offsets.len(),
+        read_usize(&case, "source_fill_offset_count")
+    );
+    assert_eq!(zero_entry_rifts, read_usize(&case, "zero_entry_rift_count"));
+    assert_eq!(non_empty_rifts, read_usize(&case, "non_empty_rift_count"));
+    assert_eq!(sorted_rifts, read_usize(&case, "sorted_rift_count"));
+    assert_eq!(min_entry_count, read_usize(&case, "min_rift_entry_count"));
+    assert_eq!(max_entry_count, read_usize(&case, "max_rift_entry_count"));
+
+    let first = fs::read_to_string(fixture.join("objects/cli-compression-rift-001.json"))
+        .expect("read first object");
+    for required in [
+        "\"size\": 2560",
+        "\"source_widening_fill_offset\": 5",
+        "\"source\": 784",
+        "\"target\": 780",
     ] {
         assert!(first.contains(required), "first object missing {required}");
     }

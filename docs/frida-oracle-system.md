@@ -563,9 +563,9 @@ these internal atoms:
 
 The lab lane should now optimize for repeatability and smaller atom fixtures:
 
-1. Extend `promote-stage-fixture.mjs` beyond its first
-   `CliBlobCompressedInteger` call-record mode to cover stage objects,
-   reader-window blobs, and other call records.
+1. Keep extending `promote-stage-fixture.mjs` beyond the current
+   `CliBlobCompressedInteger` call-record mode and `CliCompressionRift`
+   stage-object mode to cover reader-window blobs and other call records.
 2. Add `NativeOracleDiff`, a normalized-object comparator that can replay Rust
    output against promoted native captures without a full apply run.
 3. Add targeted call/object harnesses for evidence gaps such as non-identity

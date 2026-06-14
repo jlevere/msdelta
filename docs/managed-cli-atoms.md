@@ -694,10 +694,17 @@ summed into the final PE-copy rift.
 Current state: classic CLI compression-rift construction composes heap,
 `#GUID`, and metadata table row-start rifts into one sorted target-to-source
 rift. A transformed-source-aware variant derives the native source-fill offset
-and composes typed metadata width-hole entries. This is still not wired into
-apply and is not marked native-parity until a
-`CompressionRiftTableCli::FromCliMap` fixture compares the complete sorted
-native rift.
+and composes typed metadata width-hole entries.
+
+Win26100 stage capture now hooks
+`CompressionRiftTableFromCliMap::Generate` at RVA `0x1da60` and promotes a
+curated `cli-compression-rift-win26100` fixture. The live corpus produced 72
+native compression-rift records, collapsed into six stable logical rift shapes
+after stripping native pointers. The fixture proves source buffer size,
+source-fill offset, sorted rift entries, and the zero-entry case for the classic
+CLI path. The remaining native-parity gap is a Rust/native replay comparator
+that rebuilds these exact rifts from the fixture inputs and compares against
+the promoted sorted native output before wiring the rift into apply.
 
 ### FinalPeCopyRiftManaged
 

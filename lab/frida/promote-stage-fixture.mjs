@@ -6,15 +6,22 @@ import path from "node:path";
 import process from "node:process";
 
 const MODE_CLI_BLOB_COMPRESSED_INTEGER = "cli-blob-compressed-integer";
+const MODE_CLI_COMPRESSION_RIFT = "cli-compression-rift";
 
 function usage() {
   return `usage:
   node promote-stage-fixture.mjs --mode cli-blob-compressed-integer --normalized <normalized-dir> --source-case <id> --out <fixture-dir> --case-id <id> [--force]
+  node promote-stage-fixture.mjs --mode cli-compression-rift --normalized <normalized-dir> --source-case <id> --out <fixture-dir> --case-id <id> [--force]
 
 The normalized directory should contain run.json and cases/<source-case>/capture.json
-from import-inject-capture.mjs. The current mode promotes successful
-CliBlobCompressedInteger GetBlobContent call records, selecting one stable
-representative per encoded-width/decoded-length/encoded-prefix tuple.`;
+from import-inject-capture.mjs.
+
+cli-blob-compressed-integer promotes successful CliBlobCompressedInteger
+GetBlobContent call records, selecting one stable representative per
+encoded-width/decoded-length/encoded-prefix tuple.
+
+cli-compression-rift promotes CliCompressionRift stage objects, selecting one
+stable representative per source-size/fill-offset/rift-entry tuple.`;
 }
 
 function parseArgs(argv) {
@@ -66,8 +73,10 @@ function parseArgs(argv) {
       throw new Error(`--${name.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`)} is required\n${usage()}`);
     }
   }
-  if (options.mode !== MODE_CLI_BLOB_COMPRESSED_INTEGER) {
-    throw new Error(`unsupported --mode ${options.mode}; expected ${MODE_CLI_BLOB_COMPRESSED_INTEGER}`);
+  if (![MODE_CLI_BLOB_COMPRESSED_INTEGER, MODE_CLI_COMPRESSION_RIFT].includes(options.mode)) {
+    throw new Error(
+      `unsupported --mode ${options.mode}; expected ${MODE_CLI_BLOB_COMPRESSED_INTEGER} or ${MODE_CLI_COMPRESSION_RIFT}`
+    );
   }
   for (const [name, value] of [
     ["--source-case", options.sourceCase],
@@ -167,6 +176,22 @@ function stableCliBlobObject(objectValue) {
       encoded_width: objectValue.result.encoded_width,
     },
   };
+}
+
+function stableCliCompressionRiftObject(objectValue) {
+  return {
+    type: objectValue.type,
+    native_layout: objectValue.native_layout,
+    source_buffer: {
+      size: objectValue.source_buffer ? objectValue.source_buffer.size : null,
+    },
+    source_widening_fill_offset: objectValue.source_widening_fill_offset,
+    rift: objectValue.rift,
+  };
+}
+
+function riftFirstEntry(objectValue) {
+  return objectValue.rift && objectValue.rift.entries.length > 0 ? objectValue.rift.entries[0] : null;
 }
 
 function moduleImageSize(run, moduleName) {
@@ -382,6 +407,222 @@ async function promoteCliBlobCompressedInteger(options, run, sourceCaseDir, capt
   };
 }
 
+function selectCliCompressionRiftRecords(sourceCaseDir, capture) {
+  const sourceStageEvents = capture.events.filter(event => event.target_atom === "CliCompressionRift");
+  const leaves = sourceStageEvents.filter(event => event.phase === "leave");
+  const selectedByKey = new Map();
+
+  for (const leave of leaves) {
+    const objectRef = leave.objects && leave.objects[0];
+    if (!objectRef) {
+      continue;
+    }
+    const objectPath = path.join(sourceCaseDir, objectRef.path);
+    const objectValue = JSON.parse(fsSync.readFileSync(objectPath, "utf8"));
+    if (objectValue.type !== "CliCompressionRiftRecord" || !objectValue.rift) {
+      continue;
+    }
+
+    const stableObj = stableCliCompressionRiftObject(objectValue);
+    const key = JSON.stringify(stableObj);
+    if (!selectedByKey.has(key)) {
+      selectedByKey.set(key, { leave, objectValue, stableObj });
+    }
+  }
+
+  const selected = Array.from(selectedByKey.values());
+  selected.sort((a, b) => {
+    const sizeDelta = a.stableObj.source_buffer.size - b.stableObj.source_buffer.size;
+    if (sizeDelta !== 0) {
+      return sizeDelta;
+    }
+    const fillDelta = a.stableObj.source_widening_fill_offset - b.stableObj.source_widening_fill_offset;
+    if (fillDelta !== 0) {
+      return fillDelta;
+    }
+    const entryDelta = a.stableObj.rift.entries.length - b.stableObj.rift.entries.length;
+    if (entryDelta !== 0) {
+      return entryDelta;
+    }
+    const aFirst = riftFirstEntry(a.stableObj);
+    const bFirst = riftFirstEntry(b.stableObj);
+    const aSource = aFirst ? aFirst.source : Number.NEGATIVE_INFINITY;
+    const bSource = bFirst ? bFirst.source : Number.NEGATIVE_INFINITY;
+    if (aSource !== bSource) {
+      return aSource - bSource;
+    }
+    const aTarget = aFirst ? aFirst.target : Number.NEGATIVE_INFINITY;
+    const bTarget = bFirst ? bFirst.target : Number.NEGATIVE_INFINITY;
+    return aTarget - bTarget;
+  });
+
+  return { sourceStageEvents, selected };
+}
+
+function buildCliCompressionRiftCaptureEvents(selected) {
+  const events = [];
+  const objectWrites = [];
+  let seq = 0;
+
+  for (const { leave, stableObj } of selected) {
+    seq += 1;
+    const suffix = String(seq).padStart(3, "0");
+    const callId = `cli-compression-rift-${suffix}`;
+    const objectName = `${callId}.json`;
+    const objectText = `${JSON.stringify(stableObj, null, 2)}\n`;
+    const objectHash = sha256Text(objectText);
+
+    const base = {
+      call_id: callId,
+      seq,
+      atom: "FridaStageCapture",
+      target_atom: "CliCompressionRift",
+      symbol: leave.symbol,
+      module: stableModule(leave),
+      function: stableFunction(leave),
+      inputs: {
+        source_buffer: stableObj.source_buffer,
+      },
+    };
+
+    events.push({
+      event_id: `${callId}-enter`,
+      ...base,
+      phase: "enter",
+      objects: [],
+      blobs: [],
+    });
+    events.push({
+      event_id: `${callId}-leave`,
+      ...base,
+      phase: "leave",
+      objects: [
+        {
+          slot: "normalized",
+          path: `objects/${objectName}`,
+          size: Buffer.byteLength(objectText),
+          sha256: objectHash,
+          note: "",
+          type: stableObj.type,
+        },
+      ],
+      blobs: [],
+    });
+    objectWrites.push({ name: objectName, text: objectText, sha256: objectHash });
+  }
+
+  return { events, objectWrites };
+}
+
+function buildCliCompressionRiftCaseToml(options, run, capture, sourceStageEvents, selected, objectWrites) {
+  const first = selected[0];
+  if (!first) {
+    throw new Error("no CliCompressionRift records found");
+  }
+
+  const { leave, stableObj } = first;
+  const imageSize = moduleImageSize(run, leave.module.name);
+  if (imageSize === null) {
+    throw new Error(`run.json is missing image size for ${leave.module.name}`);
+  }
+
+  const sourceSizes = new Set();
+  const fillOffsets = new Set();
+  const entryCounts = [];
+  let zeroEntryRifts = 0;
+  let sortedRifts = 0;
+  for (const item of selected) {
+    sourceSizes.add(item.stableObj.source_buffer.size);
+    fillOffsets.add(item.stableObj.source_widening_fill_offset);
+    const entryCount = item.stableObj.rift.entries.length;
+    entryCounts.push(entryCount);
+    if (entryCount === 0) {
+      zeroEntryRifts += 1;
+    }
+    if (item.stableObj.rift.sorted === true) {
+      sortedRifts += 1;
+    }
+  }
+
+  const lines = [
+    ["atom", "FridaStageCapture"],
+    ["case", options.caseId],
+    ["source_case", options.sourceCase],
+    ["module", leave.module.name],
+    ["module_sha256", leave.module.sha256],
+    ["module_image_size", imageSize],
+    ["symbol", leave.symbol],
+    ["legacy_symbol", "CompressionRiftTableCli::FromCliMap"],
+    ["rva", leave.function.rva],
+    ["abi", leave.function.abi],
+    ["capture_adapter", leave.function.capture],
+    ["object_layout", stableObj.native_layout],
+    ["target_atom", "CliCompressionRift"],
+    ["transport", "frida-inject"],
+    ["capture_mode", "file_sink"],
+    ["fixture_source", options.fixtureSource],
+    ["selection", "one representative per source-size/fill-offset/rift-entry tuple observed in the managed corpus"],
+    ["coverage_note", "current managed corpus covers source fill offset 5 and classic CLI compression rifts only"],
+    ["export_event_count", capture.events.filter(event => event.atom === "FridaExportOracle").length],
+    ["source_stage_event_count", sourceStageEvents.length],
+    ["stage_event_count", selected.length * 2],
+    ["stage_leave_object_count", selected.length],
+    ["stage_leave_blob_count", 0],
+    ["distinct_object_hash_count", new Set(objectWrites.map(write => write.sha256)).size],
+    ["distinct_source_buffer_size_count", sourceSizes.size],
+    ["source_fill_offset_count", fillOffsets.size],
+    ["min_rift_entry_count", Math.min(...entryCounts)],
+    ["max_rift_entry_count", Math.max(...entryCounts)],
+    ["zero_entry_rift_count", zeroEntryRifts],
+    ["non_empty_rift_count", selected.length - zeroEntryRifts],
+    ["sorted_rift_count", sortedRifts],
+    ["normalization_error_count", (run.errors || []).length],
+    ["reader_window_error_count", 0],
+  ];
+
+  return `${lines
+    .map(([key, value]) => `${key} = ${typeof value === "string" ? tomlStringValue(value) : value}`)
+    .join("\n")}\n`;
+}
+
+async function promoteCliCompressionRift(options, run, sourceCaseDir, capture, outDir) {
+  const { sourceStageEvents, selected } = selectCliCompressionRiftRecords(sourceCaseDir, capture);
+  const { events, objectWrites } = buildCliCompressionRiftCaptureEvents(selected);
+  const first = selected[0];
+  if (!first) {
+    throw new Error("no CliCompressionRift records found");
+  }
+
+  const promotedCapture = {
+    schema: 1,
+    atom: "FridaStageCapture",
+    case_id: options.caseId,
+    source_case_id: options.sourceCase,
+    module_sha256: first.leave.module.sha256,
+    target_atom: "CliCompressionRift",
+    selection: "one representative per source-size/fill-offset/rift-entry tuple observed in the managed corpus",
+    events,
+  };
+
+  const objectDir = path.join(outDir, "objects");
+  await fs.mkdir(objectDir, { recursive: true });
+  for (const objectWrite of objectWrites) {
+    await fs.writeFile(path.join(objectDir, objectWrite.name), objectWrite.text);
+  }
+  await fs.writeFile(path.join(outDir, "capture.json"), `${JSON.stringify(promotedCapture, null, 2)}\n`);
+  await fs.writeFile(
+    path.join(outDir, "case.toml"),
+    buildCliCompressionRiftCaseToml(options, run, capture, sourceStageEvents, selected, objectWrites)
+  );
+
+  return {
+    fixture: outDir,
+    selected: selected.length,
+    source_stage_events: sourceStageEvents.length,
+    rift_entry_counts: selected.map(item => item.stableObj.rift.entries.length),
+  };
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const normalizedDir = resolveExistingPath(options.normalizedDir);
@@ -402,6 +643,8 @@ async function main() {
   let summary;
   if (options.mode === MODE_CLI_BLOB_COMPRESSED_INTEGER) {
     summary = await promoteCliBlobCompressedInteger(options, run, sourceCaseDir, capture, outDir);
+  } else if (options.mode === MODE_CLI_COMPRESSION_RIFT) {
+    summary = await promoteCliCompressionRift(options, run, sourceCaseDir, capture, outDir);
   } else {
     throw new Error(`unsupported --mode ${options.mode}`);
   }
