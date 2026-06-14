@@ -98,7 +98,10 @@ where
     /// Read and validate `job.json` from `dir`.
     pub fn read(dir: &Path) -> io::Result<Self> {
         let bytes = fs::read(dir.join(JOB_FILE))?;
-        let job: Job<P> = serde_json::from_slice(&bytes).map_err(io::Error::other)?;
+        let slice = bytes
+            .strip_prefix(&[0xEF, 0xBB, 0xBF])
+            .unwrap_or(bytes.as_slice());
+        let job: Job<P> = serde_json::from_slice(slice).map_err(io::Error::other)?;
         if job.schema_version != SCHEMA_VERSION {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
