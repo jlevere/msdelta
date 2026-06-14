@@ -4,7 +4,9 @@ use crate::lzx::rift::{RiftEntry, RiftTable};
 use crate::pe::cli::blob::read_compressed_u32;
 use crate::pe::cli::map::CliMapModel;
 use crate::pe::cli::metadata::{CliColumnValue, CliMetadataModel};
-use crate::pe::cli::schema::{coded_index_schema, table_schema, ColumnKind, HeapKind};
+use crate::pe::cli::schema::{
+    coded_index_schema, table_schema, CliSchemaFlavor, ColumnKind, HeapKind,
+};
 use crate::{Error, Result};
 use std::collections::{BTreeMap, VecDeque};
 
@@ -457,6 +459,44 @@ pub(crate) fn build_cli_map_from_metadata(
             blob_and_rva: blob_and_rva_maps.stats,
         },
     })
+}
+
+pub(crate) fn build_classic_cli_map_from_metadata(
+    source_image: &[u8],
+    source_metadata: &CliMetadataModel,
+    target_image: &[u8],
+    target_metadata: &CliMetadataModel,
+) -> Result<CliMapFromPeResult> {
+    require_metadata_flavor(
+        source_metadata,
+        CliSchemaFlavor::Classic,
+        "classic CLI map create: source metadata flavor mismatch",
+    )?;
+    require_metadata_flavor(
+        target_metadata,
+        CliSchemaFlavor::Classic,
+        "classic CLI map create: target metadata flavor mismatch",
+    )?;
+    build_cli_map_from_metadata(source_image, source_metadata, target_image, target_metadata)
+}
+
+pub(crate) fn build_cli4_map_from_metadata(
+    source_image: &[u8],
+    source_metadata: &CliMetadataModel,
+    target_image: &[u8],
+    target_metadata: &CliMetadataModel,
+) -> Result<CliMapFromPeResult> {
+    require_metadata_flavor(
+        source_metadata,
+        CliSchemaFlavor::Cli4,
+        "CLI4 map create: source metadata flavor mismatch",
+    )?;
+    require_metadata_flavor(
+        target_metadata,
+        CliSchemaFlavor::Cli4,
+        "CLI4 map create: target metadata flavor mismatch",
+    )?;
+    build_cli_map_from_metadata(source_image, source_metadata, target_image, target_metadata)
 }
 
 pub(crate) fn build_cli_strings_heap_map_from_metadata(
@@ -945,6 +985,17 @@ fn reduce_cli_map_from_metadata(cli_map: &mut CliMapModel) {
     for table in &mut cli_map.tables {
         table.internal_reduce(true);
     }
+}
+
+fn require_metadata_flavor(
+    metadata: &CliMetadataModel,
+    expected: CliSchemaFlavor,
+    error: &'static str,
+) -> Result<()> {
+    if metadata.flavor != expected {
+        return Err(Error::Malformed(error));
+    }
+    Ok(())
 }
 
 fn exact_table_target_rid(table_map: &RiftTable, source_rid: u32) -> Option<u32> {
@@ -1989,6 +2040,56 @@ mod tests {
     }
 
     #[test]
+    fn classic_cli_map_wrapper_requires_classic_metadata() {
+        let source = b"\0A\0".to_vec();
+        let target = b"\0A\0".to_vec();
+        let source_metadata = with_flavor(metadata_with_strings(0, 3), CliSchemaFlavor::Cli4);
+        let target_metadata = metadata_with_strings(0, 3);
+
+        assert!(matches!(
+            build_classic_cli_map_from_metadata(
+                &source,
+                &source_metadata,
+                &target,
+                &target_metadata,
+            ),
+            Err(Error::Malformed(
+                "classic CLI map create: source metadata flavor mismatch"
+            ))
+        ));
+    }
+
+    #[test]
+    fn cli4_map_wrapper_reuses_composition_for_cli4_metadata() {
+        let source = b"\0A\0".to_vec();
+        let target = b"\0B\0A\0".to_vec();
+        let source_metadata = with_flavor(metadata_with_strings(0, 3), CliSchemaFlavor::Cli4);
+        let target_metadata = with_flavor(metadata_with_strings(0, 5), CliSchemaFlavor::Cli4);
+
+        let result =
+            build_cli4_map_from_metadata(&source, &source_metadata, &target, &target_metadata)
+                .unwrap();
+
+        assert_eq!(pairs(&result.cli_map.strings), vec![(0, 0), (1, 3)]);
+        assert_eq!(result.stats.strings.matched_strings, 1);
+    }
+
+    #[test]
+    fn cli4_map_wrapper_rejects_classic_metadata() {
+        let source = b"\0A\0".to_vec();
+        let target = b"\0A\0".to_vec();
+        let source_metadata = metadata_with_strings(0, 3);
+        let target_metadata = with_flavor(metadata_with_strings(0, 3), CliSchemaFlavor::Cli4);
+
+        assert!(matches!(
+            build_cli4_map_from_metadata(&source, &source_metadata, &target, &target_metadata),
+            Err(Error::Malformed(
+                "CLI4 map create: source metadata flavor mismatch"
+            ))
+        ));
+    }
+
+    #[test]
     fn sequence_table_map_matches_children_by_owner_range_and_mapped_name() {
         let heap_widths = narrow_heap_widths();
         let source_type_rows = typedef_rows(1);
@@ -2571,6 +2672,11 @@ mod tests {
             row_sizes,
             table_file_offsets,
         }
+    }
+
+    fn with_flavor(mut metadata: CliMetadataModel, flavor: CliSchemaFlavor) -> CliMetadataModel {
+        metadata.flavor = flavor;
+        metadata
     }
 
     const fn narrow_heap_widths() -> HeapIndexWidths {

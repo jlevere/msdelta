@@ -832,6 +832,12 @@ away. This is still gated: hash-collision and duplicate selection parity,
 Frida/native fixtures, and the RVA-to-PE-section composition step remain open
 before this can drive CreateDeltaB output.
 
+`Cli4MapFromPEs` now has the corresponding flavor-gated wrapper. The native
+classic and CLI4 `Run` bodies share the same map-building state machine; the
+Rust CLI4 wrapper validates both metadata models are `Cli4` before reusing the
+generic composition atom. This is still unit-only until a native CLI4 map
+fixture proves the wrapper against real `GetBestMetadataCli4` output.
+
 ## Current Implementation Plan
 
 The old linear order is no longer accurate. Several early parser/model atoms
@@ -845,7 +851,7 @@ The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 23
 partial, 0 missing, and 0 rejected. All 24 remain `apply_policy=reject`.
 
 The broader managed workstream tracks 31 atoms including create-side map and
-encoder atoms. Current state: 1 supported, 27 partial, 3 missing, and 0
+encoder atoms. Current state: 1 supported, 28 partial, 2 missing, and 0
 rejected. All 31 remain `apply_policy=reject`.
 
 That is the important reading of current progress: the parser/context
