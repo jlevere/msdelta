@@ -26,7 +26,107 @@ pub struct RiftTable {
     pub entries: Vec<RiftEntry>,
 }
 
+pub(crate) const RIFT_VECTOR_UNSET_TARGET: i64 = i64::MAX;
+
 impl RiftTable {
+    /// `compo::RiftTable::ResetVector(count)`.
+    ///
+    /// Native create-side map construction seeds vector maps with exact
+    /// `source -> i64::MAX` entries. Later `Set` calls mutate only matching
+    /// in-range source indices, and `InternalReduce(true)` drops entries still
+    /// holding the unset sentinel.
+    pub(crate) fn reset_vector(entry_count: usize) -> Self {
+        Self {
+            entries: (0..entry_count)
+                .map(|source| RiftEntry {
+                    source: source as i64,
+                    target: RIFT_VECTOR_UNSET_TARGET,
+                })
+                .collect(),
+        }
+    }
+
+    /// `compo::RiftTable::Set(source, target)` for vector maps.
+    pub(crate) fn set_vector_entry(&mut self, source: i64, target: i64) {
+        if source < 0 {
+            return;
+        }
+        let Ok(index) = usize::try_from(source) else {
+            return;
+        };
+        let Some(entry) = self.entries.get_mut(index) else {
+            return;
+        };
+        if entry.source == source {
+            entry.target = target;
+        }
+    }
+
+    /// `compo::RiftTable::InternalReduce(drop_unset)`.
+    pub(crate) fn internal_reduce(&mut self, drop_unset: bool) {
+        let mut reduced = Vec::with_capacity(self.entries.len());
+        let mut index = 0usize;
+        while index < self.entries.len() {
+            let source = self.entries[index].source;
+            let mut target = self.entries[index].target;
+            index += 1;
+
+            if drop_unset && target == RIFT_VECTOR_UNSET_TARGET {
+                continue;
+            }
+
+            let mut vote_count = 1usize;
+            while index < self.entries.len() && self.entries[index].source == source {
+                let next_target = self.entries[index].target;
+                if next_target == target {
+                    vote_count += 1;
+                } else if vote_count == 0 {
+                    target = next_target;
+                    vote_count = 1;
+                } else {
+                    vote_count -= 1;
+                }
+                index += 1;
+            }
+
+            let offset = rift_entry_offset(source, target);
+            if reduced.last().is_none_or(|entry: &RiftEntry| {
+                rift_entry_offset(entry.source, entry.target) != offset
+            }) {
+                reduced.push(RiftEntry { source, target });
+            }
+        }
+
+        match reduced.len() {
+            0 => {
+                self.entries.clear();
+            }
+            1 => {
+                let entry = reduced[0];
+                if entry.source == entry.target {
+                    self.entries.clear();
+                } else {
+                    self.entries = vec![RiftEntry {
+                        source: 0,
+                        target: rift_entry_offset(entry.source, entry.target),
+                    }];
+                }
+            }
+            _ => {
+                let first = reduced[0];
+                let last = *reduced
+                    .last()
+                    .expect("multi-entry reduced table should have a last entry");
+                if rift_entry_offset(first.source, first.target)
+                    == rift_entry_offset(last.source, last.target)
+                {
+                    reduced.remove(0);
+                }
+                self.entries = reduced;
+            }
+        }
+    }
+
     /// Parse a rift table from the bitstream.
     ///
     /// Format: 1-bit flag (0=empty, 1=has entries).
@@ -765,6 +865,10 @@ impl OffsetRiftTable {
     }
 }
 
+fn rift_entry_offset(source: i64, target: i64) -> i64 {
+    target.wrapping_sub(source)
+}
+
 /// IntFormat: Huffman-coded signed integer encoding.
 ///
 /// 252 symbols split into two ranges:
@@ -1142,6 +1246,84 @@ mod tests {
                 "roundtrip failed for {val}: sym={sym} extra={extra} ebits={ebits}"
             );
         }
+    }
+
+    #[test]
+    fn reset_vector_seeds_unset_entries_for_native_set() {
+        let mut table = RiftTable::reset_vector(3);
+
+        assert_eq!(
+            table.entries,
+            vec![
+                RiftEntry {
+                    source: 0,
+                    target: RIFT_VECTOR_UNSET_TARGET,
+                },
+                RiftEntry {
+                    source: 1,
+                    target: RIFT_VECTOR_UNSET_TARGET,
+                },
+                RiftEntry {
+                    source: 2,
+                    target: RIFT_VECTOR_UNSET_TARGET,
+                },
+            ]
+        );
+
+        table.set_vector_entry(1, 4);
+        table.set_vector_entry(3, 9);
+        table.set_vector_entry(-1, 9);
+
+        assert_eq!(table.entries[1].target, 4);
+        assert_eq!(table.entries.len(), 3);
+    }
+
+    #[test]
+    fn internal_reduce_drops_unset_identity_vector_maps() {
+        let mut table = RiftTable::reset_vector(3);
+        table.set_vector_entry(0, 0);
+
+        table.internal_reduce(true);
+
+        assert!(table.entries.is_empty());
+    }
+
+    #[test]
+    fn internal_reduce_keeps_changed_vector_segments() {
+        let mut table = RiftTable::reset_vector(3);
+        table.set_vector_entry(0, 0);
+        table.set_vector_entry(1, 2);
+
+        table.internal_reduce(true);
+
+        assert_eq!(table, t(&[(0, 0), (1, 2)]));
+    }
+
+    #[test]
+    fn internal_reduce_converts_single_non_identity_to_offset_at_zero() {
+        let mut table = t(&[(5, 9)]);
+
+        table.internal_reduce(false);
+
+        assert_eq!(table, t(&[(0, 4)]));
+    }
+
+    #[test]
+    fn internal_reduce_removes_wrapped_duplicate_offset() {
+        let mut table = t(&[(0, 1), (5, 7), (8, 9)]);
+
+        table.internal_reduce(false);
+
+        assert_eq!(table, t(&[(5, 7), (8, 9)]));
+    }
+
+    #[test]
+    fn internal_reduce_chooses_duplicate_source_majority() {
+        let mut table = t(&[(1, 4), (1, 5), (1, 4)]);
+
+        table.internal_reduce(false);
+
+        assert_eq!(table, t(&[(0, 3)]));
     }
 
     fn t(pairs: &[(i64, i64)]) -> RiftTable {

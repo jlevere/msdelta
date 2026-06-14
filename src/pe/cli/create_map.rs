@@ -443,6 +443,7 @@ pub(crate) fn build_cli_map_from_metadata(
         &cli_map.tables,
     )?;
     cli_map.blob = blob_and_rva_maps.blob;
+    reduce_cli_map_from_metadata(&mut cli_map);
 
     Ok(CliMapFromPeResult {
         cli_map,
@@ -911,7 +912,9 @@ fn seed_cli_map_tables(
     let mut seeded_table_maps = 0usize;
     for table_id in 0..64usize {
         if source_metadata.row_counts[table_id] != 0 && target_metadata.row_counts[table_id] != 0 {
-            cli_map.tables[table_id] = zero_seeded_rift();
+            cli_map.tables[table_id] =
+                RiftTable::reset_vector(source_metadata.row_counts[table_id] as usize + 1);
+            cli_map.tables[table_id].set_vector_entry(0, 0);
             seeded_table_maps += 1;
         }
     }
@@ -919,7 +922,9 @@ fn seed_cli_map_tables(
     let seeded_guid_map = guid_stream_item_count(source_metadata) != 0
         && guid_stream_item_count(target_metadata) != 0;
     if seeded_guid_map {
-        cli_map.guid = zero_seeded_rift();
+        cli_map.guid =
+            RiftTable::reset_vector(guid_stream_item_count(source_metadata) as usize + 1);
+        cli_map.guid.set_vector_entry(0, 0);
     }
 
     CliTableSeedStats {
@@ -932,12 +937,13 @@ fn guid_stream_item_count(metadata: &CliMetadataModel) -> u32 {
     metadata.streams.guid.map_or(0, |stream| stream.size / 16)
 }
 
-fn zero_seeded_rift() -> RiftTable {
-    RiftTable {
-        entries: vec![RiftEntry {
-            source: 0,
-            target: 0,
-        }],
+fn reduce_cli_map_from_metadata(cli_map: &mut CliMapModel) {
+    cli_map.strings.internal_reduce(false);
+    cli_map.user_strings.internal_reduce(false);
+    cli_map.blob.internal_reduce(false);
+    cli_map.guid.internal_reduce(true);
+    for table in &mut cli_map.tables {
+        table.internal_reduce(true);
     }
 }
 
@@ -1961,9 +1967,9 @@ mod tests {
         .unwrap();
 
         assert_eq!(pairs(&result.cli_map.strings), vec![(0, 0), (1, 8), (6, 1)]);
-        assert_eq!(pairs(&result.cli_map.user_strings), vec![(0, 0), (1, 1)]);
-        assert_eq!(pairs(&result.cli_map.tables[0x02]), vec![(0, 0), (1, 1)]);
-        assert_eq!(pairs(&result.cli_map.tables[0x06]), vec![(0, 0), (1, 1)]);
+        assert!(result.cli_map.user_strings.entries.is_empty());
+        assert!(result.cli_map.tables[0x02].entries.is_empty());
+        assert!(result.cli_map.tables[0x06].entries.is_empty());
         assert_eq!(pairs(&result.cli_map.blob), vec![(0, 0), (3, 5)]);
         assert_eq!(pairs(&result.rvas), vec![(0x2100, 0x2400)]);
         assert_eq!(result.stats.seeds.seeded_table_maps, 2);

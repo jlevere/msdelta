@@ -820,16 +820,17 @@ gap is exact native sorted retry and duplicate ordering parity, plus native
 fixture parity.
 
 `CliMapFromPEs` now has a partial composition atom over those helpers.
-`build_cli_map_from_metadata` seeds GUID and table maps with the native-style
-`0 -> 0` entries when both sides contain the corresponding items, runs
+`build_cli_map_from_metadata` seeds GUID and table maps with native
+`ResetVector`/`Set` semantics, including the `i64::MAX` unset sentinel, runs
 `#Strings` and `#US` matching first, follows the decompiled native interleaving
-of `ProcessTripletTable` and `ProcessSequenceTable`, then extracts blob and RVA
-maps from the resulting table maps. Unit coverage proves that a TypeDef triplet
-match feeds a MethodDef sequence match, which then enables MethodDef signature
-and RVA extraction. This is still gated: native `InternalReduce` parity,
-hash-collision and duplicate selection parity, Frida/native fixtures, and the
-RVA-to-PE-section composition step remain open before this can drive CreateDeltaB
-output.
+of `ProcessTripletTable` and `ProcessSequenceTable`, extracts blob and RVA maps
+from the resulting table maps, then applies the native final `InternalReduce`
+sequence for heap/blob maps, GUID, and all 64 table maps. Unit coverage proves
+that a TypeDef triplet match feeds a MethodDef sequence match, which then
+enables MethodDef signature and RVA extraction before identity table maps reduce
+away. This is still gated: hash-collision and duplicate selection parity,
+Frida/native fixtures, and the RVA-to-PE-section composition step remain open
+before this can drive CreateDeltaB output.
 
 ## Current Implementation Plan
 
