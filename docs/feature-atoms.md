@@ -409,6 +409,22 @@ Use this shape for future oracle atoms:
    snapshots; do not invent reader blobs when the native function did not
    consume a bitstream.
 
+## PE Logical Sections
+
+`PeLogicalSections` is the architecture-neutral section/address-domain atom.
+It owns the conversion rules shared by PE transforms, managed metadata parsing,
+and WinSxS base extraction:
+
+- A section's logical RVA span is `max(VirtualSize, SizeOfRawData)`.
+- RVA-to-file-offset mapping requires file-backed raw data, but may land in raw
+  padding when raw size is larger than virtual size.
+- File-offset-to-RVA and same-section checks use the raw file range only.
+- Callers must still bounds-check the returned file offset against the concrete
+  buffer before reading.
+
+Keep source RVA, target RVA, source file offset, and target file offset explicit
+when composing this atom with rifts or transform markers.
+
 ## Near-Term Milestones
 
 1. Keep `RiftTable::reverse` debug/release parity in the release suite; the

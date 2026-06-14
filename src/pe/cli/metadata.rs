@@ -10,7 +10,7 @@ use crate::pe::cli::tokens::{
     BlobHeapOffset, GuidHeapIndex, MetadataRid, MetadataTableId, StringsHeapOffset,
     UserStringsHeapOffset,
 };
-use crate::pe::parse::{PeInfo, SectionInfo};
+use crate::pe::parse::PeInfo;
 use crate::{Error, Result};
 
 const CLR_DATA_DIRECTORY: usize = 14;
@@ -449,7 +449,8 @@ pub(crate) fn parse_cli_metadata_from_pe_info(
         return Err(Error::Malformed("PE: missing CLR runtime header"));
     }
 
-    let clr_file_offset = rva_to_file_offset(&pe.sections, clr_rva)
+    let clr_file_offset = pe
+        .rva_to_file_offset(clr_rva)
         .ok_or(Error::Malformed("PE: CLR runtime header RVA is unmapped"))?;
     checked_slice(image, clr_file_offset, 0x48)?;
     let metadata_rva = read_u32(image, clr_file_offset + COR20_METADATA_RVA_OFFSET)?;
@@ -458,7 +459,8 @@ pub(crate) fn parse_cli_metadata_from_pe_info(
         return Err(Error::Malformed("CLI metadata: empty metadata directory"));
     }
 
-    let metadata_file_offset = rva_to_file_offset(&pe.sections, metadata_rva)
+    let metadata_file_offset = pe
+        .rva_to_file_offset(metadata_rva)
         .ok_or(Error::Malformed("CLI metadata: metadata RVA is unmapped"))?;
     parse_cli_metadata_root(
         image,
@@ -783,22 +785,6 @@ const fn heap_width_from_bit(bit: u64) -> u8 {
     } else {
         4
     }
-}
-
-fn rva_to_file_offset(sections: &[SectionInfo], rva: u32) -> Option<usize> {
-    for section in sections {
-        if section.raw_size == 0 {
-            continue;
-        }
-        let start = section.virtual_address;
-        let len = section.virtual_size.max(section.raw_size);
-        let end = start.checked_add(len)?;
-        if rva >= start && rva < end {
-            let offset = section.raw_offset.checked_add(rva - start)?;
-            return Some(offset as usize);
-        }
-    }
-    None
 }
 
 fn read_u16(data: &[u8], offset: usize) -> Result<u16> {

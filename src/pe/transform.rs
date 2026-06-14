@@ -52,11 +52,7 @@ fn map_rva(rift: &RiftTable, rva: i64) -> i64 {
 }
 
 fn first_section_rva(pe: &PeInfo) -> i64 {
-    pe.sections
-        .iter()
-        .map(|s| s.virtual_address as i64)
-        .min()
-        .unwrap_or(0)
+    pe.first_section_rva().map(i64::from).unwrap_or(0)
 }
 
 /// Claim `len` bytes at file offset `fo` in the transform marker (bit 0 = owned),
@@ -79,13 +75,7 @@ fn map_rva_field(buf: &mut [u8], marker: &mut [u8], fo: usize, rift: &RiftTable)
 }
 
 fn rva_to_file_off(pe: &PeInfo, rva: i64) -> Option<usize> {
-    pe.sections
-        .iter()
-        .find(|s| {
-            rva >= s.virtual_address as i64
-                && rva < (s.virtual_address + s.virtual_size.max(s.raw_size)) as i64
-        })
-        .map(|s| (s.raw_offset as i64 + (rva - s.virtual_address as i64)) as usize)
+    pe.rva_to_file_offset(u32::try_from(rva).ok()?)
 }
 
 /// Build `T(source)`: the source image transformed exactly as genuine
@@ -665,12 +655,7 @@ fn rebuild_reloc_blocks(
     // table past VirtualSize into the section's raw padding (e.g. appserverai,
     // VirtualSize 0x11b0 but rebuilt blocks reach 0x11c8 within raw 0x1200).
     let extent = pe
-        .sections
-        .iter()
-        .find(|s| {
-            reloc_rva >= s.virtual_address
-                && reloc_rva < s.virtual_address + s.virtual_size.max(s.raw_size)
-        })
+        .section_containing_rva(reloc_rva)
         .map(|s| s.raw_size.saturating_sub(reloc_rva - s.virtual_address))
         .unwrap_or(reloc_size)
         .max(reloc_size);
@@ -714,10 +699,10 @@ fn branch_target_reachable(pe: &PeInfo, target: u32) -> bool {
     target != 0
         && target < pe.size_of_image
         && ((target as i64) < first_section_rva(pe)
-            || pe.sections.iter().any(|s| {
-                target >= s.virtual_address
-                    && target < s.virtual_address + s.virtual_size.max(s.raw_size)
-            }))
+            || pe
+                .sections
+                .iter()
+                .any(|section| section.contains_rva(target)))
 }
 
 /// Marker index for a branch target: rebased to a file offset when it lands in

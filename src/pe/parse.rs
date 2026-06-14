@@ -2,6 +2,7 @@
 
 use crate::pe::structs::PeView;
 use crate::{Error, Result};
+use std::ops::Range;
 
 /// Parsed PE metadata needed for delta transforms.
 #[derive(Debug, Clone)]
@@ -25,6 +26,70 @@ pub struct SectionInfo {
     pub raw_offset: u32,
     pub raw_size: u32,
     pub characteristics: u32,
+}
+
+impl SectionInfo {
+    /// Logical RVA span used by msdelta section mapping.
+    ///
+    /// Native PE transforms commonly accept RVAs up to
+    /// `max(VirtualSize, SizeOfRawData)` from the section start. The resulting
+    /// file offset can point into raw padding; callers still need to bounds
+    /// check against the actual file buffer before reading.
+    pub fn logical_rva_size(&self) -> u32 {
+        self.virtual_size.max(self.raw_size)
+    }
+
+    pub fn rva_range(&self) -> Option<Range<u32>> {
+        let size = self.logical_rva_size();
+        if size == 0 {
+            return None;
+        }
+        let end = self.virtual_address.checked_add(size)?;
+        Some(self.virtual_address..end)
+    }
+
+    pub fn raw_range(&self) -> Option<Range<usize>> {
+        if self.raw_size == 0 {
+            return None;
+        }
+        let start = self.raw_offset as usize;
+        let end = start.checked_add(self.raw_size as usize)?;
+        Some(start..end)
+    }
+
+    pub fn clipped_raw_range(&self, file_len: usize) -> Option<Range<usize>> {
+        let range = self.raw_range()?;
+        let start = range.start.min(file_len);
+        let end = range.end.min(file_len);
+        (start < end).then_some(start..end)
+    }
+
+    pub fn contains_rva(&self, rva: u32) -> bool {
+        self.rva_range().is_some_and(|range| range.contains(&rva))
+    }
+
+    pub fn contains_file_offset(&self, offset: usize) -> bool {
+        self.raw_range()
+            .is_some_and(|range| range.contains(&offset))
+    }
+
+    pub fn rva_to_file_offset(&self, rva: u32) -> Option<usize> {
+        if self.raw_size == 0 || !self.contains_rva(rva) {
+            return None;
+        }
+        let delta = rva.checked_sub(self.virtual_address)?;
+        let offset = self.raw_offset.checked_add(delta)?;
+        Some(offset as usize)
+    }
+
+    pub fn file_offset_to_rva(&self, offset: usize) -> Option<u32> {
+        let range = self.raw_range()?;
+        if !range.contains(&offset) {
+            return None;
+        }
+        let delta = u32::try_from(offset - range.start).ok()?;
+        self.virtual_address.checked_add(delta)
+    }
 }
 
 impl PeInfo {
@@ -136,6 +201,39 @@ impl PeInfo {
     pub fn contains_va(&self, va: u64) -> bool {
         va >= self.image_base && va < self.image_base + self.size_of_image as u64
     }
+
+    pub fn first_section_rva(&self) -> Option<u32> {
+        self.sections
+            .iter()
+            .filter_map(|section| section.rva_range().map(|range| range.start))
+            .min()
+    }
+
+    pub fn section_containing_rva(&self, rva: u32) -> Option<&SectionInfo> {
+        self.sections
+            .iter()
+            .find(|section| section.contains_rva(rva))
+    }
+
+    pub fn section_containing_file_offset(&self, offset: usize) -> Option<&SectionInfo> {
+        self.sections
+            .iter()
+            .find(|section| section.contains_file_offset(offset))
+    }
+
+    pub fn rva_to_file_offset(&self, rva: u32) -> Option<usize> {
+        self.section_containing_rva(rva)?.rva_to_file_offset(rva)
+    }
+
+    pub fn file_offset_to_rva(&self, offset: usize) -> Option<u32> {
+        self.section_containing_file_offset(offset)?
+            .file_offset_to_rva(offset)
+    }
+
+    pub fn same_file_section(&self, a: usize, b: usize) -> bool {
+        self.section_containing_file_offset(a)
+            .is_some_and(|section| section.contains_file_offset(b))
+    }
 }
 
 #[cfg(test)]
@@ -154,5 +252,90 @@ mod tests {
             assert!(!info.sections.is_empty());
             assert!(info.is_64bit);
         }
+    }
+
+    fn section(name: &str, rva: u32, virtual_size: u32, raw: u32, raw_size: u32) -> SectionInfo {
+        SectionInfo {
+            name: name.to_string(),
+            virtual_address: rva,
+            virtual_size,
+            raw_offset: raw,
+            raw_size,
+            characteristics: 0,
+        }
+    }
+
+    fn pe_with_sections(sections: Vec<SectionInfo>) -> PeInfo {
+        PeInfo {
+            image_base: 0x140000000,
+            size_of_image: 0x9000,
+            timestamp: 0,
+            checksum: 0,
+            is_64bit: true,
+            sections,
+            data_directories: vec![],
+        }
+    }
+
+    #[test]
+    fn section_maps_rva_through_logical_span() {
+        let text = section(".text", 0x1000, 0x180, 0x400, 0x200);
+
+        assert_eq!(text.logical_rva_size(), 0x200);
+        assert_eq!(text.rva_range(), Some(0x1000..0x1200));
+        assert_eq!(text.raw_range(), Some(0x400..0x600));
+        assert_eq!(text.rva_to_file_offset(0x1000), Some(0x400));
+        assert_eq!(text.rva_to_file_offset(0x11ff), Some(0x5ff));
+        assert_eq!(text.rva_to_file_offset(0x1200), None);
+        assert_eq!(text.file_offset_to_rva(0x400), Some(0x1000));
+        assert_eq!(text.file_offset_to_rva(0x5ff), Some(0x11ff));
+        assert_eq!(text.file_offset_to_rva(0x600), None);
+    }
+
+    #[test]
+    fn section_maps_raw_padding_when_virtual_size_is_smaller() {
+        let rdata = section(".rdata", 0x2000, 0x180, 0x800, 0x200);
+
+        assert!(rdata.contains_rva(0x21ff));
+        assert_eq!(rdata.rva_to_file_offset(0x21ff), Some(0x9ff));
+        assert_eq!(rdata.rva_to_file_offset(0x2200), None);
+    }
+
+    #[test]
+    fn zero_raw_section_has_rva_span_but_no_file_mapping() {
+        let bss = section(".bss", 0x3000, 0x100, 0, 0);
+
+        assert!(bss.contains_rva(0x3000));
+        assert_eq!(bss.raw_range(), None);
+        assert_eq!(bss.rva_to_file_offset(0x3000), None);
+        assert_eq!(bss.file_offset_to_rva(0), None);
+    }
+
+    #[test]
+    fn pe_section_lookup_preserves_address_domains() {
+        let pe = pe_with_sections(vec![
+            section(".text", 0x1000, 0x200, 0x400, 0x200),
+            section(".rdata", 0x3000, 0x100, 0x800, 0x200),
+        ]);
+
+        assert_eq!(pe.first_section_rva(), Some(0x1000));
+        assert_eq!(pe.rva_to_file_offset(0x3050), Some(0x850));
+        assert_eq!(pe.file_offset_to_rva(0x850), Some(0x3050));
+        assert_eq!(pe.section_containing_rva(0x3050).unwrap().name, ".rdata");
+        assert_eq!(
+            pe.section_containing_file_offset(0x450).unwrap().name,
+            ".text"
+        );
+        assert!(pe.same_file_section(0x400, 0x5ff));
+        assert!(!pe.same_file_section(0x400, 0x800));
+    }
+
+    #[test]
+    fn clipped_raw_range_bounds_sections_to_file_length() {
+        let text = section(".text", 0x1000, 0x200, 0x400, 0x200);
+
+        assert_eq!(text.clipped_raw_range(0x1000), Some(0x400..0x600));
+        assert_eq!(text.clipped_raw_range(0x500), Some(0x400..0x500));
+        assert_eq!(text.clipped_raw_range(0x300), None);
     }
 }
