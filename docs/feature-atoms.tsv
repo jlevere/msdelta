@@ -59,8 +59,8 @@ CliBlobTypeTokenRemap	cli	source_transform	pe,cli	-	CliBlobTransformer::Transfor
 TransformCliMetadata	cli	source_transform	0x2,0x4,0x8	0x8000	TransformCliMetadata::Run	missing	reject	needs_fixture	Phase 4 transform ladder: remap metadata table columns and signature blobs after rift/context atoms
 TransformCli4Metadata	cli	source_transform	0x10,0x20,0x40,0x80	0x400000	TransformCli4Metadata::Run	missing	reject	needs_fixture	Phase 4 transform ladder: port metadata-table and signature-blob remap to CLI4 schema
 CliHeapRift	cli	producer	pe,cli	-	CompressionRiftTableCli::AddHeapMap	partial	reject	unit	Generates target-to-source heap rift entries for Strings UserStrings and Blob maps; next gap is native AddHeapMap or FromCliMap rift output parity
-CliTableRift	cli	producer	pe,cli	-	CompressionRiftTableCli::AddTableMap	missing	reject	needs_fixture	Phase 3 rift ladder: generate table rifts including 2-byte and 4-byte column width changes
-CliCompressionRift	cli	producer	0x2,0x4,0x8	-	CompressionRiftTableCli::FromCliMap	missing	reject	needs_fixture	Phase 3 rift ladder: compose classic CLI heap/table rifts and compare native sorted output
+CliTableRift	cli	producer	pe,cli	-	CompressionRiftTableCli::AddTableMap	partial	reject	unit	Generates target-to-source row-start rift entries for metadata tables and GUID; next gap is native column-width hole parity
+CliCompressionRift	cli	producer	0x2,0x4,0x8	-	CompressionRiftTableCli::FromCliMap	partial	reject	unit	Composes heap GUID and table row-start rifts; next gap is native FromCliMap sorted output parity before final rift use
 Cli4CompressionRift	cli	producer	0x10,0x20,0x40,0x80	-	CompressionRiftTableCli4::FromCli4Map	missing	reject	needs_fixture	Phase 3 rift ladder: compose CLI4 heap/table rifts after classic path is understood
 FinalPeCopyRiftManaged	cli	producer	pe,cli	-	PreProcessPEForApply and RiftTable::Sum	missing	reject	needs_fixture	Phase 3 release input: sum native PE-copy rift with CLI compression rift and fixture the result
 CreateRaw	create	create	0x1	-	CreateDeltaB RAW path	supported	allow	release	Keep Windows oracle on raw PA30/PA31 cases

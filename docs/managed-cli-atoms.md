@@ -657,6 +657,12 @@ width-change holes.
 Done when: tests cover row-count changes, row-size changes, 2-byte to 4-byte
 index widening, 4-byte to 2-byte narrowing, and empty table maps.
 
+Current state: `src/pe/cli/rift.rs` generates table row-start rifts for
+metadata tables and treats `#GUID` as a fixed-width table stream. It handles
+empty maps, explicit RID map entries, source-sentinel termination, sorted output,
+and managed native corpus construction. It does not yet model native
+column-width hole entries for widened or narrowed metadata rows.
+
 ### CliCompressionRift
 
 Native reference: `CompressionRiftTableCli::FromCliMap`,
@@ -673,6 +679,12 @@ No-op conditions: empty source or target metadata yields an empty rift.
 
 Done when: native stage fixtures compare the sorted CLI rift before it is
 summed into the final PE-copy rift.
+
+Current state: classic CLI compression-rift construction composes heap,
+`#GUID`, and metadata table row-start rifts into one sorted target-to-source
+rift. This is still not wired into apply and is not marked native-parity until a
+`CompressionRiftTableCli::FromCliMap` fixture compares the complete sorted
+native rift.
 
 ### FinalPeCopyRiftManaged
 
@@ -711,11 +723,11 @@ the release gate below is satisfied.
 
 ### Readiness Snapshot
 
-The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 10
-partial, 12 missing, and 1 rejected. All 24 remain `apply_policy=reject`.
+The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 12
+partial, 10 missing, and 1 rejected. All 24 remain `apply_policy=reject`.
 
 The broader managed workstream tracks 31 atoms including create-side map and
-encoder atoms. Current state: 1 supported, 10 partial, 19 missing, and 1
+encoder atoms. Current state: 1 supported, 12 partial, 17 missing, and 1
 rejected. All 31 remain `apply_policy=reject`.
 
 That is the important reading of current progress: the parser/context
@@ -739,6 +751,8 @@ These atoms are useful building blocks today, but not all are release gates:
 | `TransformContextManaged` | unit validation plus managed native corpus construction | native fixture proving actual transform slot attachment |
 | `CliBlobCompressedInteger` | synthetic boundary tests plus Win26100 successful 1-byte `GetBlobContent` fixtures | native 2-byte, 4-byte, malformed, and non-canonical `GetNumber` behavior |
 | `CliHeapRift` | pure unit tests plus managed native corpus construction | native `AddHeapMap` or `FromCliMap` rift-output parity before final rift use |
+| `CliTableRift` | pure row-start unit tests plus managed native corpus construction | native column-width hole parity for widened/narrowed metadata rows |
+| `CliCompressionRift` | heap/GUID/table composition tests plus managed native corpus construction | native `FromCliMap` sorted output parity before final rift use |
 
 Treat these as the base for the next phase. Do not re-implement them as part of
 larger atoms; improve their fixture coverage when a downstream atom exposes a
