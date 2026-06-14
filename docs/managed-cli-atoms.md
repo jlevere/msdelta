@@ -794,11 +794,12 @@ duplicate-selection behavior still need a fixture before this can feed
 `CliMapBlobAndRvas` is table-map driven rather than a standalone blob-content
 matcher. It walks exact source-RID to target-RID table-map entries, copies
 nonzero `#Blob` column offsets into the blob rift, and emits nonzero typed
-`Rva` columns into a separate RVA rift. Unit coverage proves MethodDef
-signature/RVA mapping, zero and unmapped-row skipping, that plain `U32` columns
-are not treated as RVAs, and truncated row rejection. The next gap is native
-fixture parity plus the create graph step that composes RVA maps with PE section
-maps.
+`Rva` columns into a separate RVA rift after adding each side's metadata RVA
+base, matching the native `ProcessBlobStreamAndRvas` address domain. Unit
+coverage proves MethodDef signature/RVA mapping, metadata-RVA-base adjustment,
+zero and unmapped-row skipping, that plain `U32` columns are not treated as
+RVAs, and truncated row rejection. The next gap is native fixture parity plus
+the create graph step that composes RVA maps with PE section maps.
 
 `CliMapSequenceTables` now has the `ProcessSequenceTable` half, the native
 `ProcessTripletTable` table order/key matrix, and a generic triplet row-key

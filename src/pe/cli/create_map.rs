@@ -919,8 +919,8 @@ pub(crate) fn build_cli_blob_and_rva_maps(
                             continue;
                         }
                         rva_entries.push(RiftEntry {
-                            source: i64::from(source_rva),
-                            target: i64::from(target_rva),
+                            source: metadata_adjusted_rva(source_metadata, source_rva),
+                            target: metadata_adjusted_rva(target_metadata, target_rva),
                         });
                         stats.mapped_rva_columns += 1;
                     }
@@ -1364,6 +1364,10 @@ fn rva_column_value(value: CliColumnValue) -> Result<u32> {
         CliColumnValue::Rva(value) => Ok(value),
         _ => Err(Error::Malformed("CLI map create: expected RVA column")),
     }
+}
+
+fn metadata_adjusted_rva(metadata: &CliMetadataModel, rva: u32) -> i64 {
+    i64::from(metadata.metadata_rva) + i64::from(rva)
 }
 
 fn sequence_list_start(
@@ -1893,6 +1897,37 @@ mod tests {
 
         assert_eq!(pairs(&maps.blob), vec![(0, 0)]);
         assert!(maps.rvas.entries.is_empty());
+    }
+
+    #[test]
+    fn blob_and_rva_map_adds_metadata_rva_base_like_native() {
+        let heap_widths = narrow_heap_widths();
+        let row_size = row_size(0x06, &method_rows(1), heap_widths).unwrap();
+        let mut source_image = vec![0u8; 0x80];
+        let mut target_image = vec![0u8; 0x80];
+
+        put_u32(&mut source_image, 0x20, 0x100);
+        put_u16(&mut source_image, 0x2a, 1);
+        put_u32(&mut target_image, 0x30, 0x180);
+        put_u16(&mut target_image, 0x3a, 1);
+
+        let source_metadata =
+            with_metadata_rva(metadata_with_table(0x06, 1, row_size as u32, 0x20), 0x2000);
+        let target_metadata =
+            with_metadata_rva(metadata_with_table(0x06, 1, row_size as u32, 0x30), 0x3000);
+        let mut table_maps = empty_table_maps();
+        table_maps[0x06] = rift(&[(0, 0), (1, 1)]);
+
+        let maps = build_cli_blob_and_rva_maps(
+            &source_image,
+            &source_metadata,
+            &target_image,
+            &target_metadata,
+            &table_maps,
+        )
+        .unwrap();
+
+        assert_eq!(pairs(&maps.rvas), vec![(0x2100, 0x3180)]);
     }
 
     #[test]
@@ -2676,6 +2711,11 @@ mod tests {
 
     fn with_flavor(mut metadata: CliMetadataModel, flavor: CliSchemaFlavor) -> CliMetadataModel {
         metadata.flavor = flavor;
+        metadata
+    }
+
+    fn with_metadata_rva(mut metadata: CliMetadataModel, metadata_rva: u32) -> CliMetadataModel {
+        metadata.metadata_rva = metadata_rva;
         metadata
     }
 
