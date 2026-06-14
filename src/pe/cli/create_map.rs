@@ -2,9 +2,9 @@
 
 use crate::lzx::rift::{RiftEntry, RiftTable};
 use crate::pe::cli::metadata::{CliColumnValue, CliMetadataModel};
-use crate::pe::cli::schema::{table_schema, ColumnKind, HeapKind};
+use crate::pe::cli::schema::{coded_index_schema, table_schema, ColumnKind, HeapKind};
 use crate::{Error, Result};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct CliStringsHeapMatchStats {
@@ -54,6 +54,37 @@ pub(crate) struct CliSequenceTableMap {
     pub(crate) table_id: u8,
     pub(crate) rift: RiftTable,
     pub(crate) stats: CliSequenceTableMapStats,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CliTripletKeyColumn {
+    MappedString(&'static str),
+    MappedTable(&'static str),
+    MappedCoded(&'static str),
+    RawU16(&'static str),
+    RawU32(&'static str),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CliTripletTableSpec {
+    pub(crate) table_id: u8,
+    pub(crate) key_columns: &'static [CliTripletKeyColumn],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CliTripletTableMapStats {
+    pub(crate) source_rows: usize,
+    pub(crate) target_rows: usize,
+    pub(crate) mapped_rows: usize,
+    pub(crate) missing_source_key_rows: usize,
+    pub(crate) missing_target_key_rows: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CliTripletTableMap {
+    pub(crate) table_id: u8,
+    pub(crate) rift: RiftTable,
+    pub(crate) stats: CliTripletTableMapStats,
 }
 
 pub(crate) const CLI_SEQUENCE_TABLE_SPECS: &[CliSequenceTableSpec] = &[
@@ -307,6 +338,69 @@ pub(crate) fn build_cli_sequence_table_map(
     })
 }
 
+pub(crate) fn build_cli_triplet_table_map(
+    source_image: &[u8],
+    source_metadata: &CliMetadataModel,
+    target_image: &[u8],
+    target_metadata: &CliMetadataModel,
+    strings_map: &RiftTable,
+    table_maps: &[RiftTable; 64],
+    initial_table_map: &RiftTable,
+    spec: CliTripletTableSpec,
+) -> Result<CliTripletTableMap> {
+    let mut rift = initial_table_map.clone();
+    let source_row_count = source_metadata.row_counts[spec.table_id as usize];
+    let target_row_count = target_metadata.row_counts[spec.table_id as usize];
+    let mut stats = CliTripletTableMapStats {
+        source_rows: source_row_count as usize,
+        target_rows: target_row_count as usize,
+        mapped_rows: 0,
+        missing_source_key_rows: 0,
+        missing_target_key_rows: 0,
+    };
+
+    if initial_table_map.entries.is_empty() || source_row_count == 0 || target_row_count == 0 {
+        return Ok(CliTripletTableMap {
+            table_id: spec.table_id,
+            rift,
+            stats,
+        });
+    }
+
+    let mut targets_by_key = BTreeMap::<Vec<u32>, VecDeque<u32>>::new();
+    for target_rid in 1..=target_row_count {
+        let row = target_metadata.table_row_by_id(target_image, spec.table_id, target_rid)?;
+        let Some(key) = triplet_target_key(row, spec.key_columns)? else {
+            stats.missing_target_key_rows += 1;
+            continue;
+        };
+        targets_by_key.entry(key).or_default().push_back(target_rid);
+    }
+
+    for source_rid in 1..=source_row_count {
+        let row = source_metadata.table_row_by_id(source_image, spec.table_id, source_rid)?;
+        let Some(key) = triplet_source_key(row, spec.key_columns, strings_map, table_maps)? else {
+            stats.missing_source_key_rows += 1;
+            continue;
+        };
+        let Some(targets) = targets_by_key.get_mut(&key) else {
+            continue;
+        };
+        let Some(target_rid) = targets.pop_front() else {
+            continue;
+        };
+        set_rift_entry(&mut rift, source_rid, target_rid);
+        stats.mapped_rows += 1;
+    }
+
+    rift.entries.sort_by_key(|entry| entry.source);
+    Ok(CliTripletTableMap {
+        table_id: spec.table_id,
+        rift,
+        stats,
+    })
+}
+
 pub(crate) fn build_cli_blob_and_rva_maps(
     source_image: &[u8],
     source_metadata: &CliMetadataModel,
@@ -427,6 +521,143 @@ fn set_rift_entry(rift: &mut RiftTable, source: u32, target: u32) {
             source: i64::from(source),
             target: i64::from(target),
         });
+    }
+}
+
+fn triplet_source_key(
+    row: crate::pe::cli::metadata::CliTableRow<'_>,
+    columns: &[CliTripletKeyColumn],
+    strings_map: &RiftTable,
+    table_maps: &[RiftTable; 64],
+) -> Result<Option<Vec<u32>>> {
+    let mut key = Vec::with_capacity(columns.len());
+    for column in columns {
+        let Some(value) =
+            triplet_source_key_value(row.column(column.name())?, *column, strings_map, table_maps)?
+        else {
+            return Ok(None);
+        };
+        key.push(value);
+    }
+    Ok(Some(key))
+}
+
+fn triplet_target_key(
+    row: crate::pe::cli::metadata::CliTableRow<'_>,
+    columns: &[CliTripletKeyColumn],
+) -> Result<Option<Vec<u32>>> {
+    let mut key = Vec::with_capacity(columns.len());
+    for column in columns {
+        let Some(value) = triplet_target_key_value(row.column(column.name())?, *column)? else {
+            return Ok(None);
+        };
+        key.push(value);
+    }
+    Ok(Some(key))
+}
+
+fn triplet_source_key_value(
+    value: CliColumnValue,
+    column: CliTripletKeyColumn,
+    strings_map: &RiftTable,
+    table_maps: &[RiftTable; 64],
+) -> Result<Option<u32>> {
+    match column {
+        CliTripletKeyColumn::MappedString(_) => Ok(exact_rift_target_value(
+            strings_map,
+            string_column_offset(value)?,
+        )),
+        CliTripletKeyColumn::MappedTable(_) => {
+            let (table_id, rid) = table_column_target(value)?;
+            let Some(rid) = rid else {
+                return Ok(Some(0));
+            };
+            Ok(exact_rift_target_value(&table_maps[table_id as usize], rid))
+        }
+        CliTripletKeyColumn::MappedCoded(_) => map_coded_triplet_source_value(value, table_maps),
+        CliTripletKeyColumn::RawU16(_) => Ok(Some(u16_column_value(value)?)),
+        CliTripletKeyColumn::RawU32(_) => Ok(Some(u32_column_value(value)?)),
+    }
+}
+
+fn triplet_target_key_value(
+    value: CliColumnValue,
+    column: CliTripletKeyColumn,
+) -> Result<Option<u32>> {
+    match column {
+        CliTripletKeyColumn::MappedString(_) => Ok(Some(string_column_offset(value)?)),
+        CliTripletKeyColumn::MappedTable(_) => Ok(Some(table_column_rid(value)?)),
+        CliTripletKeyColumn::MappedCoded(_) => Ok(Some(coded_column_raw(value)?)),
+        CliTripletKeyColumn::RawU16(_) => Ok(Some(u16_column_value(value)?)),
+        CliTripletKeyColumn::RawU32(_) => Ok(Some(u32_column_value(value)?)),
+    }
+}
+
+fn map_coded_triplet_source_value(
+    value: CliColumnValue,
+    table_maps: &[RiftTable; 64],
+) -> Result<Option<u32>> {
+    let CliColumnValue::Coded {
+        kind,
+        raw,
+        table,
+        rid,
+    } = value
+    else {
+        return Err(Error::Malformed("CLI triplet map: expected coded column"));
+    };
+    let Some(table) = table else {
+        return Ok(Some(raw));
+    };
+    let Some(rid) = rid else {
+        return Ok(Some(0));
+    };
+    let Some(mapped_rid) = exact_rift_target_value(&table_maps[table.get() as usize], rid.get())
+    else {
+        return Ok(None);
+    };
+    let schema = coded_index_schema(kind);
+    let tag_mask = (1u32 << schema.tag_bits) - 1;
+    Ok(Some((mapped_rid << schema.tag_bits) | (raw & tag_mask)))
+}
+
+fn table_column_target(value: CliColumnValue) -> Result<(u8, Option<u32>)> {
+    match value {
+        CliColumnValue::Table { table, rid } => Ok((table.get(), rid.map(|rid| rid.get()))),
+        _ => Err(Error::Malformed("CLI triplet map: expected table column")),
+    }
+}
+
+fn coded_column_raw(value: CliColumnValue) -> Result<u32> {
+    match value {
+        CliColumnValue::Coded { raw, .. } => Ok(raw),
+        _ => Err(Error::Malformed("CLI triplet map: expected coded column")),
+    }
+}
+
+fn u16_column_value(value: CliColumnValue) -> Result<u32> {
+    match value {
+        CliColumnValue::U16(value) => Ok(u32::from(value)),
+        _ => Err(Error::Malformed("CLI triplet map: expected u16 column")),
+    }
+}
+
+fn u32_column_value(value: CliColumnValue) -> Result<u32> {
+    match value {
+        CliColumnValue::U32(value) | CliColumnValue::Rva(value) => Ok(value),
+        _ => Err(Error::Malformed("CLI triplet map: expected u32 column")),
+    }
+}
+
+impl CliTripletKeyColumn {
+    const fn name(self) -> &'static str {
+        match self {
+            Self::MappedString(name)
+            | Self::MappedTable(name)
+            | Self::MappedCoded(name)
+            | Self::RawU16(name)
+            | Self::RawU32(name) => name,
+        }
     }
 }
 
@@ -891,6 +1122,127 @@ mod tests {
         assert_eq!(map.stats.missing_string_rows, 1);
     }
 
+    #[test]
+    fn triplet_table_map_matches_rows_by_mapped_string_keys() {
+        const TYPEDEF_TRIPLET: CliTripletTableSpec = CliTripletTableSpec {
+            table_id: 0x02,
+            key_columns: &[
+                CliTripletKeyColumn::MappedString("Name"),
+                CliTripletKeyColumn::MappedString("Namespace"),
+            ],
+        };
+        let heap_widths = narrow_heap_widths();
+        let row_size = row_size(0x02, &typedef_rows(2), heap_widths).unwrap();
+        let mut source_image = vec![0u8; 0x80];
+        let mut target_image = vec![0u8; 0x80];
+
+        put_u16(&mut source_image, 0x24, 10);
+        put_u16(&mut source_image, 0x26, 20);
+        put_u16(&mut source_image, 0x24 + row_size, 11);
+        put_u16(&mut source_image, 0x26 + row_size, 21);
+        put_u16(&mut target_image, 0x34, 101);
+        put_u16(&mut target_image, 0x36, 201);
+        put_u16(&mut target_image, 0x34 + row_size, 100);
+        put_u16(&mut target_image, 0x36 + row_size, 200);
+
+        let source_metadata = metadata_with_table(0x02, 2, row_size as u32, 0x20);
+        let target_metadata = metadata_with_table(0x02, 2, row_size as u32, 0x30);
+        let table_maps = empty_table_maps();
+
+        let map = build_cli_triplet_table_map(
+            &source_image,
+            &source_metadata,
+            &target_image,
+            &target_metadata,
+            &rift(&[(0, 0), (10, 100), (11, 101), (20, 200), (21, 201)]),
+            &table_maps,
+            &rift(&[(0, 0)]),
+            TYPEDEF_TRIPLET,
+        )
+        .unwrap();
+
+        assert_eq!(pairs(&map.rift), vec![(0, 0), (1, 2), (2, 1)]);
+        assert_eq!(map.stats.mapped_rows, 2);
+        assert_eq!(map.stats.missing_source_key_rows, 0);
+    }
+
+    #[test]
+    fn triplet_table_map_matches_rows_by_mapped_table_keys() {
+        const NESTED_CLASS_TRIPLET: CliTripletTableSpec = CliTripletTableSpec {
+            table_id: 0x29,
+            key_columns: &[
+                CliTripletKeyColumn::MappedTable("NestedClass"),
+                CliTripletKeyColumn::MappedTable("EnclosingClass"),
+            ],
+        };
+        let heap_widths = narrow_heap_widths();
+        let mut row_counts = [0u32; 64];
+        row_counts[0x02] = 2;
+        row_counts[0x29] = 1;
+        let row_size = row_size(0x29, &row_counts, heap_widths).unwrap();
+        let mut source_image = vec![0u8; 0x80];
+        let mut target_image = vec![0u8; 0x80];
+
+        put_u16(&mut source_image, 0x20, 1);
+        put_u16(&mut source_image, 0x22, 2);
+        put_u16(&mut target_image, 0x30, 2);
+        put_u16(&mut target_image, 0x32, 1);
+
+        let source_metadata = metadata_with_rows(&row_counts, &[(0x29, row_size as u32, 0x20)]);
+        let target_metadata = metadata_with_rows(&row_counts, &[(0x29, row_size as u32, 0x30)]);
+        let mut table_maps = empty_table_maps();
+        table_maps[0x02] = rift(&[(0, 0), (1, 2), (2, 1)]);
+
+        let map = build_cli_triplet_table_map(
+            &source_image,
+            &source_metadata,
+            &target_image,
+            &target_metadata,
+            &rift(&[(0, 0)]),
+            &table_maps,
+            &rift(&[(0, 0)]),
+            NESTED_CLASS_TRIPLET,
+        )
+        .unwrap();
+
+        assert_eq!(pairs(&map.rift), vec![(0, 0), (1, 1)]);
+        assert_eq!(map.stats.mapped_rows, 1);
+    }
+
+    #[test]
+    fn triplet_table_map_tracks_missing_source_keys() {
+        const TYPEDEF_TRIPLET: CliTripletTableSpec = CliTripletTableSpec {
+            table_id: 0x02,
+            key_columns: &[CliTripletKeyColumn::MappedString("Name")],
+        };
+        let heap_widths = narrow_heap_widths();
+        let row_size = row_size(0x02, &typedef_rows(1), heap_widths).unwrap();
+        let mut source_image = vec![0u8; 0x80];
+        let mut target_image = vec![0u8; 0x80];
+
+        put_u16(&mut source_image, 0x24, 10);
+        put_u16(&mut target_image, 0x34, 100);
+
+        let source_metadata = metadata_with_table(0x02, 1, row_size as u32, 0x20);
+        let target_metadata = metadata_with_table(0x02, 1, row_size as u32, 0x30);
+        let table_maps = empty_table_maps();
+
+        let map = build_cli_triplet_table_map(
+            &source_image,
+            &source_metadata,
+            &target_image,
+            &target_metadata,
+            &rift(&[(0, 0)]),
+            &table_maps,
+            &rift(&[(0, 0)]),
+            TYPEDEF_TRIPLET,
+        )
+        .unwrap();
+
+        assert_eq!(pairs(&map.rift), vec![(0, 0)]);
+        assert_eq!(map.stats.missing_source_key_rows, 1);
+    }
+
     fn metadata_with_strings(file_offset: usize, size: u32) -> CliMetadataModel {
         metadata_with_streams(
             CliStreamSet {
@@ -980,6 +1332,43 @@ mod tests {
                 },
             },
             row_counts,
+            row_sizes,
+            table_file_offsets,
+        )
+    }
+
+    fn metadata_with_rows(
+        row_counts: &[u32; 64],
+        tables: &[(usize, u32, usize)],
+    ) -> CliMetadataModel {
+        let mut row_sizes = [0u32; 64];
+        let mut table_file_offsets = [None; 64];
+        let mut tables_size = 0u32;
+        let mut tables_start = usize::MAX;
+        for &(table_id, row_size, table_file_offset) in tables {
+            row_sizes[table_id] = row_size;
+            table_file_offsets[table_id] = Some(table_file_offset);
+            tables_size = tables_size.saturating_add(row_counts[table_id].saturating_mul(row_size));
+            tables_start = tables_start.min(table_file_offset);
+        }
+
+        metadata_with_streams(
+            CliStreamSet {
+                strings: Some(CliStream {
+                    metadata_offset: 0,
+                    file_offset: 0,
+                    size: 0,
+                }),
+                user_strings: None,
+                blob: None,
+                guid: None,
+                tables: CliStream {
+                    metadata_offset: 0,
+                    file_offset: tables_start,
+                    size: tables_size,
+                },
+            },
+            *row_counts,
             row_sizes,
             table_file_offsets,
         )
