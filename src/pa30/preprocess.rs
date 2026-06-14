@@ -160,9 +160,20 @@ mod tests {
     use crate::pe::cli::context::ManagedPeInfoBitstream;
     use crate::pe::cli::map::CliMapModel;
     use crate::pe::cli::metadata::{
-        CliMetadataBitstreamRecord, CliMetadataModel, CliStream, CliStreamSet,
+        parse_cli_metadata_from_pe, CliMetadataBitstreamRecord, CliMetadataModel, CliStream,
+        CliStreamSet,
     };
     use crate::pe::cli::schema::{CliSchemaFlavor, CodedIndexKind, HeapIndexWidths};
+    use std::path::PathBuf;
+
+    const MANAGED_NATIVE_CASES: &[&str] = &[
+        "cli-const-string",
+        "cli-add-method",
+        "cli-generics-signature",
+        "cli-custom-attribute",
+        "cli-resource",
+        "cli-platform-x64",
+    ];
 
     fn empty_source_metadata() -> CliMetadataModel {
         CliMetadataModel {
@@ -193,6 +204,13 @@ mod tests {
             row_sizes: [0; 64],
             table_file_offsets: [None; 64],
         }
+    }
+
+    fn managed_native_corpus_dir() -> PathBuf {
+        PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/atoms/ManagedNativeCorpus"
+        ))
     }
 
     #[test]
@@ -246,6 +264,47 @@ mod tests {
                 .map_coded_token((1 << 2) | 1, CodedIndexKind::TypeDefOrRef)
                 .unwrap(),
             (2 << 2) | 1
+        );
+    }
+
+    #[test]
+    fn classic_managed_preprocess_context_builds_from_native_corpus() {
+        let root = managed_native_corpus_dir();
+        if !root.exists() {
+            return;
+        }
+
+        let mut cases_with_target_metadata = 0usize;
+        let mut cases_with_cli_map = 0usize;
+
+        for case in MANAGED_NATIVE_CASES {
+            let case_dir = root.join(case);
+            let source =
+                std::fs::read(case_dir.join("source.dll")).expect("read managed source fixture");
+            let delta =
+                std::fs::read(case_dir.join("delta.pa30")).expect("read managed delta fixture");
+            let parsed = crate::pa30::parse(&delta).expect("parse managed delta");
+            let preprocess = super::parse_pe_preprocess(&parsed.preprocess)
+                .expect("parse classic managed preprocess");
+            let source_metadata = parse_cli_metadata_from_pe(&source, CliSchemaFlavor::Classic)
+                .expect("parse source CLI metadata");
+
+            let context = preprocess
+                .managed_transform_context(source_metadata)
+                .expect("build managed transform context");
+
+            assert_eq!(context.flavor, CliSchemaFlavor::Classic, "{case}");
+            cases_with_target_metadata += usize::from(context.target_info.has_target_metadata());
+            cases_with_cli_map += usize::from(!context.cli_map.is_empty());
+        }
+
+        assert!(
+            cases_with_target_metadata > 0,
+            "managed corpus should cover target metadata records"
+        );
+        assert!(
+            cases_with_cli_map > 0,
+            "managed corpus should cover CLI map records"
         );
     }
 }

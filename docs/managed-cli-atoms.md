@@ -709,6 +709,19 @@ now exist, and the remaining risk is mostly about proving the right state
 boundary before composing larger transforms. Keep managed apply rejected until
 the release gate below is satisfied.
 
+### Readiness Snapshot
+
+The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 9
+partial, 13 missing, and 1 rejected. All 24 remain `apply_policy=reject`.
+
+The broader managed workstream tracks 31 atoms including create-side map and
+encoder atoms. Current state: 1 supported, 9 partial, 20 missing, and 1
+rejected. All 31 remain `apply_policy=reject`.
+
+That is the important reading of current progress: the parser/context
+foundation is becoming real, but managed apply is still gated because the rift
+producer ladder and byte-transform ladder are mostly not implemented.
+
 ### Established Foundation
 
 These atoms are useful building blocks today, but not all are release gates:
@@ -716,12 +729,14 @@ These atoms are useful building blocks today, but not all are release gates:
 | Atom | Evidence | Remaining gap |
 |---|---|---|
 | `ManagedFileTypeBranch` | exhaustive unit tests | wire branch diagnostics into every managed rejection |
+| `PePreprocessManagedClassic` | managed native corpus preprocess/context test | consume the context in native-backed rift and transform atoms; keep CLI4 separate |
 | `CliMetadataStaticSchema` | Rust schema self-checks | native `CheckStaticData` parity hook |
 | `CliMetadataFromPe` | synthetic PE32/PE32+ tests | native `CliMetadata::Init` object oracle |
 | `CliMetadataRowsAndHeaps` | synthetic metadata row/heap tests | native row and heap accessor samples from real managed PE metadata |
-| `CliMetadataBitstream` | Win26100 reader-window fixtures | CLI4 equivalent and transform-context wiring |
+| `CliMetadataBitstream` | Win26100 reader-window fixtures | broader target-metadata fixture diversity and CLI4 equivalent |
 | `CliMapBitstream` | Win26100 reader-window fixtures | native-like writer canonicalization for encode |
 | `CliCodedTokenMap` | Win26100 call-record fixtures | targeted non-identity `MapCoded` native case |
+| `TransformContextManaged` | unit validation plus managed native corpus construction | native fixture proving actual transform slot attachment |
 | `CliBlobCompressedInteger` | synthetic boundary tests plus Win26100 successful 1-byte `GetBlobContent` fixtures | native 2-byte, 4-byte, malformed, and non-canonical `GetNumber` behavior |
 
 Treat these as the base for the next phase. Do not re-implement them as part of

@@ -15,7 +15,7 @@ PeInfoParse	pe	parser	0x2,0x4,0x8,0x10,0x20,0x40,0x80	-	PortableExecutable parse
 PeLogicalSections	pe	parser	0x2,0x4,0x8,0x10,0x20,0x40,0x80	-	SectionHelper::ExtractImageOffsetToRva and RVA section predicates	partial	allow	unit	Add native PE info normalizer fixture to confirm raw range and logical RVA span edge cases
 PeDataDirectories	pe	parser	0x2,0x4,0x8,0x10,0x20,0x40,0x80	-	PE optional-header IMAGE_DATA_DIRECTORY table	partial	allow	unit	Keep named-directory consumers on DataDirectoryKind and fixture truncated or absent directory tables
 PePreprocessNative	pe	parser	0x2,0x4,0x8	-	PortableExecutableInfo::FromBitReader	supported	allow	curated	Split native and CLI preprocess tests explicitly
-PePreprocessManagedClassic	cli	parser	0x2,0x4,0x8	-	PortableExecutableInfo::FromBitReader with CliMetadata	rejected	reject	needs_fixture	Parse target metadata, used rift, and CliMap for managed classic branch
+PePreprocessManagedClassic	cli	parser	0x2,0x4,0x8	-	PortableExecutableInfo::FromBitReader with CliMetadata	partial	reject	curated	Classic managed preprocess parses target info, target metadata, used rift, and CliMap; apply stays gated until rift/transform atoms consume it
 PePreprocessManagedCli4	cli	parser	0x10,0x20,0x40,0x80	-	PortableExecutableInfoCli4::FromBitReader	rejected	reject	needs_fixture	Parse target Cli4Metadata, used rift, and CliMap instead of byte-counting
 RiftTableReadWrite	rift	parser	all	-	RiftTable::FromBitReader and ToBitWriter	supported	allow	release	Add malformed table fuzz cases as regressions are found
 RiftTableMultiply	rift	algebra	pe	-	RiftTable::Multiply	supported	allow	release	Keep oracle vectors for gaps and overlaps

@@ -91,6 +91,15 @@ const REQUIRED_FRIDA_LAB_ATOMS: &[&str] = &[
     "NativeOracleDiff",
 ];
 
+#[derive(Debug, Clone, Copy)]
+struct AtomRow<'a> {
+    atom: &'a str,
+    layer: &'a str,
+    status: &'a str,
+    apply_policy: &'a str,
+    oracle_level: &'a str,
+}
+
 #[test]
 fn feature_atom_registry_is_well_formed() {
     let mut lines = REGISTRY.lines().filter(|line| !line.trim().is_empty());
@@ -176,10 +185,9 @@ fn feature_atom_registry_is_well_formed() {
 
 #[test]
 fn managed_cli_atom_set_is_explicit() {
-    let atoms = REGISTRY
-        .lines()
-        .skip(1)
-        .filter_map(|line| line.split('\t').next())
+    let atoms = registry_rows()
+        .into_iter()
+        .map(|row| row.atom)
         .collect::<HashSet<_>>();
 
     for required in REQUIRED_MANAGED_ATOMS {
@@ -192,10 +200,9 @@ fn managed_cli_atom_set_is_explicit() {
 
 #[test]
 fn frida_oracle_atom_set_is_explicit() {
-    let atoms = REGISTRY
-        .lines()
-        .skip(1)
-        .filter_map(|line| line.split('\t').next())
+    let atoms = registry_rows()
+        .into_iter()
+        .map(|row| row.atom)
         .collect::<HashSet<_>>();
 
     for required in REQUIRED_FRIDA_LAB_ATOMS {
@@ -203,6 +210,68 @@ fn frida_oracle_atom_set_is_explicit() {
             atoms.contains(required),
             "Frida oracle atom {required} is missing from registry"
         );
+    }
+}
+
+#[test]
+fn managed_cli_readiness_counts_are_explicit() {
+    let rows = registry_rows();
+    let cli_rows = rows
+        .iter()
+        .copied()
+        .filter(|row| row.layer == "cli")
+        .collect::<Vec<_>>();
+
+    assert_eq!(cli_rows.len(), 24, "CLI-layer atom count changed");
+    assert_eq!(count_by(&cli_rows, |row| row.status, "supported"), 1);
+    assert_eq!(count_by(&cli_rows, |row| row.status, "partial"), 9);
+    assert_eq!(count_by(&cli_rows, |row| row.status, "missing"), 13);
+    assert_eq!(count_by(&cli_rows, |row| row.status, "rejected"), 1);
+    assert_eq!(count_by(&cli_rows, |row| row.apply_policy, "reject"), 24);
+    assert_eq!(count_by(&cli_rows, |row| row.oracle_level, "curated"), 5);
+    assert_eq!(count_by(&cli_rows, |row| row.oracle_level, "unit"), 5);
+    assert_eq!(
+        count_by(&cli_rows, |row| row.oracle_level, "needs_fixture"),
+        14
+    );
+}
+
+#[test]
+fn managed_workstream_readiness_counts_are_explicit() {
+    let required = REQUIRED_MANAGED_ATOMS
+        .iter()
+        .copied()
+        .collect::<HashSet<_>>();
+    let rows = registry_rows()
+        .into_iter()
+        .filter(|row| required.contains(row.atom))
+        .collect::<Vec<_>>();
+
+    assert_eq!(rows.len(), REQUIRED_MANAGED_ATOMS.len());
+    assert_eq!(count_by(&rows, |row| row.status, "supported"), 1);
+    assert_eq!(count_by(&rows, |row| row.status, "partial"), 9);
+    assert_eq!(count_by(&rows, |row| row.status, "missing"), 20);
+    assert_eq!(count_by(&rows, |row| row.status, "rejected"), 1);
+    assert_eq!(count_by(&rows, |row| row.apply_policy, "reject"), 31);
+    assert_eq!(count_by(&rows, |row| row.oracle_level, "curated"), 5);
+    assert_eq!(count_by(&rows, |row| row.oracle_level, "unit"), 5);
+    assert_eq!(count_by(&rows, |row| row.oracle_level, "needs_fixture"), 21);
+}
+
+#[test]
+fn managed_apply_policy_stays_rejected_until_release_gate_changes() {
+    let required = REQUIRED_MANAGED_ATOMS
+        .iter()
+        .copied()
+        .collect::<HashSet<_>>();
+    for row in registry_rows() {
+        if required.contains(row.atom) {
+            assert_eq!(
+                row.apply_policy, "reject",
+                "{} must stay reject-gated until the managed release gate is intentionally changed",
+                row.atom
+            );
+        }
     }
 }
 
@@ -222,4 +291,29 @@ fn valid_hex_file_type(value: &str) -> bool {
 
 fn valid_flag_mask(value: &str) -> bool {
     value == "-" || value == "unknown" || valid_hex_file_type(value)
+}
+
+fn registry_rows() -> Vec<AtomRow<'static>> {
+    REGISTRY
+        .lines()
+        .skip(1)
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            let cols = line.split('\t').collect::<Vec<_>>();
+            AtomRow {
+                atom: cols[0],
+                layer: cols[1],
+                status: cols[6],
+                apply_policy: cols[7],
+                oracle_level: cols[8],
+            }
+        })
+        .collect()
+}
+
+fn count_by(rows: &[AtomRow<'_>], key: impl Fn(AtomRow<'_>) -> &str, value: &str) -> usize {
+    rows.iter()
+        .copied()
+        .filter(|&row| key(row) == value)
+        .count()
 }
