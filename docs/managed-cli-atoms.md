@@ -574,8 +574,11 @@ terminate the current method scan without panicking.
 Current state: `pe::cli::disasm` remaps classic CLI metadata and user-string
 tokens in IL method bodies using the parsed `CliMap`. Unit coverage includes
 one-byte token opcodes, `0xfe` two-byte token opcodes, switch-table skipping,
-and truncated operand handling. The managed native corpus also produces at
-least one real source-image rewrite through this path. The CLI4 entry point
+and truncated operand handling. Native-created constructor cases show that
+constructor method bodies take a narrower path: MethodDef self-call operands
+remap, but constructor MemberRef and user-string operands stay as authored. The
+managed native corpus now includes instance-constructor, static-constructor, and
+constructor user-string boundary cases for this rule. The CLI4 entry point
 validates that the source metadata model is `Cli4` and reuses the same typed
 method-body and IL token scanner.
 

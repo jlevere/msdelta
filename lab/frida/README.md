@@ -142,9 +142,10 @@ powershell -NoProfile -ExecutionPolicy Bypass `
   -Out C:\msdelta-managed-corpus\result.msdelta.json
 ```
 
-The initial corpus is deliberately small but diverse: string/user-string
+The managed corpus is deliberately small but diverse: string/user-string
 changes, metadata row growth, generic signature blobs, custom attributes,
-manifest resources, and one x64 managed PE. Each case requests
+manifest resources, one x64 managed PE, and constructor-boundary IL token
+cases. Each case requests
 `native_to_ours` and `native_to_native`, so the lab emits native `.gold` deltas
 and proves those deltas apply back to the expected target before we use them as
 fixtures.

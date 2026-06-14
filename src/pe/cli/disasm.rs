@@ -23,15 +23,10 @@ pub(crate) fn transform_cli_disasm_tokens(
     cli_map: &CliMapModel,
 ) -> usize {
     let bodies = cli_method_bodies(image, pe, metadata);
+    let constructor_map = constructor_cli_map(cli_map);
     let mut rewrites = 0usize;
 
     for body in bodies {
-        // Native-created managed deltas reuse constructor operand bytes under
-        // different token-table tags; remapping constructor RIDs corrupts those
-        // copy sources.
-        if is_constructor_body(image, metadata, body.rid) {
-            continue;
-        }
         let code_start = body.file_offset.saturating_add(body.header_size);
         let Some(code_end) = code_start.checked_add(body.code_size) else {
             continue;
@@ -39,7 +34,12 @@ pub(crate) fn transform_cli_disasm_tokens(
         if code_end > image.len() {
             continue;
         }
-        rewrites += transform_il_tokens(&mut image[code_start..code_end], cli_map);
+        let method_map = if is_constructor_body(image, metadata, body.rid) {
+            &constructor_map
+        } else {
+            cli_map
+        };
+        rewrites += transform_il_tokens(&mut image[code_start..code_end], method_map);
     }
 
     rewrites
@@ -160,6 +160,14 @@ fn is_constructor_body(image: &[u8], metadata: &CliMetadataModel, method_rid: u3
     )
 }
 
+fn constructor_cli_map(cli_map: &CliMapModel) -> CliMapModel {
+    // Constructors are a narrower native path: MethodDef self-calls remap, but
+    // MemberRef/user-string operands are copied as authored.
+    let mut constructor_map = CliMapModel::default();
+    constructor_map.tables[0x06] = cli_map.tables[0x06].clone();
+    constructor_map
+}
+
 fn one_byte_operand(opcode: u8) -> IlOperand {
     match opcode {
         0x0e..=0x13 | 0x1f | 0x2b..=0x37 | 0xde => IlOperand::Fixed(1),
@@ -207,6 +215,9 @@ mod tests {
         "cli-platform-x64",
         "cli-properties-events",
         "cli-interface-impl",
+        "cli-constructor-token-boundary",
+        "cli-static-constructor-token-boundary",
+        "cli-constructor-user-string-boundary",
         "cli-exception-switch",
         "cli-pinvoke-module",
         "cli-nested-struct-enum-array",
@@ -289,7 +300,7 @@ mod tests {
     }
 
     #[test]
-    fn cli_disasm_transform_preserves_constructor_bodies() {
+    fn cli_disasm_transform_preserves_constructor_memberrefs() {
         let root = managed_native_corpus_dir();
         if !root.exists() {
             return;
@@ -320,7 +331,55 @@ mod tests {
             assert_eq!(
                 &transformed[code_start..code_end],
                 &source[code_start..code_end],
-                "constructor body RID {} should not be token-remapped",
+                "constructor body RID {} should preserve MemberRef operands",
+                body.rid
+            );
+        }
+
+        assert!(
+            constructors > 0,
+            "fixture should include a constructor body"
+        );
+    }
+
+    #[test]
+    fn cli_disasm_transform_remaps_constructor_methoddefs() {
+        let root = managed_native_corpus_dir();
+        if !root.exists() {
+            return;
+        }
+
+        let case_dir = root.join("cli-constructor-token-boundary");
+        if !case_dir.exists() {
+            return;
+        }
+        let source =
+            std::fs::read(case_dir.join("source.dll")).expect("read managed source fixture");
+        let delta = std::fs::read(case_dir.join("delta.pa30")).expect("read managed delta fixture");
+        let pe = PeInfo::parse_lenient(&source).expect("parse managed source PE");
+        let metadata = parse_cli_metadata_from_pe(&source, CliSchemaFlavor::Classic)
+            .expect("parse source CLI metadata");
+        let parsed = crate::pa30::parse(&delta).expect("parse managed delta");
+        let preprocess = crate::pa30::preprocess::parse_pe_preprocess(&parsed.preprocess)
+            .expect("parse managed preprocess");
+        let mut transformed = source.clone();
+
+        transform_cli_disasm_tokens(&mut transformed, &pe, &metadata, &preprocess.cli_map);
+
+        let mut constructors = 0usize;
+        for body in cli_method_bodies(&source, &pe, &metadata) {
+            if !is_constructor_body(&source, &metadata, body.rid) {
+                continue;
+            }
+            constructors += 1;
+            let code_start = body.file_offset + body.header_size;
+            let code_end = code_start + body.code_size;
+            let constructor_code = &transformed[code_start..code_end];
+            assert!(
+                constructor_code
+                    .windows(4)
+                    .any(|window| window == 0x0600_0004u32.to_le_bytes()),
+                "constructor body RID {} should remap MethodDef operands",
                 body.rid
             );
         }

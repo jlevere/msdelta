@@ -509,6 +509,136 @@ $cases += $case.job
 $manifestCases += $case.manifest
 
 $source = @"
+namespace ManagedFixture {
+    public sealed class ConstructorTokens {
+        private int value;
+
+        public ConstructorTokens(int seed) {
+            value = Helper(seed);
+        }
+
+        public int Value() {
+            return value;
+        }
+
+        private static int Helper(int input) {
+            return input + 1;
+        }
+    }
+}
+"@
+$target = @"
+namespace ManagedFixture {
+    public sealed class ConstructorTokens {
+        private int value;
+        private int extra;
+
+        public ConstructorTokens(int seed) {
+            value = Helper(seed);
+            extra = Added(seed);
+        }
+
+        public int Value() {
+            return value + extra;
+        }
+
+        private static int Added(int input) {
+            return input * 2;
+        }
+
+        private static int Helper(int input) {
+            return input + 3;
+        }
+    }
+}
+"@
+$case = New-CorpusCase $compiler $root "cli-constructor-token-boundary" "constructor-table-token-boundary" "anycpu" $source $target
+$cases += $case.job
+$manifestCases += $case.manifest
+
+$source = @"
+namespace ManagedFixture {
+    public static class StaticConstructorTokens {
+        private static int value;
+
+        static StaticConstructorTokens() {
+            value = Helper(5);
+        }
+
+        public static int Get() {
+            return value;
+        }
+
+        private static int Helper(int input) {
+            return input + 1;
+        }
+    }
+}
+"@
+$target = @"
+namespace ManagedFixture {
+    public static class StaticConstructorTokens {
+        private static int value;
+        private static int scale;
+
+        static StaticConstructorTokens() {
+            value = Helper(5);
+            scale = Added(7);
+        }
+
+        public static int Get() {
+            return value * scale;
+        }
+
+        private static int Added(int input) {
+            return input - 2;
+        }
+
+        private static int Helper(int input) {
+            return input + 4;
+        }
+    }
+}
+"@
+$case = New-CorpusCase $compiler $root "cli-static-constructor-token-boundary" "static-constructor-table-token-boundary" "anycpu" $source $target
+$cases += $case.job
+$manifestCases += $case.manifest
+
+$source = @"
+namespace ManagedFixture {
+    public sealed class ConstructorString {
+        private readonly string text;
+
+        public ConstructorString() {
+            text = "source constructor string";
+        }
+
+        public string Text {
+            get { return text; }
+        }
+    }
+}
+"@
+$target = @"
+namespace ManagedFixture {
+    public sealed class ConstructorString {
+        private readonly string text;
+
+        public ConstructorString() {
+            text = "target constructor string with more data";
+        }
+
+        public string Text {
+            get { return text.ToUpperInvariant(); }
+        }
+    }
+}
+"@
+$case = New-CorpusCase $compiler $root "cli-constructor-user-string-boundary" "constructor-user-string-boundary" "anycpu" $source $target
+$cases += $case.job
+$manifestCases += $case.manifest
+
+$source = @"
 using System;
 
 namespace ManagedFixture {

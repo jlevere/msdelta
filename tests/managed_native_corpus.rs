@@ -37,6 +37,18 @@ const CASES: &[(&str, &str)] = &[
         "managed-cli/interface-implementation-and-methodimpl",
     ),
     (
+        "cli-constructor-token-boundary",
+        "managed-cli/constructor-table-token-boundary",
+    ),
+    (
+        "cli-static-constructor-token-boundary",
+        "managed-cli/static-constructor-table-token-boundary",
+    ),
+    (
+        "cli-constructor-user-string-boundary",
+        "managed-cli/constructor-user-string-boundary",
+    ),
+    (
         "cli-exception-switch",
         "managed-cli/exception-handlers-and-switch-il",
     ),
