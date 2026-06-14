@@ -19,6 +19,23 @@ lab workflow rather than the managed behavior itself, update
 `docs/feature-atoms.tsv` with a `lab` atom instead of inflating the managed
 pipeline.
 
+The implementation home for this work is `src/pe/cli/`. Treat it as a typed
+CLR metadata subsystem, not as miscellaneous PE helper code:
+
+| Module | Concern |
+|---|---|
+| `schema.rs` | static ECMA-335 table, column, heap, and coded-index schema |
+| `metadata.rs` | CLR metadata root and MSDelta metadata-bitstream models |
+| `map.rs` | semantic `CliMap`, MSDelta map bitstream, and coded-token remapping |
+| `blob.rs` | compressed unsigned integers used by signature blobs |
+| `tokens.rs` | metadata table IDs, nonzero RIDs, and raw metadata tokens |
+
+Future splits should move toward `root.rs`, `tables.rs`, `heaps.rs`,
+`rows.rs`, `signatures.rs`, `map_bitstream.rs`, and
+`metadata_bitstream.rs` as those concerns grow. Transforms should depend on
+typed rows, heap offsets, RIDs, and tokens from this subsystem instead of
+constructing magic offsets directly.
+
 ## Terminology
 
 `CLI` in these symbols means the ECMA-335 Common Language Infrastructure
@@ -273,7 +290,7 @@ native `CheckStaticData` path.
 Done when: static schema extraction is represented as Rust data, the
 self-checks pass, and classic-vs-CLI4 differences are explicit in tests.
 
-Current state: `src/pe/cli_schema.rs` now contains the pure static ECMA-335
+Current state: `src/pe/cli/schema.rs` now contains the pure static ECMA-335
 table schema and coded-token descriptor model used by downstream metadata
 parsers and transforms. It covers the 45 standard metadata tables, 13
 coded-token descriptors, heap/table/coded index width calculation, and row-size
@@ -310,7 +327,7 @@ bounds stream ranges, too-small table stream, malformed row-count array.
 Done when: a real managed PE can produce a `CliMetadataModel` without reading a
 delta, and that model matches the target metadata model for equal inputs.
 
-Current state: `src/pe/cli_metadata.rs` parses the PE CLR runtime header,
+Current state: `src/pe/cli/metadata.rs` parses the PE CLR runtime header,
 `BSJB` metadata root, stream headers, and `#~` table stream into a
 `CliMetadataModel`. The model records metadata RVA/file offset/size, version
 string, `#Strings`/`#US`/`#Blob`/`#GUID`/`#~` stream ranges, heap index widths,
@@ -367,7 +384,7 @@ No-op conditions: `present == 0` yields empty rifts for all maps.
 Done when: parser tests cover empty maps, non-empty heap maps, and at least
 one table map against native `CliMap::FromBitReader` reader-window fixtures.
 
-Current state: `src/pe/cli_map.rs` contains the semantic `CliMapModel` and
+Current state: `src/pe/cli/map.rs` contains the semantic `CliMapModel` and
 `read_cli_map_bitstream` / `write_cli_map_bitstream` helpers. The parser reads
 the outer present bit, four shared `IntFormat` records, the three variable heap
 maps, the table-format GUID map, and 64 table RID maps. Individual maps use the
@@ -407,7 +424,7 @@ Done when: unit tests cover every coded-token kind and sentinel table id
 `0x40`, and native call fixtures replay both `MapCoded` and `MapCodedExact`
 outputs against Rust.
 
-Current state: `src/pe/cli_map.rs` implements the pure coded-token algebra
+Current state: `src/pe/cli/map.rs` implements the pure coded-token algebra
 against the static schema. It covers tag/RID split and reassembly, sentinel
 table identity for non-exact mapping, exact miss behavior, identity when no
 table map is present for non-exact mapping, native wrapping reassembly,
@@ -496,7 +513,7 @@ Outputs: decoded integer and consumed byte count.
 Done when: unit/property tests cover boundary values `0x7f`, `0x80`, `0x3fff`,
 `0x4000`, and the reserved high-bit encodings.
 
-Current state: `src/pe/cli_blob.rs` implements the pure compressed unsigned
+Current state: `src/pe/cli/blob.rs` implements the pure compressed unsigned
 integer reader used by later signature blob transforms. It returns the decoded
 value plus the consumed byte count, rejects truncated encodings, and rejects the
 reserved `111xxxxx` prefix family. It does not yet enforce native behavior for

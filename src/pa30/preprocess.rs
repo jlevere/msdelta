@@ -11,10 +11,10 @@ pub(crate) struct PePreprocess {
     pub(crate) target_field1: u32,
     pub(crate) target_timestamp: u32,
     pub(crate) pe_rift: crate::lzx::rift::RiftTable,
-    pub(crate) target_cli_metadata: crate::pe::cli_metadata::CliMetadataBitstreamRecord,
+    pub(crate) target_cli_metadata: crate::pe::cli::metadata::CliMetadataBitstreamRecord,
     // Second rift table (from PreProcessPEForApply, separate from PE info rift)
     pub(crate) preprocess_rift: crate::lzx::rift::RiftTable,
-    pub(crate) cli_map: crate::pe::cli_map::CliMapModel,
+    pub(crate) cli_map: crate::pe::cli::map::CliMapModel,
 }
 
 impl PePreprocess {
@@ -45,18 +45,18 @@ pub(crate) fn parse_pe_preprocess(preprocess: &[u8]) -> Result<PePreprocess> {
 
     let pe_rift = crate::lzx::rift::RiftTable::from_reader(&mut reader)?;
 
-    let target_cli_metadata = crate::pe::cli_metadata::read_cli_metadata_bitstream(
+    let target_cli_metadata = crate::pe::cli::metadata::read_cli_metadata_bitstream(
         &mut reader,
-        crate::pe::cli_schema::CliSchemaFlavor::Classic,
+        crate::pe::cli::schema::CliSchemaFlavor::Classic,
     )?;
 
     // Second rift table from PreProcessPEForApply
     let preprocess_rift = crate::lzx::rift::RiftTable::from_reader(&mut reader)?;
 
     let cli_map = if reader.remaining() > 0 {
-        crate::pe::cli_map::read_cli_map_bitstream(&mut reader)?
+        crate::pe::cli::map::read_cli_map_bitstream(&mut reader)?
     } else {
-        crate::pe::cli_map::CliMapModel::default()
+        crate::pe::cli::map::CliMapModel::default()
     };
 
     Ok(PePreprocess {
@@ -86,16 +86,16 @@ pub(crate) fn build_pe_preprocess(
     writer.write_bits(target_checksum as u64, 32);
     writer.write_bits(target_timestamp as u64, 32);
     pe_rift.to_writer(&mut writer);
-    crate::pe::cli_metadata::write_cli_metadata_bitstream(
+    crate::pe::cli::metadata::write_cli_metadata_bitstream(
         &mut writer,
-        &crate::pe::cli_metadata::CliMetadataBitstreamRecord::empty(
-            crate::pe::cli_schema::CliSchemaFlavor::Classic,
+        &crate::pe::cli::metadata::CliMetadataBitstreamRecord::empty(
+            crate::pe::cli::schema::CliSchemaFlavor::Classic,
         ),
     );
     preprocess_rift.to_writer(&mut writer);
-    crate::pe::cli_map::write_cli_map_bitstream(
+    crate::pe::cli::map::write_cli_map_bitstream(
         &mut writer,
-        &crate::pe::cli_map::CliMapModel::default(),
+        &crate::pe::cli::map::CliMapModel::default(),
     );
     writer.finish()
 }

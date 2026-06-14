@@ -310,6 +310,11 @@ switches:
 If adding an atom requires touching unrelated parser, transform, and fixture
 code at the same time, the atom boundary is probably still too large.
 
+For managed/.NET work, the typed subsystem root is `src/pe/cli/`. New managed
+atoms should extend that namespace with explicit model, wire, transition, or
+oracle modules. Do not add new CLR metadata parsing or rewriting logic directly
+to generic PE modules unless the behavior is genuinely PE-wide.
+
 ## Next Atom Selection
 
 Pick the next atom by asking:

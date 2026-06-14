@@ -2,7 +2,7 @@
 
 use crate::bitstream::{BitReader, BitWriter};
 use crate::lzx::rift::{IntFormat, RiftTable};
-use crate::pe::cli_schema::{coded_index_schema, table_schema, CodedIndexKind, TABLE_SENTINEL};
+use crate::pe::cli::schema::{coded_index_schema, table_schema, CodedIndexKind, TABLE_SENTINEL};
 use crate::{Error as DeltaError, Result};
 use thiserror::Error;
 
@@ -504,7 +504,7 @@ fn collect_rift_deltas<'a>(
 mod tests {
     use super::*;
     use crate::lzx::rift::{IntFormat, RiftEntry, RiftTable};
-    use crate::pe::cli_schema::CODED_INDEXES;
+    use crate::pe::cli::schema::CODED_INDEXES;
     use serde::{Deserialize, Deserializer};
     use std::path::Path;
 

@@ -1,7 +1,7 @@
 //! Managed PE CLR metadata root and preprocess-bitstream parsing.
 
 use crate::bitstream::{BitReader, BitWriter};
-use crate::pe::cli_schema::{metadata_schema, row_size, CliSchemaFlavor, HeapIndexWidths};
+use crate::pe::cli::schema::{metadata_schema, row_size, CliSchemaFlavor, HeapIndexWidths};
 use crate::pe::parse::{PeInfo, SectionInfo};
 use crate::{Error, Result};
 

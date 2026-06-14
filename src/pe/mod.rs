@@ -1,9 +1,6 @@
 //! PE binary transforms and rift table generation for MSDelta.
 
-pub(crate) mod cli_blob;
-pub(crate) mod cli_map;
-pub(crate) mod cli_metadata;
-pub(crate) mod cli_schema;
+pub(crate) mod cli;
 pub mod parse;
 pub mod rift_gen;
 pub mod structs;
