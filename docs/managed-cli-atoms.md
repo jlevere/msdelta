@@ -72,7 +72,7 @@ flowchart TD
   J --> K["native PE/arch transforms"]
   K --> L["native final copy rift"]
   H --> M["CliMap to CLI compression rift"]
-  L --> N["RiftTable::Sum"]
+  L --> N["RiftTable::Sum entry merge"]
   M --> N
 ```
 
@@ -84,7 +84,8 @@ Important ordering:
 4. Read `CliMap`.
 5. Run the transform chain with `CliMetadata`/`Cli4Metadata` and `CliMap` set on
    each transform object.
-6. Build the native PE-copy rift and sum it with the CLI map rift.
+6. Build the native PE-copy rift, merge it with the CLI map rift, then fold
+   the merged map into the decompressor caller-rift domain.
 
 ## File-Type Branches
 
@@ -637,22 +638,27 @@ TypeSpec remaps across the same signature forms.
 Native reference: `TransformCliMetadata::Run`,
 `TransformCli4Metadata::Run`, `CliBlobTransformer::TransformColumn`
 
-Inputs: transformed source PE, source metadata, target metadata, `CliMap`.
+Inputs: transformed source PE, source metadata, target metadata, `CliMap`, and
+the source-RVA to target-RVA preprocess rift.
 
 Transition: walk every present metadata table and each schema-described column.
 Simple heap/table/coded-index columns are remapped through the relevant
-`CliMap` rifts. Blob signature columns collect referenced blob offsets, then
-run `CliBlobTypeTokenRemap` on each unique blob.
+`CliMap` rifts. Metadata `Rva` columns are remapped through the preprocess
+source-RVA to target-RVA rift. Blob signature columns collect referenced blob
+offsets, then run `CliBlobTypeTokenRemap` on each unique blob.
 
 Outputs: source metadata tables and selected blob signatures rewritten in
 place.
 
 Current state: `pe::cli::metadata_transform` walks typed metadata schemas and
-rewrites heap indexes, direct table indexes, coded indexes, and selected source
-signature blobs through `CliMap`. Unit coverage exercises heap, table,
-TypeDefOrRef coded, and MethodDef signature blob rewrites in one synthetic
-metadata image. The CLI4 entry point validates that the source metadata model
-is `Cli4` and reuses the same schema-driven table and signature-blob transform.
+rewrites heap indexes, direct table indexes, coded indexes, typed RVA columns,
+and selected source signature blobs. Heap/table/coded rewrites use `CliMap`;
+RVA rewrites use the preprocess rift. Unit coverage exercises heap, table,
+TypeDefOrRef coded, MethodDef RVA, and MethodDef signature blob rewrites in
+one synthetic metadata image. The classic managed native corpus applies
+byte-for-byte through this atom. The CLI4 entry point validates that the source
+metadata model is `Cli4` and reuses the same schema-driven table and
+signature-blob transform.
 
 Done when: native `TransformCliMetadata::Run` entry/exit fixtures prove table
 column parity across the managed corpus, and blob transform coverage expands
@@ -752,19 +758,22 @@ Native reference: `PreProcessPEForApply`, `RiftTable::Sum`
 
 Inputs: native PE-copy rift, CLI compression rift.
 
-Transition: sum the native rift and CLI rift to produce the final caller rift
-used by the decompressor copy stage.
+Transition: native `RiftTable::Sum` at this call site merges the two entry
+streams and sorts by source. It does not do the pointwise additive composition
+used by the lower-level rift algebra helper. The merged target-file-offset map
+is then folded into the decompressor caller-rift domain.
 
 Outputs: final copy rift.
 
 Current state: the PA30 helper now keeps the PE-copy map in target-file-offset
-to source-file-offset form, sums it with the classic CLI compression rift, and
-folds the combined map into the LZX caller-rift domain once. A checked-in
-managed native corpus test covers the composition contract and verifies that an
-empty CLI rift preserves the unmanaged PE-copy path.
+to source-file-offset form, merges it with the classic CLI compression rift,
+and folds the combined map into the LZX caller-rift domain once. A checked-in
+managed native corpus test covers the composition contract, verifies that an
+empty CLI rift preserves the unmanaged PE-copy path, and the six-case classic
+managed corpus now applies byte-for-byte against native-generated targets.
 
 Done when: fixture packets include `native_final_rift.tsv` for at least one
-classic CLI and one CLI4 case, and managed apply uses this rift only after the
+classic CLI and one CLI4 case, and CLI4 apply uses this rift only after the
 remaining source transforms are validated.
 
 ## Create-Side Atoms

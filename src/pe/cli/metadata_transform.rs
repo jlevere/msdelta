@@ -15,6 +15,7 @@ use std::collections::BTreeSet;
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct CliMetadataTransformStats {
     pub(crate) index_rewrites: usize,
+    pub(crate) rva_rewrites: usize,
     pub(crate) signature_blob_rewrites: usize,
 }
 
@@ -22,6 +23,18 @@ pub(crate) fn transform_cli_metadata(
     image: &mut [u8],
     metadata: &CliMetadataModel,
     cli_map: &CliMapModel,
+) -> CliMetadataTransformStats {
+    let empty_rva_map = RiftTable {
+        entries: Vec::new(),
+    };
+    transform_cli_metadata_with_rva_map(image, metadata, cli_map, &empty_rva_map)
+}
+
+pub(crate) fn transform_cli_metadata_with_rva_map(
+    image: &mut [u8],
+    metadata: &CliMetadataModel,
+    cli_map: &CliMapModel,
+    rva_map: &RiftTable,
 ) -> CliMetadataTransformStats {
     let token_map = cli_map.coded_token_map().ok();
     let mut signature_blobs = BTreeSet::new();
@@ -76,11 +89,16 @@ pub(crate) fn transform_cli_metadata(
                         .as_ref()
                         .and_then(|map| map.map_coded_token(value, kind).ok())
                         .unwrap_or(value),
-                    ColumnKind::U8 | ColumnKind::U16 | ColumnKind::U32 | ColumnKind::Rva => value,
+                    ColumnKind::Rva => map_index(rva_map, value),
+                    ColumnKind::U8 | ColumnKind::U16 | ColumnKind::U32 => value,
                 };
 
                 if mapped != value && write_index(image, cell_offset, width, mapped) {
-                    stats.index_rewrites += 1;
+                    if matches!(column.kind, ColumnKind::Rva) {
+                        stats.rva_rewrites += 1;
+                    } else {
+                        stats.index_rewrites += 1;
+                    }
                 }
 
                 column_offset += width;
@@ -255,6 +273,14 @@ mod tests {
         u16::from_le_bytes(image[offset..offset + 2].try_into().unwrap())
     }
 
+    fn put_u32(image: &mut [u8], offset: usize, value: u32) {
+        image[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn read_u32(image: &[u8], offset: usize) -> u32 {
+        u32::from_le_bytes(image[offset..offset + 4].try_into().unwrap())
+    }
+
     fn test_metadata_model() -> CliMetadataModel {
         let heap_widths = HeapIndexWidths {
             strings: 2,
@@ -314,6 +340,7 @@ mod tests {
         metadata.flavor = flavor;
         let mut image = vec![0u8; 0x180];
 
+        put_u32(&mut image, 0x00, 0x2066); // MethodDef.Rva
         put_u16(&mut image, 0x08, 3); // MethodDef.Name
         put_u16(&mut image, 0x0a, 1); // MethodDef.Signature
         put_u16(&mut image, 0x0c, 1); // MethodDef.ParamList
@@ -356,6 +383,7 @@ mod tests {
     ) {
         assert!(stats.index_rewrites >= 6);
         assert_eq!(stats.signature_blob_rewrites, 1);
+        assert_eq!(read_u32(image, 0x00), 0x2066);
         assert_eq!(read_u16(image, 0x08), 7);
         assert_eq!(read_u16(image, 0x0a), 5);
         assert_eq!(read_u16(image, 0x0c), 2);
@@ -373,6 +401,22 @@ mod tests {
         let stats = transform_cli_metadata(&mut fixture.image, &fixture.metadata, &fixture.cli_map);
 
         assert_fixture_was_transformed(&fixture.image, fixture.blob_start, stats);
+    }
+
+    #[test]
+    fn transforms_metadata_rva_columns_with_supplied_rva_map() {
+        let mut fixture = metadata_transform_fixture(CliSchemaFlavor::Classic);
+        let rva_map = rift(&[(0x2066, 0x2067)]);
+
+        let stats = transform_cli_metadata_with_rva_map(
+            &mut fixture.image,
+            &fixture.metadata,
+            &fixture.cli_map,
+            &rva_map,
+        );
+
+        assert_eq!(stats.rva_rewrites, 1);
+        assert_eq!(read_u32(&fixture.image, 0x00), 0x2067);
     }
 
     #[test]

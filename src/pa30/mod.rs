@@ -53,8 +53,10 @@ use crate::{Error, Result};
 ///
 ///   final_file_offsets = RiftTable::Sum(pe_copy, cli_compression_rift)
 ///
-/// Only after that sum do we fold into the decompressor caller-rift domain by
-/// adding the reference length to the entry source offsets.
+/// At this native call site, `Sum` behaves as an entry-stream merge sorted by
+/// source. Only after that merge do we fold into the decompressor caller-rift
+/// domain by adding the reference length to the entry source offsets.
+#[cfg(test)]
 fn build_pe_copy_rift(
     reference: &[u8],
     pp: &preprocess::PePreprocess,
@@ -75,7 +77,7 @@ fn build_pe_copy_rift_with_cli_rift(
     };
 
     if !cli_rift.entries.is_empty() {
-        target_to_source = target_to_source.sum(cli_rift);
+        target_to_source = merge_rift_entries(&target_to_source, cli_rift);
     }
 
     fold_target_to_source_rift_for_decompressor(reference.len(), &target_to_source)
@@ -148,6 +150,36 @@ fn fold_target_to_source_rift_for_decompressor(
     out
 }
 
+fn merge_rift_entries(
+    a: &crate::lzx::rift::RiftTable,
+    b: &crate::lzx::rift::RiftTable,
+) -> crate::lzx::rift::RiftTable {
+    let mut entries = Vec::with_capacity(a.entries.len() + b.entries.len());
+    entries.extend_from_slice(&a.entries);
+    entries.extend_from_slice(&b.entries);
+    entries.sort_by_key(|entry| entry.source);
+    crate::lzx::rift::RiftTable { entries }
+}
+
+fn apply_classic_cli_source_transforms(
+    image: &mut [u8],
+    pe: &crate::pe::parse::PeInfo,
+    metadata: &crate::pe::cli::metadata::CliMetadataModel,
+    cli_map: &crate::pe::cli::map::CliMapModel,
+    rva_map: &crate::lzx::rift::RiftTable,
+    flags: u64,
+) -> Result<()> {
+    if flags & 0x4000 != 0 {
+        crate::pe::cli::disasm::transform_cli_disasm_tokens(image, pe, metadata, cli_map);
+    }
+    if flags & 0x8000 != 0 {
+        crate::pe::cli::metadata_transform::transform_cli_metadata_with_rva_map(
+            image, metadata, cli_map, rva_map,
+        );
+    }
+    Ok(())
+}
+
 /// Build `io2rva` exactly as `SectionHelper::ExtractImageOffsetToRva`: an
 /// initial `Add(0, 0)` entry, then per section (skipping those whose
 /// VirtualAddress == 0 or PointerToRawData == 0) an `Add(PointerToRawData,
@@ -212,37 +244,58 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
         return Ok(output);
     }
 
-    let (caller_rift, pp) = if parsed.header.file_type != 1 && !parsed.preprocess.is_empty() {
-        // Managed (.NET / CLI) images go through the CLI metadata/disasm pipeline
-        // we do not implement. Screen on the reference's CLR header FIRST -- the
-        // CLI preprocess stream is differently framed and would otherwise fail
-        // deep in the bitstream parser. Reject cleanly instead.
-        if crate::pe::transform::is_managed_pe(reference) {
+    let managed_branch = if parsed.header.file_type != 1
+        && !parsed.preprocess.is_empty()
+        && crate::pe::transform::is_managed_pe(reference)
+    {
+        let Some(branch) =
+            crate::pe::transform::managed_branch_for_file_type(parsed.header.file_type)
+        else {
+            return Err(Error::Unsupported(unsupported_managed_transform(
+                parsed.header.file_type,
+            )));
+        };
+        if branch == crate::pe::transform::ManagedBranch::Cli4 {
             return Err(Error::Unsupported(unsupported_managed_transform(
                 parsed.header.file_type,
             )));
         }
+        Some(branch)
+    } else {
+        None
+    };
+
+    let pp = if parsed.header.file_type != 1 && !parsed.preprocess.is_empty() {
         let pp = parse_pe_preprocess(&parsed.preprocess)?;
         // Belt-and-suspenders: some managed deltas carry CLI metadata/map state
         // in the preprocess without a CLR header surviving in the reference.
-        if pp.has_managed_cli_state() {
+        if managed_branch.is_none() && pp.has_managed_cli_state() {
             return Err(Error::Unsupported(unsupported_managed_transform(
                 parsed.header.file_type,
             )));
         }
-        let combined = build_pe_copy_rift(reference, &pp);
-        (Some(combined), Some(pp))
+        Some(pp)
     } else {
-        (None, None)
+        None
     };
 
     // For PE deltas, msdelta normalizes the copy source by zeroing the
     // optional-header CheckSum before applying. Mirror that so copies resolve
     // identically (the target's real checksum is carried as literals).
+    let mut caller_rift = None;
     let pe_ref;
     let decode_ref: &[u8] = if let Some(pp) = &pp {
         let mut r = reference.to_vec();
         crate::pe::transform::zero_pe_checksum(&mut r);
+        let source_metadata =
+            if managed_branch == Some(crate::pe::transform::ManagedBranch::ClassicCli) {
+                Some(crate::pe::cli::metadata::parse_cli_metadata_from_pe(
+                    &r,
+                    crate::pe::cli::schema::CliSchemaFlavor::Classic,
+                )?)
+            } else {
+                None
+            };
         // Build T(source): transform the reference exactly as genuine
         // PreProcessPEForApply does before the LZX copy stage, so copies land
         // bit-identical. i386 relative calls/jmps + relocation operands, gated
@@ -257,7 +310,30 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
                 pp.target_info.image_base,
                 pp.target_info.time_date_stamp,
             );
+            if let Some(metadata) = &source_metadata {
+                apply_classic_cli_source_transforms(
+                    &mut r,
+                    &src_pe,
+                    metadata,
+                    &pp.cli_map,
+                    &pp.preprocess_rift,
+                    parsed.header.flags as u64,
+                )?;
+            }
         }
+        let cli_rift = if let Some(metadata) = &source_metadata {
+            crate::pe::cli::rift::build_cli_compression_rift_from_transformed_source(
+                metadata,
+                &pp.target_info.target_metadata,
+                &pp.cli_map,
+                &r,
+            )
+        } else {
+            crate::lzx::rift::RiftTable {
+                entries: Vec::new(),
+            }
+        };
+        caller_rift = Some(build_pe_copy_rift_with_cli_rift(reference, pp, &cli_rift));
         pe_ref = r;
         &pe_ref
     } else {
@@ -613,7 +689,7 @@ mod tests {
                 &preprocess.cli_map,
                 &source,
             );
-            let summed_unfolded = pe_unfolded.sum(&cli_rift);
+            let summed_unfolded = merge_rift_entries(&pe_unfolded, &cli_rift);
             let expected =
                 fold_target_to_source_rift_for_decompressor(source.len(), &summed_unfolded);
             let final_rift = build_pe_copy_rift_with_cli_rift(&source, &preprocess, &cli_rift);

@@ -91,6 +91,19 @@ const REQUIRED_FRIDA_LAB_ATOMS: &[&str] = &[
     "NativeOracleDiff",
 ];
 
+const CLASSIC_MANAGED_APPLY_ALLOWED_ATOMS: &[&str] = &[
+    "ManagedFileTypeBranch",
+    "PePreprocessManagedClassic",
+    "CliMapBitstream",
+    "TransformCliDisasm",
+    "CliBlobTypeTokenRemap",
+    "TransformCliMetadata",
+    "CliHeapRift",
+    "CliTableRift",
+    "CliCompressionRift",
+    "FinalPeCopyRiftManaged",
+];
+
 #[derive(Debug, Clone, Copy)]
 struct AtomRow<'a> {
     atom: &'a str,
@@ -227,9 +240,10 @@ fn managed_cli_readiness_counts_are_explicit() {
     assert_eq!(count_by(&cli_rows, |row| row.status, "partial"), 23);
     assert_eq!(count_by(&cli_rows, |row| row.status, "missing"), 0);
     assert_eq!(count_by(&cli_rows, |row| row.status, "rejected"), 0);
-    assert_eq!(count_by(&cli_rows, |row| row.apply_policy, "reject"), 24);
-    assert_eq!(count_by(&cli_rows, |row| row.oracle_level, "curated"), 6);
-    assert_eq!(count_by(&cli_rows, |row| row.oracle_level, "unit"), 18);
+    assert_eq!(count_by(&cli_rows, |row| row.apply_policy, "allow"), 10);
+    assert_eq!(count_by(&cli_rows, |row| row.apply_policy, "reject"), 14);
+    assert_eq!(count_by(&cli_rows, |row| row.oracle_level, "curated"), 8);
+    assert_eq!(count_by(&cli_rows, |row| row.oracle_level, "unit"), 16);
     assert_eq!(
         count_by(&cli_rows, |row| row.oracle_level, "needs_fixture"),
         0
@@ -252,23 +266,33 @@ fn managed_workstream_readiness_counts_are_explicit() {
     assert_eq!(count_by(&rows, |row| row.status, "partial"), 28);
     assert_eq!(count_by(&rows, |row| row.status, "missing"), 2);
     assert_eq!(count_by(&rows, |row| row.status, "rejected"), 0);
-    assert_eq!(count_by(&rows, |row| row.apply_policy, "reject"), 31);
-    assert_eq!(count_by(&rows, |row| row.oracle_level, "curated"), 6);
-    assert_eq!(count_by(&rows, |row| row.oracle_level, "unit"), 23);
+    assert_eq!(count_by(&rows, |row| row.apply_policy, "allow"), 10);
+    assert_eq!(count_by(&rows, |row| row.apply_policy, "reject"), 21);
+    assert_eq!(count_by(&rows, |row| row.oracle_level, "curated"), 8);
+    assert_eq!(count_by(&rows, |row| row.oracle_level, "unit"), 21);
     assert_eq!(count_by(&rows, |row| row.oracle_level, "needs_fixture"), 2);
 }
 
 #[test]
-fn managed_apply_policy_stays_rejected_until_release_gate_changes() {
+fn managed_apply_policy_only_allows_classic_apply_atoms() {
     let required = REQUIRED_MANAGED_ATOMS
+        .iter()
+        .copied()
+        .collect::<HashSet<_>>();
+    let allowed = CLASSIC_MANAGED_APPLY_ALLOWED_ATOMS
         .iter()
         .copied()
         .collect::<HashSet<_>>();
     for row in registry_rows() {
         if required.contains(row.atom) {
+            let expected = if allowed.contains(row.atom) {
+                "allow"
+            } else {
+                "reject"
+            };
             assert_eq!(
-                row.apply_policy, "reject",
-                "{} must stay reject-gated until the managed release gate is intentionally changed",
+                row.apply_policy, expected,
+                "{} has an unexpected managed apply policy",
                 row.atom
             );
         }

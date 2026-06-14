@@ -1,4 +1,4 @@
-use msdelta::{pa30, Error};
+use msdelta::pa30;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::fs;
@@ -97,18 +97,52 @@ fn managed_native_corpus_is_diverse_and_native_verified() {
 }
 
 #[test]
-fn managed_native_corpus_still_hits_explicit_unsupported_gate() {
+fn managed_native_corpus_applies_classic_managed_deltas() {
     for (case_id, _) in CASES {
         let case_dir = Path::new(FIXTURE_ROOT).join(case_id);
+        let case = fs::read_to_string(case_dir.join("case.toml")).expect("read case.toml");
         let source = fs::read(case_dir.join("source.dll")).expect("read source.dll");
+        let target = fs::read(case_dir.join("target.dll")).expect("read target.dll");
         let delta = fs::read(case_dir.join("delta.pa30")).expect("read delta.pa30");
 
-        let err = pa30::apply(&source, &delta).expect_err("managed apply should stay gated");
-        assert!(
-            matches!(err, Error::Unsupported(message) if message.contains("ManagedFileTypeBranch")),
-            "{case_id} expected managed unsupported gate, got {err:?}"
+        let output = pa30::apply(&source, &delta)
+            .unwrap_or_else(|error| panic!("{case_id}: managed apply failed: {error}"));
+        if output != target {
+            let diffs = first_diffs(&output, &target, 24);
+            panic!(
+                "{case_id}: managed apply target mismatch: {} differing bytes, first diffs: {diffs:?}",
+                diff_count(&output, &target)
+            );
+        }
+        assert_eq!(
+            sha256_hex(&output),
+            read_string(&case, "target_sha256"),
+            "{case_id}: managed apply target hash mismatch"
         );
     }
+}
+
+fn first_diffs(left: &[u8], right: &[u8], limit: usize) -> Vec<(usize, Option<u8>, Option<u8>)> {
+    let len = left.len().max(right.len());
+    let mut diffs = Vec::new();
+    for index in 0..len {
+        let left_byte = left.get(index).copied();
+        let right_byte = right.get(index).copied();
+        if left_byte != right_byte {
+            diffs.push((index, left_byte, right_byte));
+            if diffs.len() == limit {
+                break;
+            }
+        }
+    }
+    diffs
+}
+
+fn diff_count(left: &[u8], right: &[u8]) -> usize {
+    let len = left.len().max(right.len());
+    (0..len)
+        .filter(|&index| left.get(index) != right.get(index))
+        .count()
 }
 
 fn assert_fixture_file(case_dir: &Path, name: &str, case: &str, size_key: &str, hash_key: &str) {
