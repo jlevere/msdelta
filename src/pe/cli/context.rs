@@ -100,14 +100,15 @@ mod tests {
     }
 
     fn non_empty_cli_map() -> CliMapModel {
-        let mut cli_map = CliMapModel::default();
-        cli_map.strings = RiftTable {
-            entries: vec![RiftEntry {
-                source: 0x10,
-                target: 0x20,
-            }],
-        };
-        cli_map
+        CliMapModel {
+            strings: RiftTable {
+                entries: vec![RiftEntry {
+                    source: 0x10,
+                    target: 0x20,
+                }],
+            },
+            ..CliMapModel::default()
+        }
     }
 
     fn source_metadata(flavor: CliSchemaFlavor) -> CliMetadataModel {

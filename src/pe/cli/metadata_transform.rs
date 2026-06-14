@@ -360,13 +360,17 @@ mod tests {
             (3 << 2) | 1,
         ]);
 
-        let mut cli_map = CliMapModel::default();
-        cli_map.strings = rift(&[(3, 7)]);
-        cli_map.blob = rift(&[(1, 5)]);
-        cli_map.tables[0x01] = rift(&[(3, 7)]);
-        cli_map.tables[0x04] = rift(&[(1, 4)]);
-        cli_map.tables[0x06] = rift(&[(1, 6)]);
-        cli_map.tables[0x08] = rift(&[(1, 2)]);
+        let mut table_maps = CliMapModel::default().tables;
+        table_maps[0x01] = rift(&[(3, 7)]);
+        table_maps[0x04] = rift(&[(1, 4)]);
+        table_maps[0x06] = rift(&[(1, 6)]);
+        table_maps[0x08] = rift(&[(1, 2)]);
+        let cli_map = CliMapModel {
+            strings: rift(&[(3, 7)]),
+            blob: rift(&[(1, 5)]),
+            tables: table_maps,
+            ..CliMapModel::default()
+        };
 
         MetadataTransformFixture {
             metadata,

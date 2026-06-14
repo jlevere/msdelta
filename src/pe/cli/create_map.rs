@@ -366,6 +366,14 @@ struct StringsHeapEntry<'a> {
     value: &'a [u8],
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct CliMapInputs<'a> {
+    source_image: &'a [u8],
+    source_metadata: &'a CliMetadataModel,
+    target_image: &'a [u8],
+    target_metadata: &'a CliMetadataModel,
+}
+
 pub(crate) fn build_cli_map_from_metadata(
     source_image: &[u8],
     source_metadata: &CliMetadataModel,
@@ -393,6 +401,12 @@ pub(crate) fn build_cli_map_from_metadata(
     let seed_stats = seed_cli_map_tables(source_metadata, target_metadata, &mut cli_map);
     let mut triplet_maps = Vec::new();
     let mut sequence_maps = Vec::new();
+    let inputs = CliMapInputs {
+        source_image,
+        source_metadata,
+        target_image,
+        target_metadata,
+    };
 
     for step in CLI_MAP_RUN_STEPS {
         match *step {
@@ -400,10 +414,7 @@ pub(crate) fn build_cli_map_from_metadata(
                 let spec = cli_triplet_table_spec(table_id)
                     .ok_or(Error::Malformed("CLI map create: unknown triplet step"))?;
                 let table_map = build_cli_triplet_table_map(
-                    source_image,
-                    source_metadata,
-                    target_image,
-                    target_metadata,
+                    inputs,
                     &cli_map.strings,
                     &cli_map.tables,
                     &cli_map.tables[table_id as usize],
@@ -419,10 +430,7 @@ pub(crate) fn build_cli_map_from_metadata(
                 let spec = cli_sequence_table_spec(table_id)
                     .ok_or(Error::Malformed("CLI map create: unknown sequence step"))?;
                 let table_map = build_cli_sequence_table_map(
-                    source_image,
-                    source_metadata,
-                    target_image,
-                    target_metadata,
+                    inputs,
                     &cli_map.strings,
                     &cli_map.tables[spec.owner_table_id as usize],
                     &cli_map.tables[table_id as usize],
@@ -633,15 +641,16 @@ fn build_cli_heap_map(
 }
 
 pub(crate) fn build_cli_sequence_table_map(
-    source_image: &[u8],
-    source_metadata: &CliMetadataModel,
-    target_image: &[u8],
-    target_metadata: &CliMetadataModel,
+    inputs: CliMapInputs<'_>,
     strings_map: &RiftTable,
     owner_table_map: &RiftTable,
     child_table_map: &RiftTable,
     table_id: u8,
 ) -> Result<CliSequenceTableMap> {
+    let source_image = inputs.source_image;
+    let source_metadata = inputs.source_metadata;
+    let target_image = inputs.target_image;
+    let target_metadata = inputs.target_metadata;
     let spec = cli_sequence_table_spec(table_id)
         .ok_or(Error::Malformed("CLI sequence map: unsupported table"))?;
     let mut rift = child_table_map.clone();
@@ -768,15 +777,16 @@ pub(crate) fn build_cli_sequence_table_map(
 }
 
 pub(crate) fn build_cli_triplet_table_map(
-    source_image: &[u8],
-    source_metadata: &CliMetadataModel,
-    target_image: &[u8],
-    target_metadata: &CliMetadataModel,
+    inputs: CliMapInputs<'_>,
     strings_map: &RiftTable,
     table_maps: &[RiftTable; 64],
     initial_table_map: &RiftTable,
     spec: CliTripletTableSpec,
 ) -> Result<CliTripletTableMap> {
+    let source_image = inputs.source_image;
+    let source_metadata = inputs.source_metadata;
+    let target_image = inputs.target_image;
+    let target_metadata = inputs.target_metadata;
     let mut rift = initial_table_map.clone();
     let source_row_count = source_metadata.row_counts[spec.table_id as usize];
     let target_row_count = target_metadata.row_counts[spec.table_id as usize];
@@ -1532,6 +1542,20 @@ mod tests {
         }
     }
 
+    fn map_inputs<'a>(
+        source_image: &'a [u8],
+        source_metadata: &'a CliMetadataModel,
+        target_image: &'a [u8],
+        target_metadata: &'a CliMetadataModel,
+    ) -> CliMapInputs<'a> {
+        CliMapInputs {
+            source_image,
+            source_metadata,
+            target_image,
+            target_metadata,
+        }
+    }
+
     #[test]
     fn triplet_table_specs_follow_native_run_order() {
         let spec_order = CLI_TRIPLET_TABLE_SPECS
@@ -2163,10 +2187,12 @@ mod tests {
         ]);
 
         let map = build_cli_sequence_table_map(
-            &source_image,
-            &source_metadata,
-            &target_image,
-            &target_metadata,
+            map_inputs(
+                &source_image,
+                &source_metadata,
+                &target_image,
+                &target_metadata,
+            ),
             &rift(&[(0, 0), (10, 100), (20, 200)]),
             &rift(&[(0, 0), (1, 1)]),
             &rift(&[(0, 0)]),
@@ -2205,10 +2231,12 @@ mod tests {
         ]);
 
         let map = build_cli_sequence_table_map(
-            &source_image,
-            &source_metadata,
-            &target_image,
-            &target_metadata,
+            map_inputs(
+                &source_image,
+                &source_metadata,
+                &target_image,
+                &target_metadata,
+            ),
             &rift(&[(0, 0), (10, 100), (20, 200)]),
             &rift(&[(0, 0), (1, 1)]),
             &rift(&[(0, 0), (1, 1)]),
@@ -2243,10 +2271,12 @@ mod tests {
         ]);
 
         let map = build_cli_sequence_table_map(
-            &source_image,
-            &source_metadata,
-            &target_image,
-            &target_metadata,
+            map_inputs(
+                &source_image,
+                &source_metadata,
+                &target_image,
+                &target_metadata,
+            ),
             &rift(&[(0, 0)]),
             &rift(&[(0, 0), (1, 1)]),
             &rift(&[(0, 0)]),
@@ -2286,10 +2316,12 @@ mod tests {
         let table_maps = empty_table_maps();
 
         let map = build_cli_triplet_table_map(
-            &source_image,
-            &source_metadata,
-            &target_image,
-            &target_metadata,
+            map_inputs(
+                &source_image,
+                &source_metadata,
+                &target_image,
+                &target_metadata,
+            ),
             &rift(&[(0, 0), (10, 100), (11, 101), (20, 200), (21, 201)]),
             &table_maps,
             &rift(&[(0, 0)]),
@@ -2330,10 +2362,12 @@ mod tests {
         table_maps[0x02] = rift(&[(0, 0), (1, 2), (2, 1)]);
 
         let map = build_cli_triplet_table_map(
-            &source_image,
-            &source_metadata,
-            &target_image,
-            &target_metadata,
+            map_inputs(
+                &source_image,
+                &source_metadata,
+                &target_image,
+                &target_metadata,
+            ),
             &rift(&[(0, 0)]),
             &table_maps,
             &rift(&[(0, 0)]),
@@ -2364,10 +2398,12 @@ mod tests {
         table_maps[0x06] = rift(&[(0, 0), (1, 2)]);
 
         let map = build_cli_triplet_table_map(
-            &source_image,
-            &source_metadata,
-            &target_image,
-            &target_metadata,
+            map_inputs(
+                &source_image,
+                &source_metadata,
+                &target_image,
+                &target_metadata,
+            ),
             &rift(&[(0, 0)]),
             &table_maps,
             &rift(&[(0, 0)]),
@@ -2422,10 +2458,12 @@ mod tests {
         table_maps[0x02] = rift(&[(0, 0)]);
 
         let map = build_cli_triplet_table_map(
-            &source_image,
-            &source_metadata,
-            &target_image,
-            &target_metadata,
+            map_inputs(
+                &source_image,
+                &source_metadata,
+                &target_image,
+                &target_metadata,
+            ),
             &rift(&[(0, 0), (10, 100), (11, 101), (20, 200), (30, 300)]),
             &table_maps,
             &rift(&[(0, 0)]),
@@ -2465,10 +2503,12 @@ mod tests {
         table_maps[0x01] = rift(&[(0, 0)]);
 
         let map = build_cli_triplet_table_map(
-            &source_image,
-            &source_metadata,
-            &target_image,
-            &target_metadata,
+            map_inputs(
+                &source_image,
+                &source_metadata,
+                &target_image,
+                &target_metadata,
+            ),
             &rift(&[(0, 0), (10, 100), (11, 101), (20, 200), (30, 300)]),
             &table_maps,
             &rift(&[(0, 0)]),
@@ -2499,10 +2539,12 @@ mod tests {
         let table_maps = empty_table_maps();
 
         let map = build_cli_triplet_table_map(
-            &source_image,
-            &source_metadata,
-            &target_image,
-            &target_metadata,
+            map_inputs(
+                &source_image,
+                &source_metadata,
+                &target_image,
+                &target_metadata,
+            ),
             &rift(&[(0, 0)]),
             &table_maps,
             &rift(&[(0, 0)]),
