@@ -4,6 +4,7 @@ const PNPM_LOCK: &str = include_str!("../lab/frida/pnpm-lock.yaml");
 const PNPM_WORKSPACE: &str = include_str!("../lab/frida/pnpm-workspace.yaml");
 const HOST_WRAPPER: &str = include_str!("../lab/frida/capture-export-oracle.mjs");
 const INJECT_IMPORTER: &str = include_str!("../lab/frida/import-inject-capture.mjs");
+const STAGE_PROMOTER: &str = include_str!("../lab/frida/promote-stage-fixture.mjs");
 const MANAGED_CAPTURE: &str = include_str!("../lab/frida/capture-managed-corpus.sh");
 const STAGE_MAP_STATUS: &str = include_str!("../lab/frida/check-stage-symbol-map.sh");
 const MANAGED_CORPUS: &str = include_str!("../lab/frida/managed-corpus.ps1");
@@ -57,9 +58,11 @@ fn frida_export_oracle_scaffold_has_expected_entrypoints() {
     for required in [
         "\"capture:export\"",
         "\"import:inject\"",
+        "\"promote:stage\"",
         "\"check\"",
         "node --check ./capture-export-oracle.mjs",
         "node --check ./import-inject-capture.mjs",
+        "node --check ./promote-stage-fixture.mjs",
         "node --check ./agent/export-oracle.js",
         "node --check ./agent/stage/reader-window.js",
         "node --check ./agent/stage/cli-managed.js",
@@ -87,6 +90,48 @@ fn frida_export_oracle_scaffold_has_expected_entrypoints() {
         assert!(
             HOST_WRAPPER.contains(required),
             "host wrapper should contain {required}"
+        );
+    }
+}
+
+#[test]
+fn stage_fixture_promoter_has_first_call_record_mode() {
+    for required in [
+        "promote-stage-fixture.mjs",
+        "--mode cli-blob-compressed-integer",
+        "--normalized <normalized-dir>",
+        "--source-case <id>",
+        "--case-id <id>",
+        "--force",
+        "CliBlobCompressedInteger",
+        "CliBlobCompressedIntegerCallRecord",
+        "GetBlobContent",
+        "encoded-width/decoded-length/encoded-prefix",
+        "selectCliBlobCompressedIntegerCalls",
+        "stableCliBlobObject",
+        "stage_leave_object_count",
+        "one_byte_width_count",
+        "two_byte_width_count",
+        "four_byte_width_count",
+    ] {
+        assert!(
+            STAGE_PROMOTER.contains(required),
+            "stage promoter should contain {required}"
+        );
+    }
+
+    for required in [
+        "pnpm --dir lab/frida promote:stage",
+        "--mode cli-blob-compressed-integer",
+        "--normalized lab/frida/out/managed-corpus/normalized",
+        "--source-case managed-corpus-msdelta",
+        "--case-id cli-blob-compressed-integer-win26100",
+        "strips raw pointers and lab",
+        "successful one-byte blob length",
+    ] {
+        assert!(
+            LAB_README.contains(required) || FRIDA_SYSTEM_DOC.contains(required),
+            "lab docs should describe stage promotion with {required}"
         );
     }
 }

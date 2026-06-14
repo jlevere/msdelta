@@ -155,6 +155,29 @@ bytes and different native deltas. Treat `tests/fixtures/atoms/ManagedNativeCorp
 as a curated snapshot and treat fresh `lab/frida/out/managed-corpus` output as a
 new validated sample set.
 
+## Stage Fixture Promotion
+
+Promote small atom fixtures from a normalized lab capture instead of copying
+stage records by hand. The first promotion mode covers successful
+`CliBlobCompressedInteger` `GetBlobContent` call records:
+
+```sh
+pnpm --dir lab/frida promote:stage -- \
+  --mode cli-blob-compressed-integer \
+  --normalized lab/frida/out/managed-corpus/normalized \
+  --source-case managed-corpus-msdelta \
+  --out tests/fixtures/atoms/FridaStageCapture/cli-blob-compressed-integer-win26100 \
+  --case-id cli-blob-compressed-integer-win26100 \
+  --force
+```
+
+That mode selects one representative per
+encoded-width/decoded-length/encoded-prefix tuple, strips raw pointers and lab
+paths, rewrites stable event IDs, and emits `case.toml`, `capture.json`, and
+normalized object JSON files. It intentionally records current coverage limits;
+the Win26100 managed corpus only exercises successful one-byte blob length
+prefixes, so malformed and multi-byte cases still need targeted native samples.
+
 ## DLL Build Updates
 
 Export capture is not locked to the current DLL build: it hooks public exports
@@ -195,7 +218,8 @@ Future atoms should follow the same shape. Keep private layout offsets in the
 symbol map, keep extraction code in one atom-family module, and register a named
 capture adapter through `MSDELTA_STAGE_CAPTURE_ADAPTERS`. The generic stage
 agent should not grow atom-specific branches beyond calling the adapter's
-`captureInputs`, `readObject`, and `readPlan` functions.
+`captureInputs`, optional `captureState`, `readObject`, and `readPlan`
+functions.
 
 ## Current Scope
 

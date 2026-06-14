@@ -76,7 +76,7 @@ FridaSymbolMap	lab	fixture	all	-	module hash plus internal RVA hook map	partial	
 FridaStageCapture	lab	fixture	pe,cli	-	internal function entry and exit hooks	partial	lab_only	curated	Generalize parser object plus reader-window capture for PE info, CLI4, and compression rift stages
 FridaCallStageCapture	lab	fixture	pe,cli	-	internal pure-method entry and exit hooks	partial	lab_only	curated	Add targeted call harnesses for non-identity MapCoded and GetNumber edge cases
 FridaObjectNormalizer	lab	fixture	pe,cli	-	Frida logical object readers	partial	lab_only	curated	Add PE info, CLI4 metadata/map, and compression-rift normalizers before broad transform hooks
-FridaFixturePromotion	lab	fixture	all	-	capture to atom fixture promotion	partial	lab_only	curated	Turn ad hoc stage fixture curation into a reusable promotion command
+FridaFixturePromotion	lab	fixture	all	-	capture to atom fixture promotion	partial	lab_only	curated	Extend promote-stage-fixture beyond CliBlobCompressedInteger call records to stage objects reader-window blobs and more call records
 WindowsVersionMatrix	lab	fixture	all	-	Windows build and DLL hash matrix	missing	lab_only	none	After promotion tooling, run the same capture set across another Windows build and group drift by atom
 NativeOracleDiff	lab	fixture	all	-	normalized native capture comparator	missing	lab_only	none	Build comparator for Rust stage outputs against promoted native capture objects before CLI rift work scales up
 BulkFailureClassifier	lab	fixture	all	-	corpus failure bucketing	missing	lab_only	none	After each composed milestone, bucket native mismatches by atom, section, flags, and byte range
