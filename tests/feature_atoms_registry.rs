@@ -91,6 +91,8 @@ const REQUIRED_FRIDA_LAB_ATOMS: &[&str] = &[
     "NativeOracleDiff",
 ];
 
+const REQUIRED_X64_ATOMS: &[&str] = &["DisasmX64", "PdataX64"];
+
 const CLASSIC_MANAGED_APPLY_ALLOWED_ATOMS: &[&str] = &[
     "ManagedFileTypeBranch",
     "PePreprocessManagedClassic",
@@ -207,6 +209,21 @@ fn managed_cli_atom_set_is_explicit() {
         assert!(
             atoms.contains(required),
             "managed CLI atom {required} is missing from registry"
+        );
+    }
+}
+
+#[test]
+fn native_x64_atom_set_is_explicit() {
+    let atoms = registry_rows()
+        .into_iter()
+        .map(|row| row.atom)
+        .collect::<HashSet<_>>();
+
+    for required in REQUIRED_X64_ATOMS {
+        assert!(
+            atoms.contains(required),
+            "native x64 atom {required} is missing from registry"
         );
     }
 }

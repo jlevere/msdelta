@@ -36,7 +36,7 @@ RelativeJmpsX86	x86	source_transform	0x2,0x10	0x80	RelativeJmpsX86::Run	partial	
 SmashLockPrefixesX86	x86	source_transform	0x2,0x10	unknown	SmashLockPrefixesX86::Run	missing	reject	needs_fixture	Locate flag table entry and define source normalization contract
 PostProcessI386E8	x86	postprocess	0x1,0x2,0x10	0x1	PostProcessI386E8	supported	allow	release	Add section-scoped PE cases if native gating differs from whole-buffer path
 DisasmX64	x64	source_transform	0x8,0x20	0x200	TransformDisasmX64::Run	partial	allow	bulk	Isolate remaining RIP-relative displacement failures
-PdataX64	x64	source_transform	0x8,0x20	0x400	TransformPdataX64::Run	partial	allow	bulk	Add xdata handler slot and chained unwind fixtures
+PdataX64	x64	source_transform	0x8,0x20	0x400	TransformPdataX64::Run	partial	allow	unit	Rust atom boundary remaps typed RUNTIME_FUNCTION RVAs and the first flagged unwind-info RVA slot; next gap is native stage fixture parity plus chained-unwind coverage
 DisasmIa64	ia64	source_transform	0x4	unknown	RiftTransformDisasmIa64 graph string	missing	reject	needs_fixture	Find constructor or confirm legacy graph-only behavior
 PdataIa64	ia64	source_transform	0x4	unknown	RiftTransformPdataIa64 graph string	missing	reject	needs_fixture	Acquire IA64 fixture or explicitly descope
 DisasmARM	arm	source_transform	0x40	0x80000	TransformDisasmARM::Run	missing	reject	needs_fixture	Acquire ARMNT fixture with BL and MOVW/MOVT cases

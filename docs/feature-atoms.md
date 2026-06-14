@@ -486,6 +486,28 @@ header.
   `DataDirectoryKind::ClrRuntimeHeader` rather than hard-coded COM descriptor
   ordinals.
 
+## Native AMD64 Atoms
+
+Native AMD64 transforms live under the `x64` layer. Keep the AMD64-specific
+pieces separate from the architecture-neutral PE transforms:
+
+- `PdataX64` owns only the exception-directory `.pdata` array. It maps each
+  nonzero `RUNTIME_FUNCTION` RVA field (`BeginAddress`, `EndAddress`, and
+  `UnwindData`) through the preprocess rift. When `UnwindData` points outside
+  `.pdata` to flagged unwind info, it also maps the first 4-byte RVA slot after
+  the unwind-code array. The atom reports record, runtime-function field,
+  unwind-info slot, rewrite, and truncated-tail counts.
+- `PdataX64` depends on `PeDataDirectories` and `PeLogicalSections` for locating
+  the file range. It should not rediscover PE headers or section layout.
+- `DisasmX64` owns the `.pdata`-driven instruction walk and RIP-relative/rel32
+  displacement rewrites. Split the pure length decoder from the byte transform
+  before promoting it past bulk evidence.
+
+The current `PdataX64` Rust atom is unit-backed. Do not promote it to
+fixture-backed until Frida captures the native transform entry and exit buffers,
+the exception-directory range, the rift entries, chained-unwind cases, and the
+normalized stats for at least one real AMD64 PE delta.
+
 ## Near-Term Milestones
 
 1. Keep `RiftTable::reverse` debug/release parity in the release suite; the
@@ -509,4 +531,6 @@ header.
    `TransformCliMetadata`.
 8. Run the bulk classifier after each composed milestone and update the registry
    buckets by atom, section, flag, and byte range.
-9. Add ARM64 classification and fixtures before implementing ARM64 transforms.
+9. Promote `PdataX64` with a native stage fixture, then split `DisasmX64` into
+   decoder and transform atoms.
+10. Add ARM64 classification and fixtures before implementing ARM64 transforms.
