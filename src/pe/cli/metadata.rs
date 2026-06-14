@@ -897,6 +897,7 @@ fn align_4(value: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pe::parse::PeOptionalHeaderKind;
     use serde::Deserialize;
     use std::path::{Path, PathBuf};
 
@@ -1189,21 +1190,40 @@ mod tests {
         put_u16(&mut image, 0x96, 0x210e);
 
         let opt = 0x98usize;
-        if pe32_plus {
-            put_u16(&mut image, opt, 0x20b);
-            put_u64(&mut image, opt + 24, 0x0000_0001_4000_0000);
-            put_u32(&mut image, opt + 56, 0x3000);
-            put_u32(&mut image, opt + 108, 16);
-            put_u32(&mut image, opt + 112 + 14 * 8, 0x2000);
-            put_u32(&mut image, opt + 112 + 14 * 8 + 4, 0x48);
+        let optional_kind = if pe32_plus {
+            PeOptionalHeaderKind::Pe32Plus
         } else {
-            put_u16(&mut image, opt, 0x10b);
-            put_u32(&mut image, opt + 28, 0x0040_0000);
-            put_u32(&mut image, opt + 56, 0x3000);
-            put_u32(&mut image, opt + 92, 16);
-            put_u32(&mut image, opt + 96 + 14 * 8, 0x2000);
-            put_u32(&mut image, opt + 96 + 14 * 8 + 4, 0x48);
+            PeOptionalHeaderKind::Pe32
+        };
+        let clr_directory = DataDirectoryKind::ClrRuntimeHeader.index();
+        put_u32(
+            &mut image,
+            opt + optional_kind.size_of_image_relative_offset(),
+            0x3000,
+        );
+        put_u32(
+            &mut image,
+            opt + optional_kind.number_of_rva_and_sizes_relative_offset(),
+            DataDirectoryKind::COUNT as u32,
+        );
+        let directory_base = opt + optional_kind.data_directories_relative_offset();
+        if pe32_plus {
+            put_u16(&mut image, opt, PeOptionalHeaderKind::PE32_PLUS_MAGIC);
+            put_u64(
+                &mut image,
+                opt + optional_kind.image_base_relative_offset(),
+                0x0000_0001_4000_0000,
+            );
+        } else {
+            put_u16(&mut image, opt, PeOptionalHeaderKind::PE32_MAGIC);
+            put_u32(
+                &mut image,
+                opt + optional_kind.image_base_relative_offset(),
+                0x0040_0000,
+            );
         }
+        put_u32(&mut image, directory_base + clr_directory * 8, 0x2000);
+        put_u32(&mut image, directory_base + clr_directory * 8 + 4, 0x48);
 
         let section = opt + if pe32_plus { 0xf0 } else { 0xe0 };
         image[section..section + 5].copy_from_slice(b".text");

@@ -409,6 +409,27 @@ Use this shape for future oracle atoms:
    snapshots; do not invent reader blobs when the native function did not
    consume a bitstream.
 
+## PE Header Layout
+
+`PeHeaderLayout` is the typed PE NT-header and optional-header layout atom. It
+owns the raw file offsets for the fields that MSDelta transforms mutate or use
+to route managed/native behavior:
+
+- `e_lfanew` and PE signature validation
+- COFF `Machine`, section count, `TimeDateStamp`, and optional-header size
+- PE32 vs PE32+ optional-header kind
+- `ImageBase`, `SizeOfImage`, `CheckSum`, `NumberOfRvaAndSizes`, and the data
+  directory table start
+- Section-table header offsets
+
+Transform and classifier code should not rediscover these offsets by hand. Use
+`PeHeaderLayout` for header field access, then use `PeDataDirectories` and
+`PeLogicalSections` for directory and RVA/file-offset interpretation.
+
+This atom is deliberately layout-only. It does not prove that a directory points
+to mapped bytes, that a section is semantically valid, or that a managed image is
+supported by the transform pipeline.
+
 ## PE Logical Sections
 
 `PeLogicalSections` is the architecture-neutral section/address-domain atom.

@@ -4,6 +4,29 @@ use crate::pe::structs::PeView;
 use crate::{Error, Result};
 use std::ops::Range;
 
+const DOS_E_LFANEW_OFFSET: usize = 0x3c;
+const PE_SIGNATURE: &[u8; 4] = b"PE\0\0";
+const PE_SIGNATURE_SIZE: usize = 4;
+const COFF_HEADER_SIZE: usize = 20;
+const SECTION_HEADER_SIZE: usize = 40;
+
+fn read_array<const N: usize>(data: &[u8], offset: usize) -> Option<[u8; N]> {
+    let end = offset.checked_add(N)?;
+    data.get(offset..end)?.try_into().ok()
+}
+
+fn read_u16(data: &[u8], offset: usize) -> Option<u16> {
+    Some(u16::from_le_bytes(read_array(data, offset)?))
+}
+
+fn read_u32(data: &[u8], offset: usize) -> Option<u32> {
+    Some(u32::from_le_bytes(read_array(data, offset)?))
+}
+
+fn read_u64(data: &[u8], offset: usize) -> Option<u64> {
+    Some(u64::from_le_bytes(read_array(data, offset)?))
+}
+
 /// Parsed PE metadata needed for delta transforms.
 #[derive(Debug, Clone)]
 pub struct PeInfo {
@@ -58,8 +81,242 @@ pub enum DataDirectoryKind {
 impl DataDirectoryKind {
     pub const COUNT: usize = 16;
 
+    pub const fn from_index(index: usize) -> Option<Self> {
+        match index {
+            0 => Some(Self::Export),
+            1 => Some(Self::Import),
+            2 => Some(Self::Resource),
+            3 => Some(Self::Exception),
+            4 => Some(Self::Certificate),
+            5 => Some(Self::BaseRelocation),
+            6 => Some(Self::Debug),
+            7 => Some(Self::Architecture),
+            8 => Some(Self::GlobalPointer),
+            9 => Some(Self::Tls),
+            10 => Some(Self::LoadConfig),
+            11 => Some(Self::BoundImport),
+            12 => Some(Self::ImportAddressTable),
+            13 => Some(Self::DelayImport),
+            14 => Some(Self::ClrRuntimeHeader),
+            15 => Some(Self::Reserved),
+            _ => None,
+        }
+    }
+
     pub const fn index(self) -> usize {
         self as usize
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PeOptionalHeaderKind {
+    Pe32,
+    Pe32Plus,
+}
+
+impl PeOptionalHeaderKind {
+    pub const PE32_MAGIC: u16 = 0x010b;
+    pub const PE32_PLUS_MAGIC: u16 = 0x020b;
+
+    pub const fn from_magic(magic: u16) -> Option<Self> {
+        match magic {
+            Self::PE32_MAGIC => Some(Self::Pe32),
+            Self::PE32_PLUS_MAGIC => Some(Self::Pe32Plus),
+            _ => None,
+        }
+    }
+
+    pub const fn is_64bit(self) -> bool {
+        matches!(self, Self::Pe32Plus)
+    }
+
+    pub const fn image_base_relative_offset(self) -> usize {
+        match self {
+            Self::Pe32 => 0x1c,
+            Self::Pe32Plus => 0x18,
+        }
+    }
+
+    pub const fn image_base_width(self) -> usize {
+        match self {
+            Self::Pe32 => 4,
+            Self::Pe32Plus => 8,
+        }
+    }
+
+    pub const fn size_of_image_relative_offset(self) -> usize {
+        0x38
+    }
+
+    pub const fn checksum_relative_offset(self) -> usize {
+        0x40
+    }
+
+    pub const fn number_of_rva_and_sizes_relative_offset(self) -> usize {
+        match self {
+            Self::Pe32 => 0x5c,
+            Self::Pe32Plus => 0x6c,
+        }
+    }
+
+    pub const fn data_directories_relative_offset(self) -> usize {
+        match self {
+            Self::Pe32 => 0x60,
+            Self::Pe32Plus => 0x70,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PeHeaderLayout {
+    pub nt_headers_offset: usize,
+    pub file_header_offset: usize,
+    pub optional_header_offset: usize,
+    pub optional_header_size: usize,
+    pub optional_header_kind: PeOptionalHeaderKind,
+    pub machine: u16,
+    pub number_of_sections: usize,
+    pub number_of_rva_and_sizes: usize,
+}
+
+impl PeHeaderLayout {
+    pub fn parse(data: &[u8]) -> Result<Self> {
+        if data.len() < DOS_E_LFANEW_OFFSET + 4 {
+            return Err(Error::Malformed("PE: too small"));
+        }
+        let nt_headers_offset = read_u32(data, DOS_E_LFANEW_OFFSET)
+            .ok_or(Error::Malformed("PE: missing e_lfanew"))?
+            as usize;
+        if data.get(nt_headers_offset..nt_headers_offset + PE_SIGNATURE_SIZE) != Some(PE_SIGNATURE)
+        {
+            return Err(Error::Malformed("PE: bad signature"));
+        }
+
+        let file_header_offset = nt_headers_offset
+            .checked_add(PE_SIGNATURE_SIZE)
+            .ok_or(Error::Malformed("PE: header offset overflow"))?;
+        let optional_header_offset = file_header_offset
+            .checked_add(COFF_HEADER_SIZE)
+            .ok_or(Error::Malformed("PE: header offset overflow"))?;
+        if data
+            .get(file_header_offset..optional_header_offset)
+            .is_none()
+        {
+            return Err(Error::Malformed("PE: truncated COFF header"));
+        }
+
+        let machine =
+            read_u16(data, file_header_offset).ok_or(Error::Malformed("PE: missing machine"))?;
+        let number_of_sections = read_u16(data, file_header_offset + 2)
+            .ok_or(Error::Malformed("PE: missing section count"))?
+            as usize;
+        let optional_header_size = read_u16(data, file_header_offset + 16)
+            .ok_or(Error::Malformed("PE: missing optional-header size"))?
+            as usize;
+        let magic = read_u16(data, optional_header_offset)
+            .ok_or(Error::Malformed("PE: missing optional header"))?;
+        let optional_header_kind = PeOptionalHeaderKind::from_magic(magic)
+            .ok_or(Error::Malformed("PE: bad optional magic"))?;
+        let number_of_rva_and_sizes_offset = optional_header_offset
+            .checked_add(optional_header_kind.number_of_rva_and_sizes_relative_offset())
+            .ok_or(Error::Malformed("PE: header offset overflow"))?;
+        let number_of_rva_and_sizes = read_u32(data, number_of_rva_and_sizes_offset)
+            .ok_or(Error::Malformed("PE: missing data-directory count"))?
+            as usize;
+
+        Ok(Self {
+            nt_headers_offset,
+            file_header_offset,
+            optional_header_offset,
+            optional_header_size,
+            optional_header_kind,
+            machine,
+            number_of_sections,
+            number_of_rva_and_sizes,
+        })
+    }
+
+    pub const fn is_64bit(self) -> bool {
+        self.optional_header_kind.is_64bit()
+    }
+
+    pub fn timestamp_offset(self) -> Option<usize> {
+        self.file_header_offset.checked_add(4)
+    }
+
+    pub fn image_base_offset(self) -> Option<usize> {
+        self.optional_header_offset
+            .checked_add(self.optional_header_kind.image_base_relative_offset())
+    }
+
+    pub const fn image_base_width(self) -> usize {
+        self.optional_header_kind.image_base_width()
+    }
+
+    pub fn size_of_image_offset(self) -> Option<usize> {
+        self.optional_header_offset
+            .checked_add(self.optional_header_kind.size_of_image_relative_offset())
+    }
+
+    pub fn checksum_offset(self) -> Option<usize> {
+        self.optional_header_offset
+            .checked_add(self.optional_header_kind.checksum_relative_offset())
+    }
+
+    pub fn number_of_rva_and_sizes_offset(self) -> Option<usize> {
+        self.optional_header_offset.checked_add(
+            self.optional_header_kind
+                .number_of_rva_and_sizes_relative_offset(),
+        )
+    }
+
+    pub fn data_directories_offset(self) -> Option<usize> {
+        self.optional_header_offset
+            .checked_add(self.optional_header_kind.data_directories_relative_offset())
+    }
+
+    pub fn data_directory_offset(self, kind: DataDirectoryKind) -> Option<usize> {
+        if self.number_of_rva_and_sizes <= kind.index() {
+            return None;
+        }
+        self.data_directories_offset()?
+            .checked_add(kind.index().checked_mul(8)?)
+    }
+
+    pub fn data_directory(self, data: &[u8], kind: DataDirectoryKind) -> Option<PeDataDirectory> {
+        let offset = self.data_directory_offset(kind)?;
+        Some(PeDataDirectory {
+            rva: read_u32(data, offset)?,
+            size: read_u32(data, offset + 4)?,
+        })
+    }
+
+    pub fn section_table_offset(self) -> Option<usize> {
+        self.optional_header_offset
+            .checked_add(self.optional_header_size)
+    }
+
+    pub fn section_header_offset(self, index: usize) -> Option<usize> {
+        if index >= self.number_of_sections {
+            return None;
+        }
+        self.section_table_offset()?
+            .checked_add(index.checked_mul(SECTION_HEADER_SIZE)?)
+    }
+
+    pub fn section(self, data: &[u8], index: usize) -> Option<SectionInfo> {
+        let offset = self.section_header_offset(index)?;
+        let end = offset.checked_add(SECTION_HEADER_SIZE)?;
+        let bytes = data.get(offset..end)?;
+        let name_len = bytes[..8].iter().position(|&b| b == 0).unwrap_or(8);
+        Some(SectionInfo {
+            name: String::from_utf8_lossy(&bytes[..name_len]).to_string(),
+            virtual_size: read_u32(data, offset + 8)?,
+            virtual_address: read_u32(data, offset + 12)?,
+            raw_size: read_u32(data, offset + 16)?,
+            raw_offset: read_u32(data, offset + 20)?,
+            characteristics: read_u32(data, offset + 36)?,
+        })
     }
 }
 
@@ -340,6 +597,100 @@ mod tests {
         }
     }
 
+    fn put_u16(data: &mut [u8], offset: usize, value: u16) {
+        data[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn put_u32(data: &mut [u8], offset: usize, value: u32) {
+        data[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn put_u64(data: &mut [u8], offset: usize, value: u64) {
+        data[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn synthetic_header_pe(pe32_plus: bool, directory_count: u32) -> Vec<u8> {
+        let mut image = vec![0u8; 0x600];
+        put_u32(&mut image, DOS_E_LFANEW_OFFSET, 0x80);
+        image[0x80..0x84].copy_from_slice(PE_SIGNATURE);
+
+        let file_header = 0x84;
+        let optional_header = 0x98;
+        let optional_header_size = if pe32_plus { 0xf0 } else { 0xe0 };
+        put_u16(
+            &mut image,
+            file_header,
+            if pe32_plus { 0x8664 } else { 0x014c },
+        );
+        put_u16(&mut image, file_header + 2, 1);
+        put_u32(&mut image, file_header + 4, 0x1234_5678);
+        put_u16(&mut image, file_header + 16, optional_header_size);
+
+        if pe32_plus {
+            put_u16(
+                &mut image,
+                optional_header,
+                PeOptionalHeaderKind::PE32_PLUS_MAGIC,
+            );
+            put_u64(&mut image, optional_header + 0x18, 0x0000_0001_4000_0000);
+        } else {
+            put_u16(
+                &mut image,
+                optional_header,
+                PeOptionalHeaderKind::PE32_MAGIC,
+            );
+            put_u32(&mut image, optional_header + 0x1c, 0x0040_0000);
+        }
+        put_u32(&mut image, optional_header + 0x38, 0x3000);
+        put_u32(&mut image, optional_header + 0x40, 0xfeed_beef);
+        let directory_count_offset = optional_header
+            + if pe32_plus {
+                (PeOptionalHeaderKind::Pe32Plus).number_of_rva_and_sizes_relative_offset()
+            } else {
+                (PeOptionalHeaderKind::Pe32).number_of_rva_and_sizes_relative_offset()
+            };
+        let directory_base = optional_header
+            + if pe32_plus {
+                (PeOptionalHeaderKind::Pe32Plus).data_directories_relative_offset()
+            } else {
+                (PeOptionalHeaderKind::Pe32).data_directories_relative_offset()
+            };
+        put_u32(&mut image, directory_count_offset, directory_count);
+        if directory_count > DataDirectoryKind::Import.index() as u32 {
+            put_u32(
+                &mut image,
+                directory_base + DataDirectoryKind::Import.index() * 8,
+                0x2100,
+            );
+            put_u32(
+                &mut image,
+                directory_base + DataDirectoryKind::Import.index() * 8 + 4,
+                0x28,
+            );
+        }
+        if directory_count > DataDirectoryKind::ClrRuntimeHeader.index() as u32 {
+            put_u32(
+                &mut image,
+                directory_base + DataDirectoryKind::ClrRuntimeHeader.index() * 8,
+                0x2200,
+            );
+            put_u32(
+                &mut image,
+                directory_base + DataDirectoryKind::ClrRuntimeHeader.index() * 8 + 4,
+                0x48,
+            );
+        }
+
+        let section = optional_header + optional_header_size as usize;
+        image[section..section + 5].copy_from_slice(b".text");
+        put_u32(&mut image, section + 8, 0x1000);
+        put_u32(&mut image, section + 12, 0x2000);
+        put_u32(&mut image, section + 16, 0x1000);
+        put_u32(&mut image, section + 20, 0x200);
+        put_u32(&mut image, section + 36, 0x6000_0020);
+        image
+    }
+
     #[test]
     fn section_maps_rva_through_logical_span() {
         let text = section(".text", 0x1000, 0x180, 0x400, 0x200);
@@ -412,6 +763,11 @@ mod tests {
         assert_eq!(DataDirectoryKind::ClrRuntimeHeader.index(), 14);
         assert_eq!(DataDirectoryKind::Reserved.index(), 15);
         assert_eq!(DataDirectoryKind::COUNT, 16);
+        assert_eq!(
+            DataDirectoryKind::from_index(14),
+            Some(DataDirectoryKind::ClrRuntimeHeader)
+        );
+        assert_eq!(DataDirectoryKind::from_index(16), None);
     }
 
     #[test]
@@ -450,5 +806,70 @@ mod tests {
             None,
             "missing optional-header directory slots remain absent"
         );
+    }
+
+    #[test]
+    fn pe_header_layout_parses_pe32_offsets() {
+        let image = synthetic_header_pe(false, DataDirectoryKind::COUNT as u32);
+        let layout = PeHeaderLayout::parse(&image).unwrap();
+
+        assert_eq!(layout.nt_headers_offset, 0x80);
+        assert_eq!(layout.file_header_offset, 0x84);
+        assert_eq!(layout.optional_header_offset, 0x98);
+        assert_eq!(layout.optional_header_kind, PeOptionalHeaderKind::Pe32);
+        assert_eq!(layout.machine, 0x014c);
+        assert!(!layout.is_64bit());
+        assert_eq!(layout.timestamp_offset(), Some(0x88));
+        assert_eq!(layout.image_base_offset(), Some(0xb4));
+        assert_eq!(layout.image_base_width(), 4);
+        assert_eq!(layout.size_of_image_offset(), Some(0xd0));
+        assert_eq!(layout.checksum_offset(), Some(0xd8));
+        assert_eq!(layout.data_directories_offset(), Some(0xf8));
+        assert_eq!(
+            layout.data_directory(&image, DataDirectoryKind::ClrRuntimeHeader),
+            Some(PeDataDirectory {
+                rva: 0x2200,
+                size: 0x48
+            })
+        );
+        assert_eq!(layout.section_table_offset(), Some(0x178));
+        assert_eq!(layout.section(&image, 0).unwrap().name, ".text");
+    }
+
+    #[test]
+    fn pe_header_layout_parses_pe32_plus_offsets_and_missing_slots() {
+        let image = synthetic_header_pe(true, 1);
+        let layout = PeHeaderLayout::parse(&image).unwrap();
+
+        assert_eq!(layout.optional_header_kind, PeOptionalHeaderKind::Pe32Plus);
+        assert_eq!(layout.machine, 0x8664);
+        assert!(layout.is_64bit());
+        assert_eq!(layout.image_base_offset(), Some(0xb0));
+        assert_eq!(layout.image_base_width(), 8);
+        assert_eq!(layout.data_directories_offset(), Some(0x108));
+        assert_eq!(
+            layout.data_directory(&image, DataDirectoryKind::Import),
+            None
+        );
+    }
+
+    #[test]
+    fn parse_lenient_uses_header_layout_contract() {
+        let image = synthetic_header_pe(true, DataDirectoryKind::COUNT as u32);
+        let pe = PeInfo::parse_lenient(&image).unwrap();
+
+        assert_eq!(pe.image_base, 0x0000_0001_4000_0000);
+        assert_eq!(pe.size_of_image, 0x3000);
+        assert_eq!(pe.timestamp, 0x1234_5678);
+        assert_eq!(pe.checksum, 0xfeed_beef);
+        assert!(pe.is_64bit);
+        assert_eq!(
+            pe.data_directory(DataDirectoryKind::Import),
+            Some(PeDataDirectory {
+                rva: 0x2100,
+                size: 0x28
+            })
+        );
+        assert_eq!(pe.sections[0].name, ".text");
     }
 }

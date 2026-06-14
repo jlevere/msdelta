@@ -5,7 +5,7 @@
 //! "inferred relocations" which scans for 32-bit pointers within
 //! the PE's image range and rebases them using the rift table.
 
-use super::parse::{DataDirectoryKind, PeInfo};
+use super::parse::{DataDirectoryKind, PeHeaderLayout, PeInfo, PeOptionalHeaderKind};
 use crate::Result;
 
 /// MSDelta file type flags.
@@ -100,7 +100,7 @@ pub(crate) fn build_transformed_source(
         unbind_pe(buf, pe);
     }
     // PreProcessPEForApply writes the TARGET COFF TimeDateStamp into the source
-    // FileHeader (offset e_lfanew+8) so copies of it land the target value
+    // FileHeader so copies of it land the target value.
     // (post-decode patching only covers known timestamp sites, not arbitrary
     // copies into other sections). The transforms never touch this field, so
     // the write order does not matter.
@@ -143,7 +143,7 @@ pub(crate) fn build_transformed_source(
                 }
             }
         }
-        set_header_image_base(buf, target_base, true);
+        set_header_image_base(buf, target_base);
         return;
     }
     let mut marker = vec![0u8; buf.len()];
@@ -168,7 +168,7 @@ pub(crate) fn build_transformed_source(
     if flags & 0x100 != 0 {
         transform_source_calls_i386(buf, pe, rift, &marker);
     }
-    set_header_image_base(buf, target_base, false);
+    set_header_image_base(buf, target_base);
 }
 
 /// Write the TARGET image base into the source header's `ImageBase` field, the
@@ -177,26 +177,36 @@ pub(crate) fn build_transformed_source(
 /// was defined against this T(source), so when source and target image bases
 /// differ (e.g. a rebased binary), the field must already hold the target value
 /// here -- otherwise a copy that reads it lands the stale source base.
-/// PE32+ stores an 8-byte ImageBase at optional-header offset 0x18; PE32 a
-/// 4-byte ImageBase at offset 0x1c.
-fn set_header_image_base(buf: &mut [u8], target_base: u64, is_64bit: bool) {
-    let Some(e) = crate::pe::structs::pe_header_offset(buf) else {
+fn set_header_image_base(buf: &mut [u8], target_base: u64) {
+    let Ok(layout) = PeHeaderLayout::parse(buf) else {
         return;
     };
-    let opt = e + 24; // optional header = signature(4) + COFF header(20)
-    if is_64bit {
-        crate::pe::structs::write_u64(buf, opt + 0x18, target_base); // PE32+ ImageBase
-    } else {
-        crate::pe::structs::write_u32(buf, opt + 0x1c, target_base as u32); // PE32 ImageBase
-    }
+    let Some(offset) = layout.image_base_offset() else {
+        return;
+    };
+    match layout.optional_header_kind {
+        PeOptionalHeaderKind::Pe32Plus if offset + 8 <= buf.len() => {
+            buf[offset..offset + 8].copy_from_slice(&target_base.to_le_bytes());
+        }
+        PeOptionalHeaderKind::Pe32 if offset + 4 <= buf.len() => {
+            buf[offset..offset + 4].copy_from_slice(&(target_base as u32).to_le_bytes());
+        }
+        _ => {}
+    };
 }
 
-/// Write the target COFF `TimeDateStamp` into the PE `FileHeader` (at
-/// `e_lfanew + 8`), as `PreProcessPEForApply` does.
+/// Write the target COFF `TimeDateStamp` into the PE `FileHeader`, as
+/// `PreProcessPEForApply` does.
 fn set_header_timestamp(buf: &mut [u8], ts: u32) {
-    if let Some(e) = crate::pe::structs::pe_header_offset(buf) {
-        crate::pe::structs::write_u32(buf, e + 8, ts); // FileHeader.TimeDateStamp
-    }
+    let Ok(layout) = PeHeaderLayout::parse(buf) else {
+        return;
+    };
+    let Some(offset) = layout.timestamp_offset() else {
+        return;
+    };
+    if offset + 4 <= buf.len() {
+        buf[offset..offset + 4].copy_from_slice(&ts.to_le_bytes());
+    };
 }
 
 /// `PeUnbinder::Unbind` (dpx 0x18003d8d8), run by `PreProcessPEForApply` before
@@ -217,48 +227,48 @@ fn unbind_pe(buf: &mut [u8], pe: &PeInfo) {
     if let Some(imports) = pe.data_directory(DataDirectoryKind::Import) {
         if imports.rva != 0 {
             if let Some(desc0) = rva_to_file_off(pe, imports.rva as i64) {
-            for di in 0..MAX_IMPORT_DESCRIPTORS {
-                let dfo = desc0 + di * size_of::<ImageImportDescriptor>();
-                let Some(d) = structs::read::<ImageImportDescriptor>(buf, dfo) else {
-                    break;
-                };
-                if d.original_first_thunk.get() == 0
-                    && d.name.get() == 0
-                    && d.first_thunk.get() == 0
-                {
-                    break; // null-terminator descriptor
-                }
-                if d.time_date_stamp.get() == 0 {
-                    continue; // not bound
-                }
-                if let Some(m) = structs::view_mut::<ImageImportDescriptor>(buf, dfo) {
-                    m.time_date_stamp.set(0);
-                    m.forwarder_chain.set(0);
-                }
-                let (Some(ilt), Some(iat)) = (
-                    rva_to_file_off(pe, d.original_first_thunk.get() as i64),
-                    rva_to_file_off(pe, d.first_thunk.get() as i64),
-                ) else {
-                    continue;
-                };
-                let mut k = 0usize;
-                loop {
-                    let (s, dst) = (ilt + k * ptr, iat + k * ptr);
-                    if s + ptr > buf.len() || dst + ptr > buf.len() {
+                for di in 0..MAX_IMPORT_DESCRIPTORS {
+                    let dfo = desc0 + di * size_of::<ImageImportDescriptor>();
+                    let Some(d) = structs::read::<ImageImportDescriptor>(buf, dfo) else {
                         break;
-                    }
-                    let thunk = if pe.is_64bit {
-                        structs::read_u64(buf, s)
-                    } else {
-                        structs::read_u32(buf, s) as u64
                     };
-                    if thunk == 0 {
-                        break; // end of thunk array
+                    if d.original_first_thunk.get() == 0
+                        && d.name.get() == 0
+                        && d.first_thunk.get() == 0
+                    {
+                        break; // null-terminator descriptor
                     }
-                    buf.copy_within(s..s + ptr, dst);
-                    k += 1;
+                    if d.time_date_stamp.get() == 0 {
+                        continue; // not bound
+                    }
+                    if let Some(m) = structs::view_mut::<ImageImportDescriptor>(buf, dfo) {
+                        m.time_date_stamp.set(0);
+                        m.forwarder_chain.set(0);
+                    }
+                    let (Some(ilt), Some(iat)) = (
+                        rva_to_file_off(pe, d.original_first_thunk.get() as i64),
+                        rva_to_file_off(pe, d.first_thunk.get() as i64),
+                    ) else {
+                        continue;
+                    };
+                    let mut k = 0usize;
+                    loop {
+                        let (s, dst) = (ilt + k * ptr, iat + k * ptr);
+                        if s + ptr > buf.len() || dst + ptr > buf.len() {
+                            break;
+                        }
+                        let thunk = if pe.is_64bit {
+                            structs::read_u64(buf, s)
+                        } else {
+                            structs::read_u32(buf, s) as u64
+                        };
+                        if thunk == 0 {
+                            break; // end of thunk array
+                        }
+                        buf.copy_within(s..s + ptr, dst);
+                        k += 1;
+                    }
                 }
-            }
             }
         }
     }
@@ -1456,28 +1466,43 @@ pub(crate) fn undo_x86_e8_translation(buf: &mut [u8]) -> u32 {
 /// `IMAGE_FILE_MACHINE_I386` (0x14C) and a PE32 optional header, and rejects
 /// images whose CLR runtime header (data directory 14) has `COMIMAGE_FLAGS_ILONLY`.
 fn is_i386_native_pe(buf: &[u8]) -> bool {
-    use crate::pe::structs::{self, dir, machine, PeView};
+    let rd_u32 = |o: usize| -> Option<u32> {
+        buf.get(o..o + 4)
+            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+    };
 
-    let Some(pe) = PeView::parse(buf) else {
+    let Ok(layout) = PeHeaderLayout::parse(buf) else {
         return false;
     };
-    // i386 images are PE32 with machine i386.
-    if pe.is_64bit() || pe.machine() != machine::I386 {
+    if layout.machine != 0x014c {
+        return false; // not i386
+    }
+    if layout.optional_header_kind != PeOptionalHeaderKind::Pe32 {
         return false;
     }
-    let Some(clr) = pe.data_directory(dir::COM_DESCRIPTOR) else {
-        return true; // no CLR directory -> native
+    let Some(clr) = layout.data_directory(buf, DataDirectoryKind::ClrRuntimeHeader) else {
+        return true; // no CLR header -> native
     };
-    let clr_rva = clr.virtual_address.get();
-    if clr_rva == 0 {
+    if clr.rva == 0 {
         return true; // native
     }
-    // Map the CLR header RVA to a file offset and read its COR20 Flags (u32 at
-    // +16); ILONLY (bit 0) set => managed, skip.
-    match pe.rva_to_offset(clr_rva) {
-        Some(off) => structs::read_u32(buf, off + 16) & 0x1 == 0, // ILONLY clear => native
-        None => true,
+    // Map the CLR header RVA to a file offset via the section table and read
+    // its COR20 Flags (u32 at +16); ILONLY (bit 0) => managed, skip.
+    for i in 0..layout.number_of_sections {
+        let Some(section) = layout.section(buf, i) else {
+            break;
+        };
+        if clr.rva >= section.virtual_address
+            && clr.rva < section.virtual_address.wrapping_add(section.virtual_size)
+        {
+            // usize add (a u32 add could overflow on a hostile header).
+            let off = section.raw_offset as usize + (clr.rva - section.virtual_address) as usize;
+            if let Some(flags) = rd_u32(off + 16) {
+                return flags & 0x1 == 0; // ILONLY clear => native
+            }
+        }
     }
+    true
 }
 
 /// Is `buf` a managed (.NET / CLI) PE image -- one carrying a CLR runtime
@@ -1488,23 +1513,28 @@ fn is_i386_native_pe(buf: &[u8]) -> bool {
 /// differently-framed) preprocess stream -- lets `apply` reject them cleanly with
 /// `Error::Unsupported` instead of failing deep in the bitstream parser.
 ///
-/// Lenient header parse (no `goblin`, which over-validates some genuine system
-/// images): a non-empty data directory 14 means a CLR header is present.
+/// Hand-parses just the header (no `goblin`, which over-validates some genuine
+/// system images), handling both PE32 and PE32+. Returns false for anything not
+/// a well-formed PE with a non-empty data directory 14.
 pub(crate) fn is_managed_pe(buf: &[u8]) -> bool {
-    use crate::pe::structs::{dir, PeView};
-
-    PeView::parse(buf)
-        .and_then(|pe| pe.data_directory(dir::COM_DESCRIPTOR))
-        .is_some_and(|clr| clr.virtual_address.get() != 0)
+    let Ok(layout) = PeHeaderLayout::parse(buf) else {
+        return false;
+    };
+    layout
+        .data_directory(buf, DataDirectoryKind::ClrRuntimeHeader)
+        .is_some_and(|directory| directory.rva != 0)
 }
 
 /// File offset of the PE optional-header CheckSum field (4 bytes), if `data`
-/// is a PE. CheckSum sits at optional-header offset 0x40 for both PE32 and
-/// PE32+, and the optional header starts at e_lfanew + 4 (signature) + 20
-/// (COFF file header), so the absolute offset is e_lfanew + 0x58.
+/// is a PE.
 pub(crate) fn pe_checksum_offset(data: &[u8]) -> Option<usize> {
-    let off = crate::pe::structs::pe_header_offset(data)? + 0x58;
-    (off + 4 <= data.len()).then_some(off)
+    let layout = PeHeaderLayout::parse(data).ok()?;
+    let offset = layout.checksum_offset()?;
+    if offset + 4 <= data.len() {
+        Some(offset)
+    } else {
+        None
+    }
 }
 
 /// Zero the optional-header CheckSum in a reference buffer. msdelta normalizes
@@ -1518,11 +1548,16 @@ pub(crate) fn zero_pe_checksum(data: &mut [u8]) {
 }
 
 pub(crate) fn pe_timestamp(data: &[u8]) -> u32 {
-    match crate::pe::structs::pe_header_offset(data) {
-        // COFF TimeDateStamp at PE signature + 8.
-        Some(pe_off) => crate::pe::structs::read_u32(data, pe_off + 8),
-        None => 0,
+    let Ok(layout) = PeHeaderLayout::parse(data) else {
+        return 0;
+    };
+    let Some(offset) = layout.timestamp_offset() else {
+        return 0;
+    };
+    if offset + 4 > data.len() {
+        return 0;
     }
+    u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap())
 }
 
 pub(crate) fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
@@ -1535,7 +1570,13 @@ pub(crate) fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
     };
 
     // COFF FileHeader.TimeDateStamp.
-    offsets.push(pe.pe_header_offset() + 8);
+    if let Ok(layout) = PeHeaderLayout::parse(data) {
+        if let Some(timestamp_offset) = layout.timestamp_offset() {
+            offsets.push(timestamp_offset);
+        }
+    } else {
+        offsets.push(pe.pe_header_offset() + 8);
+    }
 
     // Export directory TimeDateStamp (+4 into IMAGE_EXPORT_DIRECTORY).
     if let Some(exp) = pe.data_directory(dir::EXPORT) {
@@ -1596,10 +1637,118 @@ pub(crate) fn pe_timestamp_offsets(data: &[u8]) -> Vec<usize> {
 mod tests {
     use super::*;
 
+    fn put_u16(data: &mut [u8], offset: usize, value: u16) {
+        data[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn put_u32(data: &mut [u8], offset: usize, value: u32) {
+        data[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn put_u64(data: &mut [u8], offset: usize, value: u64) {
+        data[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn synthetic_transform_pe(pe32_plus: bool, machine: u16, clr_flags: Option<u32>) -> Vec<u8> {
+        let mut image = vec![0u8; 0x1000];
+        put_u32(&mut image, 0x3c, 0x80);
+        image[0x80..0x84].copy_from_slice(b"PE\0\0");
+        put_u16(&mut image, 0x84, machine);
+        put_u16(&mut image, 0x86, 1);
+        put_u32(&mut image, 0x88, 0x1234_5678);
+        put_u16(&mut image, 0x94, if pe32_plus { 0xf0 } else { 0xe0 });
+
+        let opt = 0x98usize;
+        let optional_kind = if pe32_plus {
+            PeOptionalHeaderKind::Pe32Plus
+        } else {
+            PeOptionalHeaderKind::Pe32
+        };
+        let directory_base = opt + optional_kind.data_directories_relative_offset();
+        put_u32(
+            &mut image,
+            opt + optional_kind.size_of_image_relative_offset(),
+            0x3000,
+        );
+        put_u32(
+            &mut image,
+            opt + optional_kind.checksum_relative_offset(),
+            0xfeed_beef,
+        );
+        put_u32(
+            &mut image,
+            opt + optional_kind.number_of_rva_and_sizes_relative_offset(),
+            DataDirectoryKind::COUNT as u32,
+        );
+        if pe32_plus {
+            put_u16(&mut image, opt, PeOptionalHeaderKind::PE32_PLUS_MAGIC);
+            put_u64(
+                &mut image,
+                opt + optional_kind.image_base_relative_offset(),
+                0x0000_0001_4000_0000,
+            );
+        } else {
+            put_u16(&mut image, opt, PeOptionalHeaderKind::PE32_MAGIC);
+            put_u32(
+                &mut image,
+                opt + optional_kind.image_base_relative_offset(),
+                0x0040_0000,
+            );
+        };
+
+        if let Some(flags) = clr_flags {
+            let clr_dir = directory_base + DataDirectoryKind::ClrRuntimeHeader.index() * 8;
+            put_u32(&mut image, clr_dir, 0x2000);
+            put_u32(&mut image, clr_dir + 4, 0x48);
+            put_u32(&mut image, 0x200 + 0x10, flags);
+        }
+
+        let section = opt + if pe32_plus { 0xf0 } else { 0xe0 };
+        image[section..section + 5].copy_from_slice(b".text");
+        put_u32(&mut image, section + 8, 0x1000);
+        put_u32(&mut image, section + 12, 0x2000);
+        put_u32(&mut image, section + 16, 0x1000);
+        put_u32(&mut image, section + 20, 0x200);
+        put_u32(&mut image, section + 36, 0x6000_0020);
+        image
+    }
+
     #[test]
     fn raw_file_type_no_transform() {
         // FILE_TYPE_RAW doesn't trigger transforms
         assert_eq!(FILE_TYPE_RAW, 1);
+    }
+
+    #[test]
+    fn pe_header_layout_drives_header_fixups() {
+        let mut image = synthetic_transform_pe(true, 0x8664, None);
+
+        assert_eq!(pe_timestamp(&image), 0x1234_5678);
+        assert_eq!(pe_checksum_offset(&image), Some(0xd8));
+
+        zero_pe_checksum(&mut image);
+        assert_eq!(&image[0xd8..0xdc], &[0, 0, 0, 0]);
+
+        set_header_timestamp(&mut image, 0xaabb_ccdd);
+        assert_eq!(&image[0x88..0x8c], &0xaabb_ccddu32.to_le_bytes());
+
+        set_header_image_base(&mut image, 0x0000_0001_5000_0000);
+        assert_eq!(&image[0xb0..0xb8], &0x0000_0001_5000_0000u64.to_le_bytes());
+    }
+
+    #[test]
+    fn managed_and_i386_native_probes_share_header_layout() {
+        let native = synthetic_transform_pe(false, 0x014c, None);
+        assert!(!is_managed_pe(&native));
+        assert!(is_i386_native_pe(&native));
+
+        let il_only = synthetic_transform_pe(false, 0x014c, Some(1));
+        assert!(is_managed_pe(&il_only));
+        assert!(!is_i386_native_pe(&il_only));
+
+        let mixed_mode = synthetic_transform_pe(false, 0x014c, Some(0));
+        assert!(is_managed_pe(&mixed_mode));
+        assert!(is_i386_native_pe(&mixed_mode));
     }
 
     #[test]
