@@ -782,11 +782,14 @@ apply-side models are stable.
 | `GetPortableExecutableInfoManaged` | `GetPortableExecutableInfo`, `GetPortableExecutableInfoCli4` | Emit target PE info and target metadata for CreateDeltaB. |
 
 Current state: `pe::cli::create_map` now contains the first create-side
-building blocks. `CliMapStringsHash` parses `#Strings` heaps, matches exact byte
-string values from source to target, emits source-offset to target-offset rift
-entries, keeps `0 -> 0` for non-empty heaps, and uses the first target duplicate
-for deterministic unit coverage. Native hash collision and duplicate-selection
-behavior still need a fixture before this can feed `CliMapFromPEs`.
+building blocks. `CliMapStringsHash` parses `#Strings` heaps and compressed
+`#US` heaps, matches exact byte-string records from source to target, emits
+source-offset to target-offset rift entries, keeps native `0 -> 0` entries for
+present streams, and uses the first target duplicate for deterministic unit
+coverage. The `#US` scanner preserves the observed native behavior for malformed
+reserved bytes and truncated length prefixes. Native hash collision and
+duplicate-selection behavior still need a fixture before this can feed
+`CliMapFromPEs`.
 
 `CliMapBlobAndRvas` is table-map driven rather than a standalone blob-content
 matcher. It walks exact source-RID to target-RID table-map entries, copies

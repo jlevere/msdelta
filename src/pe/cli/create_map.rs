@@ -1,6 +1,7 @@
 //! Create-side CLI map producers.
 
 use crate::lzx::rift::{RiftEntry, RiftTable};
+use crate::pe::cli::blob::read_compressed_u32;
 use crate::pe::cli::metadata::{CliColumnValue, CliMetadataModel};
 use crate::pe::cli::schema::{coded_index_schema, table_schema, ColumnKind, HeapKind};
 use crate::{Error, Result};
@@ -321,21 +322,77 @@ pub(crate) fn build_cli_strings_heap_map_from_metadata(
     build_cli_strings_heap_map(source_heap, target_heap)
 }
 
+pub(crate) fn build_cli_user_strings_heap_map_from_metadata(
+    source_image: &[u8],
+    source_metadata: &CliMetadataModel,
+    target_image: &[u8],
+    target_metadata: &CliMetadataModel,
+) -> Result<CliStringsHeapMap> {
+    let Some(source_stream) = source_metadata.streams.user_strings else {
+        return Ok(empty_strings_heap_map());
+    };
+    let Some(target_stream) = target_metadata.streams.user_strings else {
+        return Ok(empty_strings_heap_map());
+    };
+
+    let source_end = source_stream
+        .file_offset
+        .checked_add(source_stream.size as usize)
+        .ok_or(Error::Malformed("CLI #US heap: source range overflow"))?;
+    let target_end = target_stream
+        .file_offset
+        .checked_add(target_stream.size as usize)
+        .ok_or(Error::Malformed("CLI #US heap: target range overflow"))?;
+    let source_heap = source_image
+        .get(source_stream.file_offset..source_end)
+        .ok_or(Error::Truncated)?;
+    let target_heap = target_image
+        .get(target_stream.file_offset..target_end)
+        .ok_or(Error::Truncated)?;
+
+    build_cli_user_strings_heap_map(source_heap, target_heap)
+}
+
 pub(crate) fn build_cli_strings_heap_map(
     source_heap: &[u8],
     target_heap: &[u8],
 ) -> Result<CliStringsHeapMap> {
     let source_entries = parse_strings_heap_entries(source_heap)?;
     let target_entries = parse_strings_heap_entries(target_heap)?;
+    build_cli_heap_map(
+        &source_entries,
+        &target_entries,
+        !source_heap.is_empty() || !target_heap.is_empty(),
+    )
+}
+
+pub(crate) fn build_cli_user_strings_heap_map(
+    source_heap: &[u8],
+    target_heap: &[u8],
+) -> Result<CliStringsHeapMap> {
+    let source_entries = parse_user_strings_heap_entries(source_heap)?;
+    let target_entries = parse_user_strings_heap_entries(target_heap)?;
+    build_cli_heap_map(
+        &source_entries,
+        &target_entries,
+        !source_heap.is_empty() || !target_heap.is_empty(),
+    )
+}
+
+fn build_cli_heap_map(
+    source_entries: &[StringsHeapEntry<'_>],
+    target_entries: &[StringsHeapEntry<'_>],
+    include_zero_entry: bool,
+) -> Result<CliStringsHeapMap> {
     let mut target_offsets_by_value = BTreeMap::<&[u8], u32>::new();
-    for entry in &target_entries {
+    for entry in target_entries {
         target_offsets_by_value
             .entry(entry.value)
             .or_insert(entry.offset);
     }
 
     let mut entries = Vec::new();
-    if !source_entries.is_empty() || !target_entries.is_empty() {
+    if include_zero_entry {
         entries.push(RiftEntry {
             source: 0,
             target: 0,
@@ -343,7 +400,7 @@ pub(crate) fn build_cli_strings_heap_map(
     }
 
     let mut matched_strings = 0usize;
-    for source in &source_entries {
+    for source in source_entries {
         let Some(&target_offset) = target_offsets_by_value.get(source.value) else {
             continue;
         };
@@ -1145,6 +1202,45 @@ fn parse_strings_heap_entries(heap: &[u8]) -> Result<Vec<StringsHeapEntry<'_>>> 
     Ok(entries)
 }
 
+fn parse_user_strings_heap_entries(heap: &[u8]) -> Result<Vec<StringsHeapEntry<'_>>> {
+    let mut entries = Vec::new();
+    let mut cursor = 0usize;
+
+    while cursor < heap.len() {
+        let (payload_len, header_len) = match read_compressed_u32(&heap[cursor..]) {
+            Ok(value) => value,
+            Err(Error::Truncated) => break,
+            Err(Error::Malformed(_)) => {
+                cursor += 1;
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        let record_len = header_len
+            .checked_add(payload_len as usize)
+            .ok_or(Error::Malformed("CLI #US heap: record length overflow"))?;
+        if record_len == 0 {
+            return Err(Error::Malformed("CLI #US heap: zero-length record"));
+        }
+        let record_end = match cursor.checked_add(record_len) {
+            Some(end) if end <= heap.len() => end,
+            _ => {
+                cursor += 1;
+                continue;
+            }
+        };
+        if record_len != 1 {
+            entries.push(StringsHeapEntry {
+                offset: cursor as u32,
+                value: &heap[cursor..record_end],
+            });
+        }
+        cursor = record_end;
+    }
+
+    Ok(entries)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1314,6 +1410,15 @@ mod tests {
     }
 
     #[test]
+    fn strings_heap_map_keeps_zero_for_present_empty_heap() {
+        let map = build_cli_strings_heap_map(b"\0", b"\0").unwrap();
+
+        assert_eq!(map.stats.source_strings, 0);
+        assert_eq!(map.stats.target_strings, 0);
+        assert_eq!(pairs(&map.rift), vec![(0, 0)]);
+    }
+
+    #[test]
     fn strings_heap_map_rejects_unterminated_values() {
         assert!(matches!(
             build_cli_strings_heap_map(b"\0Name", b"\0Name\0"),
@@ -1329,6 +1434,49 @@ mod tests {
         let target_metadata = metadata_with_strings(4, 9);
 
         let map = build_cli_strings_heap_map_from_metadata(
+            &source,
+            &source_metadata,
+            &target,
+            &target_metadata,
+        )
+        .unwrap();
+
+        assert_eq!(pairs(&map.rift), vec![(0, 0), (1, 5), (5, 1)]);
+    }
+
+    #[test]
+    fn user_strings_heap_map_matches_compressed_records() {
+        let source = b"\0\x03A\0\0\x03B\0\0";
+        let target = b"\0\x03B\0\0\x03A\0\0";
+
+        let map = build_cli_user_strings_heap_map(source, target).unwrap();
+
+        assert_eq!(map.stats.source_strings, 2);
+        assert_eq!(map.stats.target_strings, 2);
+        assert_eq!(map.stats.matched_strings, 2);
+        assert_eq!(pairs(&map.rift), vec![(0, 0), (1, 5), (5, 1)]);
+    }
+
+    #[test]
+    fn user_strings_heap_map_skips_malformed_records_like_native_scanner() {
+        let source = b"\0\xe0\x03A\0\0\x80";
+        let target = b"\0\x03A\0\0";
+
+        let map = build_cli_user_strings_heap_map(source, target).unwrap();
+
+        assert_eq!(map.stats.source_strings, 1);
+        assert_eq!(map.stats.target_strings, 1);
+        assert_eq!(pairs(&map.rift), vec![(0, 0), (2, 1)]);
+    }
+
+    #[test]
+    fn user_strings_heap_map_reads_heap_ranges_from_metadata() {
+        let source = b"aaaa\0\x03A\0\0\x03B\0\0zzzz".to_vec();
+        let target = b"bbbb\0\x03B\0\0\x03A\0\0yyyy".to_vec();
+        let source_metadata = metadata_with_user_strings(4, 9);
+        let target_metadata = metadata_with_user_strings(4, 9);
+
+        let map = build_cli_user_strings_heap_map_from_metadata(
             &source,
             &source_metadata,
             &target,
@@ -1862,6 +2010,29 @@ mod tests {
                     size,
                 }),
                 user_strings: None,
+                blob: None,
+                guid: None,
+                tables: CliStream {
+                    metadata_offset: 0,
+                    file_offset: 0,
+                    size: 0,
+                },
+            },
+            [0; 64],
+            [0; 64],
+            [None; 64],
+        )
+    }
+
+    fn metadata_with_user_strings(file_offset: usize, size: u32) -> CliMetadataModel {
+        metadata_with_streams(
+            CliStreamSet {
+                strings: None,
+                user_strings: Some(CliStream {
+                    metadata_offset: 0,
+                    file_offset,
+                    size,
+                }),
                 blob: None,
                 guid: None,
                 tables: CliStream {
