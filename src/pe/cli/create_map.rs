@@ -2,6 +2,7 @@
 
 use crate::lzx::rift::{RiftEntry, RiftTable};
 use crate::pe::cli::blob::read_compressed_u32;
+use crate::pe::cli::map::CliMapModel;
 use crate::pe::cli::metadata::{CliColumnValue, CliMetadataModel};
 use crate::pe::cli::schema::{coded_index_schema, table_schema, ColumnKind, HeapKind};
 use crate::{Error, Result};
@@ -32,6 +33,12 @@ pub(crate) struct CliBlobAndRvaMaps {
     pub(crate) blob: RiftTable,
     pub(crate) rvas: RiftTable,
     pub(crate) stats: CliBlobAndRvaMapStats,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CliTableSeedStats {
+    pub(crate) seeded_table_maps: usize,
+    pub(crate) seeded_guid_map: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,6 +95,41 @@ pub(crate) struct CliTripletTableMap {
     pub(crate) stats: CliTripletTableMapStats,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CliMapRunStep {
+    Triplet(u8),
+    Sequence(u8),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CliMapFromPeStats {
+    pub(crate) seeds: CliTableSeedStats,
+    pub(crate) strings: CliStringsHeapMatchStats,
+    pub(crate) user_strings: CliStringsHeapMatchStats,
+    pub(crate) triplet_maps: Vec<CliTripletTableMapStatsByTable>,
+    pub(crate) sequence_maps: Vec<CliSequenceTableMapStatsByTable>,
+    pub(crate) blob_and_rva: CliBlobAndRvaMapStats,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CliTripletTableMapStatsByTable {
+    pub(crate) table_id: u8,
+    pub(crate) stats: CliTripletTableMapStats,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CliSequenceTableMapStatsByTable {
+    pub(crate) table_id: u8,
+    pub(crate) stats: CliSequenceTableMapStats,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CliMapFromPeResult {
+    pub(crate) cli_map: CliMapModel,
+    pub(crate) rvas: RiftTable,
+    pub(crate) stats: CliMapFromPeStats,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum CliTripletSpecialContext {
     None,
@@ -134,6 +176,37 @@ pub(crate) const CLI_SEQUENCE_TABLE_SPECS: &[CliSequenceTableSpec] = &[
 pub(crate) const CLI_TRIPLET_TABLE_ORDER: &[u8] = &[
     0x20, 0x23, 0x00, 0x1a, 0x02, 0x01, 0x0a, 0x12, 0x15, 0x0b, 0x0d, 0x0e, 0x0f, 0x10, 0x18, 0x1c,
     0x1d, 0x26, 0x28, 0x2a, 0x2b, 0x2c, 0x0c,
+];
+
+pub(crate) const CLI_MAP_RUN_STEPS: &[CliMapRunStep] = &[
+    CliMapRunStep::Triplet(0x20),
+    CliMapRunStep::Triplet(0x23),
+    CliMapRunStep::Triplet(0x00),
+    CliMapRunStep::Triplet(0x1a),
+    CliMapRunStep::Triplet(0x02),
+    CliMapRunStep::Sequence(0x04),
+    CliMapRunStep::Sequence(0x06),
+    CliMapRunStep::Sequence(0x08),
+    CliMapRunStep::Triplet(0x01),
+    CliMapRunStep::Triplet(0x0a),
+    CliMapRunStep::Triplet(0x12),
+    CliMapRunStep::Sequence(0x14),
+    CliMapRunStep::Triplet(0x15),
+    CliMapRunStep::Sequence(0x17),
+    CliMapRunStep::Triplet(0x0b),
+    CliMapRunStep::Triplet(0x0d),
+    CliMapRunStep::Triplet(0x0e),
+    CliMapRunStep::Triplet(0x0f),
+    CliMapRunStep::Triplet(0x10),
+    CliMapRunStep::Triplet(0x18),
+    CliMapRunStep::Triplet(0x1c),
+    CliMapRunStep::Triplet(0x1d),
+    CliMapRunStep::Triplet(0x26),
+    CliMapRunStep::Triplet(0x28),
+    CliMapRunStep::Triplet(0x2a),
+    CliMapRunStep::Triplet(0x2b),
+    CliMapRunStep::Triplet(0x2c),
+    CliMapRunStep::Triplet(0x0c),
 ];
 
 const TRIPLET_STRING_KEY_TAG: u32 = 0x8000_0000;
@@ -289,6 +362,100 @@ pub(crate) const CLI_TRIPLET_TABLE_SPECS: &[CliTripletTableSpec] = &[
 struct StringsHeapEntry<'a> {
     offset: u32,
     value: &'a [u8],
+}
+
+pub(crate) fn build_cli_map_from_metadata(
+    source_image: &[u8],
+    source_metadata: &CliMetadataModel,
+    target_image: &[u8],
+    target_metadata: &CliMetadataModel,
+) -> Result<CliMapFromPeResult> {
+    let strings_map = build_cli_strings_heap_map_from_metadata(
+        source_image,
+        source_metadata,
+        target_image,
+        target_metadata,
+    )?;
+    let user_strings_map = build_cli_user_strings_heap_map_from_metadata(
+        source_image,
+        source_metadata,
+        target_image,
+        target_metadata,
+    )?;
+
+    let mut cli_map = CliMapModel {
+        strings: strings_map.rift,
+        user_strings: user_strings_map.rift,
+        ..CliMapModel::default()
+    };
+    let seed_stats = seed_cli_map_tables(source_metadata, target_metadata, &mut cli_map);
+    let mut triplet_maps = Vec::new();
+    let mut sequence_maps = Vec::new();
+
+    for step in CLI_MAP_RUN_STEPS {
+        match *step {
+            CliMapRunStep::Triplet(table_id) => {
+                let spec = cli_triplet_table_spec(table_id)
+                    .ok_or(Error::Malformed("CLI map create: unknown triplet step"))?;
+                let table_map = build_cli_triplet_table_map(
+                    source_image,
+                    source_metadata,
+                    target_image,
+                    target_metadata,
+                    &cli_map.strings,
+                    &cli_map.tables,
+                    &cli_map.tables[table_id as usize],
+                    spec,
+                )?;
+                cli_map.tables[table_id as usize] = table_map.rift;
+                triplet_maps.push(CliTripletTableMapStatsByTable {
+                    table_id,
+                    stats: table_map.stats,
+                });
+            }
+            CliMapRunStep::Sequence(table_id) => {
+                let spec = cli_sequence_table_spec(table_id)
+                    .ok_or(Error::Malformed("CLI map create: unknown sequence step"))?;
+                let table_map = build_cli_sequence_table_map(
+                    source_image,
+                    source_metadata,
+                    target_image,
+                    target_metadata,
+                    &cli_map.strings,
+                    &cli_map.tables[spec.owner_table_id as usize],
+                    &cli_map.tables[table_id as usize],
+                    table_id,
+                )?;
+                cli_map.tables[table_id as usize] = table_map.rift;
+                sequence_maps.push(CliSequenceTableMapStatsByTable {
+                    table_id,
+                    stats: table_map.stats,
+                });
+            }
+        }
+    }
+
+    let blob_and_rva_maps = build_cli_blob_and_rva_maps(
+        source_image,
+        source_metadata,
+        target_image,
+        target_metadata,
+        &cli_map.tables,
+    )?;
+    cli_map.blob = blob_and_rva_maps.blob;
+
+    Ok(CliMapFromPeResult {
+        cli_map,
+        rvas: blob_and_rva_maps.rvas,
+        stats: CliMapFromPeStats {
+            seeds: seed_stats,
+            strings: strings_map.stats,
+            user_strings: user_strings_map.stats,
+            triplet_maps,
+            sequence_maps,
+            blob_and_rva: blob_and_rva_maps.stats,
+        },
+    })
 }
 
 pub(crate) fn build_cli_strings_heap_map_from_metadata(
@@ -734,6 +901,44 @@ pub(crate) fn build_cli_blob_and_rva_maps(
         },
         stats,
     })
+}
+
+fn seed_cli_map_tables(
+    source_metadata: &CliMetadataModel,
+    target_metadata: &CliMetadataModel,
+    cli_map: &mut CliMapModel,
+) -> CliTableSeedStats {
+    let mut seeded_table_maps = 0usize;
+    for table_id in 0..64usize {
+        if source_metadata.row_counts[table_id] != 0 && target_metadata.row_counts[table_id] != 0 {
+            cli_map.tables[table_id] = zero_seeded_rift();
+            seeded_table_maps += 1;
+        }
+    }
+
+    let seeded_guid_map = guid_stream_item_count(source_metadata) != 0
+        && guid_stream_item_count(target_metadata) != 0;
+    if seeded_guid_map {
+        cli_map.guid = zero_seeded_rift();
+    }
+
+    CliTableSeedStats {
+        seeded_table_maps,
+        seeded_guid_map,
+    }
+}
+
+fn guid_stream_item_count(metadata: &CliMetadataModel) -> u32 {
+    metadata.streams.guid.map_or(0, |stream| stream.size / 16)
+}
+
+fn zero_seeded_rift() -> RiftTable {
+    RiftTable {
+        entries: vec![RiftEntry {
+            source: 0,
+            target: 0,
+        }],
+    }
 }
 
 fn exact_table_target_rid(table_map: &RiftTable, source_rid: u32) -> Option<u32> {
@@ -1272,13 +1477,58 @@ mod tests {
             .iter()
             .map(|spec| spec.table_id)
             .collect::<Vec<_>>();
+        let run_triplet_order = CLI_MAP_RUN_STEPS
+            .iter()
+            .filter_map(|step| match step {
+                CliMapRunStep::Triplet(table_id) => Some(*table_id),
+                CliMapRunStep::Sequence(_) => None,
+            })
+            .collect::<Vec<_>>();
 
         assert_eq!(CLI_TRIPLET_TABLE_ORDER, spec_order.as_slice());
+        assert_eq!(CLI_TRIPLET_TABLE_ORDER, run_triplet_order.as_slice());
         assert_eq!(
             spec_order,
             vec![
                 0x20, 0x23, 0x00, 0x1a, 0x02, 0x01, 0x0a, 0x12, 0x15, 0x0b, 0x0d, 0x0e, 0x0f, 0x10,
                 0x18, 0x1c, 0x1d, 0x26, 0x28, 0x2a, 0x2b, 0x2c, 0x0c,
+            ]
+        );
+    }
+
+    #[test]
+    fn cli_map_run_steps_interleave_sequences_like_native_run() {
+        assert_eq!(
+            CLI_MAP_RUN_STEPS,
+            &[
+                CliMapRunStep::Triplet(0x20),
+                CliMapRunStep::Triplet(0x23),
+                CliMapRunStep::Triplet(0x00),
+                CliMapRunStep::Triplet(0x1a),
+                CliMapRunStep::Triplet(0x02),
+                CliMapRunStep::Sequence(0x04),
+                CliMapRunStep::Sequence(0x06),
+                CliMapRunStep::Sequence(0x08),
+                CliMapRunStep::Triplet(0x01),
+                CliMapRunStep::Triplet(0x0a),
+                CliMapRunStep::Triplet(0x12),
+                CliMapRunStep::Sequence(0x14),
+                CliMapRunStep::Triplet(0x15),
+                CliMapRunStep::Sequence(0x17),
+                CliMapRunStep::Triplet(0x0b),
+                CliMapRunStep::Triplet(0x0d),
+                CliMapRunStep::Triplet(0x0e),
+                CliMapRunStep::Triplet(0x0f),
+                CliMapRunStep::Triplet(0x10),
+                CliMapRunStep::Triplet(0x18),
+                CliMapRunStep::Triplet(0x1c),
+                CliMapRunStep::Triplet(0x1d),
+                CliMapRunStep::Triplet(0x26),
+                CliMapRunStep::Triplet(0x28),
+                CliMapRunStep::Triplet(0x2a),
+                CliMapRunStep::Triplet(0x2b),
+                CliMapRunStep::Triplet(0x2c),
+                CliMapRunStep::Triplet(0x0c),
             ]
         );
     }
@@ -1609,6 +1859,127 @@ mod tests {
             ),
             Err(Error::Truncated)
         ));
+    }
+
+    #[test]
+    fn cli_map_from_metadata_composes_native_run_order_atoms() {
+        let heap_widths = narrow_heap_widths();
+        let mut row_counts = [0u32; 64];
+        row_counts[0x02] = 1;
+        row_counts[0x06] = 1;
+        let type_row_size = row_size(0x02, &row_counts, heap_widths).unwrap();
+        let method_row_size = row_size(0x06, &row_counts, heap_widths).unwrap();
+        let mut source_image = vec![0u8; 0x140];
+        let mut target_image = vec![0u8; 0x160];
+
+        source_image[0x00..0x0d].copy_from_slice(b"\0Type\0Method\0");
+        source_image[0x20..0x25].copy_from_slice(b"\0\x03A\0\0");
+        target_image[0x00..0x0d].copy_from_slice(b"\0Method\0Type\0");
+        target_image[0x20..0x25].copy_from_slice(b"\0\x03A\0\0");
+
+        put_u16(&mut source_image, 0x64, 1);
+        put_u16(&mut source_image, 0x66, 0);
+        put_u16(&mut source_image, 0x6c, 1);
+        put_u16(&mut target_image, 0x84, 8);
+        put_u16(&mut target_image, 0x86, 0);
+        put_u16(&mut target_image, 0x8c, 1);
+
+        put_u32(&mut source_image, 0xa0, 0x2100);
+        put_u16(&mut source_image, 0xa8, 6);
+        put_u16(&mut source_image, 0xaa, 3);
+        put_u16(&mut target_image, 0xc0, 0x2400);
+        put_u16(&mut target_image, 0xc8, 1);
+        put_u16(&mut target_image, 0xca, 5);
+
+        let source_metadata = metadata_with_streams_and_tables(
+            CliStreamSet {
+                strings: Some(CliStream {
+                    metadata_offset: 0,
+                    file_offset: 0x00,
+                    size: 0x0d,
+                }),
+                user_strings: Some(CliStream {
+                    metadata_offset: 0x20,
+                    file_offset: 0x20,
+                    size: 0x05,
+                }),
+                blob: Some(CliStream {
+                    metadata_offset: 0x30,
+                    file_offset: 0x30,
+                    size: 0x10,
+                }),
+                guid: None,
+                tables: CliStream {
+                    metadata_offset: 0x60,
+                    file_offset: 0x60,
+                    size: type_row_size as u32 + method_row_size as u32,
+                },
+            },
+            &row_counts,
+            &[
+                (0x02, type_row_size as u32, 0x60),
+                (0x06, method_row_size as u32, 0xa0),
+            ],
+        );
+        let target_metadata = metadata_with_streams_and_tables(
+            CliStreamSet {
+                strings: Some(CliStream {
+                    metadata_offset: 0,
+                    file_offset: 0x00,
+                    size: 0x0d,
+                }),
+                user_strings: Some(CliStream {
+                    metadata_offset: 0x20,
+                    file_offset: 0x20,
+                    size: 0x05,
+                }),
+                blob: Some(CliStream {
+                    metadata_offset: 0x30,
+                    file_offset: 0x30,
+                    size: 0x10,
+                }),
+                guid: None,
+                tables: CliStream {
+                    metadata_offset: 0x80,
+                    file_offset: 0x80,
+                    size: type_row_size as u32 + method_row_size as u32,
+                },
+            },
+            &row_counts,
+            &[
+                (0x02, type_row_size as u32, 0x80),
+                (0x06, method_row_size as u32, 0xc0),
+            ],
+        );
+
+        let result = build_cli_map_from_metadata(
+            &source_image,
+            &source_metadata,
+            &target_image,
+            &target_metadata,
+        )
+        .unwrap();
+
+        assert_eq!(pairs(&result.cli_map.strings), vec![(0, 0), (1, 8), (6, 1)]);
+        assert_eq!(pairs(&result.cli_map.user_strings), vec![(0, 0), (1, 1)]);
+        assert_eq!(pairs(&result.cli_map.tables[0x02]), vec![(0, 0), (1, 1)]);
+        assert_eq!(pairs(&result.cli_map.tables[0x06]), vec![(0, 0), (1, 1)]);
+        assert_eq!(pairs(&result.cli_map.blob), vec![(0, 0), (3, 5)]);
+        assert_eq!(pairs(&result.rvas), vec![(0x2100, 0x2400)]);
+        assert_eq!(result.stats.seeds.seeded_table_maps, 2);
+        assert!(!result.stats.seeds.seeded_guid_map);
+        assert_eq!(result.stats.strings.matched_strings, 2);
+        assert_eq!(result.stats.user_strings.matched_strings, 1);
+        assert_eq!(
+            stats_for_triplet(&result.stats.triplet_maps, 0x02).mapped_rows,
+            1
+        );
+        assert_eq!(
+            stats_for_sequence(&result.stats.sequence_maps, 0x06).mapped_rows,
+            1
+        );
+        assert_eq!(result.stats.blob_and_rva.mapped_blob_columns, 1);
+        assert_eq!(result.stats.blob_and_rva.mapped_rva_columns, 1);
     }
 
     #[test]
@@ -2155,6 +2526,21 @@ mod tests {
         )
     }
 
+    fn metadata_with_streams_and_tables(
+        streams: CliStreamSet,
+        row_counts: &[u32; 64],
+        tables: &[(usize, u32, usize)],
+    ) -> CliMetadataModel {
+        let mut row_sizes = [0u32; 64];
+        let mut table_file_offsets = [None; 64];
+        for &(table_id, row_size, table_file_offset) in tables {
+            row_sizes[table_id] = row_size;
+            table_file_offsets[table_id] = Some(table_file_offset);
+        }
+
+        metadata_with_streams(streams, *row_counts, row_sizes, table_file_offsets)
+    }
+
     fn metadata_with_streams(
         streams: CliStreamSet,
         row_counts: [u32; 64],
@@ -2211,5 +2597,27 @@ mod tests {
 
     fn put_u32(image: &mut [u8], offset: usize, value: u32) {
         image[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn stats_for_triplet(
+        stats: &[CliTripletTableMapStatsByTable],
+        table_id: u8,
+    ) -> CliTripletTableMapStats {
+        stats
+            .iter()
+            .find(|stats| stats.table_id == table_id)
+            .map(|stats| stats.stats)
+            .unwrap()
+    }
+
+    fn stats_for_sequence(
+        stats: &[CliSequenceTableMapStatsByTable],
+        table_id: u8,
+    ) -> CliSequenceTableMapStats {
+        stats
+            .iter()
+            .find(|stats| stats.table_id == table_id)
+            .map(|stats| stats.stats)
+            .unwrap()
     }
 }

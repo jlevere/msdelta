@@ -819,6 +819,18 @@ triplet matching, and the TypeDef/TypeRef owner fallback cases. The remaining
 gap is exact native sorted retry and duplicate ordering parity, plus native
 fixture parity.
 
+`CliMapFromPEs` now has a partial composition atom over those helpers.
+`build_cli_map_from_metadata` seeds GUID and table maps with the native-style
+`0 -> 0` entries when both sides contain the corresponding items, runs
+`#Strings` and `#US` matching first, follows the decompiled native interleaving
+of `ProcessTripletTable` and `ProcessSequenceTable`, then extracts blob and RVA
+maps from the resulting table maps. Unit coverage proves that a TypeDef triplet
+match feeds a MethodDef sequence match, which then enables MethodDef signature
+and RVA extraction. This is still gated: native `InternalReduce` parity,
+hash-collision and duplicate selection parity, Frida/native fixtures, and the
+RVA-to-PE-section composition step remain open before this can drive CreateDeltaB
+output.
+
 ## Current Implementation Plan
 
 The old linear order is no longer accurate. Several early parser/model atoms
@@ -832,7 +844,7 @@ The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 23
 partial, 0 missing, and 0 rejected. All 24 remain `apply_policy=reject`.
 
 The broader managed workstream tracks 31 atoms including create-side map and
-encoder atoms. Current state: 1 supported, 26 partial, 4 missing, and 0
+encoder atoms. Current state: 1 supported, 27 partial, 3 missing, and 0
 rejected. All 31 remain `apply_policy=reject`.
 
 That is the important reading of current progress: the parser/context
