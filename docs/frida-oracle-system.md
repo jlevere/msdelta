@@ -327,6 +327,23 @@ layout noise. Use Frida to read the native object and emit logical data.
 }
 ```
 
+### CliCodedTokenMap
+
+```json
+{
+  "type": "CliCodedTokenMapCallRecord",
+  "native_layout": "msdelta-win26100-compo-cli-map-coded-token-v1",
+  "operation": "MapCodedExact",
+  "kind": 2,
+  "raw": 46,
+  "result": 4294967295,
+  "map": {
+    "type": "CliMapBitstreamRecord",
+    "tables": []
+  }
+}
+```
+
 Keep these schemas aligned with the Rust model types once those exist. The
 normalizer should be stricter than the hook: if an object cannot be read
 coherently, emit a capture error rather than a partial object.
@@ -421,6 +438,7 @@ Start with stable boundaries:
 | `PePreprocessManagedCli4` | `PortableExecutableInfoCli4::FromBitReader` |
 | `CliMetadataBitstream` | `CliMetadata::FromBitReader` |
 | `CliMapBitstream` | `CliMap::FromBitReader` |
+| `CliCodedTokenMap` | `CliMap::MapCoded`, `CliMap::MapCodedExact` |
 | `CliCompressionRift` | `CompressionRiftTableCli::FromCliMap` |
 | `Cli4CompressionRift` | `CompressionRiftTableCli4::FromCli4Map` |
 | `TransformCliDisasm` | `TransformCliDisasm::Run` entry/exit PE bytes |
@@ -476,9 +494,12 @@ Win26100 `msdelta.dll` symbol map with `Get-FileHash`, waiting for both export
 and stage Frida agents, and capturing normalized `CliMetadataBitstream` objects
 plus replay-checked standalone reader bitstreams from
 `compo::CliMetadata::InternalFromBitReader` and `compo::CliMap::FromBitReader`.
-Next hooks should be `compo::Cli4Map::InternalFromBitReader` and the CLI
-compression-rift builders, so the first real managed rift oracle exists before
-any IL or metadata rewriting work begins.
+It also captures `CliCodedTokenMap` call records from
+`compo::CliMap::MapCoded` and `compo::CliMap::MapCodedExact`, where the stable
+fixture is the logical call input/output plus a `CliMap` snapshot rather than a
+reader-window blob. Next hooks should be `compo::Cli4Map::InternalFromBitReader`
+and the CLI compression-rift builders, so the first real managed rift oracle
+exists before any IL or metadata rewriting work begins.
 
 ## Managed Corpus
 

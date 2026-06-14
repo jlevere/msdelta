@@ -133,6 +133,15 @@ function readS64Number(address, label) {
   return value;
 }
 
+function readS64Value(address) {
+  const text = address.readS64().toString(10);
+  const value = Number.parseInt(text, 10);
+  if (Number.isSafeInteger(value)) {
+    return value;
+  }
+  return text;
+}
+
 function pointerNumber(value, label) {
   const text = value.toString();
   const parsed = Number.parseInt(text.startsWith("0x") ? text.slice(2) : text, text.startsWith("0x") ? 16 : 10);
@@ -586,8 +595,8 @@ function readRiftTableRecord(tablePtr, layout, label) {
   for (let i = 0; i < count; i += 1) {
     const entryPtr = entriesPtr.add(i * layout.entry_size);
     entries.push({
-      source: readS64Number(entryPtr.add(layout.entry_source_offset), `${label} RiftTable entry ${i} source`),
-      target: readS64Number(entryPtr.add(layout.entry_target_offset), `${label} RiftTable entry ${i} target`),
+      source: readS64Value(entryPtr.add(layout.entry_source_offset)),
+      target: readS64Value(entryPtr.add(layout.entry_target_offset)),
     });
   }
 
@@ -621,17 +630,65 @@ function readCliMapRecord(thisPtr, layout) {
   };
 }
 
-function normalizeObject(fn, thisPtr) {
+function readCliCodedTokenMapCallRecord(fn, callContext, retval) {
+  const exact = fn.call_layout && fn.call_layout.exact === true;
+  return {
+    type: "CliCodedTokenMapCallRecord",
+    native_layout: fn.call_layout ? fn.call_layout.name : "msdelta-cli-coded-token-map-call-v1",
+    operation: exact ? "MapCodedExact" : "MapCoded",
+    kind: callContext.inputs.kind,
+    raw: callContext.inputs.raw,
+    result: nativePointerU32(retval, "coded-token return"),
+    map: readCliMapRecord(callContext.this_ptr, fn.object_layout),
+  };
+}
+
+function normalizeObject(fn, callContext, retval) {
   if (fn.capture === "cli_metadata_internal_from_bitreader") {
-    return readCliMetadataRecord(thisPtr, fn.object_layout);
+    return readCliMetadataRecord(callContext.this_ptr, fn.object_layout);
   }
   if (fn.capture === "cli_map_from_bitreader") {
-    return readCliMapRecord(thisPtr, fn.object_layout);
+    return readCliMapRecord(callContext.this_ptr, fn.object_layout);
+  }
+  if (fn.capture === "cli_map_coded_token_call") {
+    return readCliCodedTokenMapCallRecord(fn, callContext, retval);
   }
   if (fn.capture === "reader_bitstream_only") {
     return null;
   }
   throw new Error(`unsupported stage capture adapter: ${fn.capture}`);
+}
+
+function nativePointerU32(value, label) {
+  const raw = BigInt(value.toString());
+  const masked = raw & 0xffffffffn;
+  const parsed = Number(masked);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${label} is not a uint32: ${value.toString()}`);
+  }
+  return parsed;
+}
+
+function captureInputs(fn, args) {
+  if (fn.capture === "cli_map_coded_token_call") {
+    return {
+      this_ptr: args[0].toString(),
+      kind: nativePointerU32(args[1], "coded-token kind"),
+      raw: nativePointerU32(args[2], "coded-token raw value"),
+    };
+  }
+  return {
+    this_ptr: args[0].toString(),
+    reader_ptr: args[1].toString(),
+  };
+}
+
+function captureCallContext(fn, args) {
+  return {
+    this_ptr: args[0],
+    reader_ptr: fn.reader_layout ? args[1] : null,
+    inputs: captureInputs(fn, args),
+  };
 }
 
 function writeObject(eventId, slot, objectValue) {
@@ -918,14 +975,13 @@ function installStageHook(moduleInfo, fn) {
       this.fn = fn;
       this.moduleInfo = moduleInfo;
       this.callId = nextEventId(fn.name);
-      this.thisPtr = args[0];
-      this.readerPtr = args[1];
+      this.callContext = captureCallContext(fn, args);
       this.traceThreadId = Process.getCurrentThreadId();
       this.readerTrace = null;
-      this.readerBefore = captureReaderSnapshot(this.readerPtr, fn.reader_layout);
+      this.readerBefore = captureReaderSnapshot(this.callContext.reader_ptr, fn.reader_layout);
       if (fn.reader_layout && SYMBOL_MAP.reader_read) {
         this.readerTrace = {
-          reader_ptr: this.readerPtr.toString(),
+          reader_ptr: this.callContext.reader_ptr.toString(),
           reads: [],
           error: null,
         };
@@ -933,18 +989,16 @@ function installStageHook(moduleInfo, fn) {
       }
       sendEvent(
         beginEvent(fn, moduleInfo, "enter", this.callId, {
-          inputs: {
-            this_ptr: this.thisPtr.toString(),
-            reader_ptr: this.readerPtr.toString(),
-          },
+          inputs: this.callContext.inputs,
         })
       );
     },
     onLeave(retval) {
       const fields = {
         retval: retval.toString(),
+        inputs: this.callContext.inputs,
         outputs: {
-          this_ptr: this.thisPtr.toString(),
+          this_ptr: this.callContext.this_ptr.toString(),
         },
       };
       let objectValue = null;
@@ -953,7 +1007,7 @@ function installStageHook(moduleInfo, fn) {
         popReaderTrace(this.traceThreadId, this.readerTrace);
       }
       try {
-        objectValue = normalizeObject(this.fn, this.thisPtr);
+        objectValue = normalizeObject(this.fn, this.callContext, retval);
         if (objectValue) {
           fields.objects = { normalized: "pending" };
         }
@@ -964,7 +1018,7 @@ function installStageHook(moduleInfo, fn) {
         };
       }
       if (this.fn.reader_layout) {
-        const readerAfter = captureReaderSnapshot(this.readerPtr, this.fn.reader_layout);
+        const readerAfter = captureReaderSnapshot(this.callContext.reader_ptr, this.fn.reader_layout);
         if (this.readerBefore.error || readerAfter.error) {
           fields.reader_window = {
             native_layout: this.fn.reader_layout.name,

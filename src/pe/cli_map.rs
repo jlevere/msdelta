@@ -81,16 +81,16 @@ pub(crate) struct CliRidMap {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct CliRidMapEntry {
-    pub(crate) source: u32,
-    pub(crate) target: u32,
+    pub(crate) source: i64,
+    pub(crate) target: i64,
 }
 
 impl CliRidMap {
     pub(crate) fn new(mapped_rids: Vec<u32>) -> Self {
         Self::from_entries(mapped_rids.into_iter().enumerate().map(|(index, target)| {
             CliRidMapEntry {
-                source: index as u32 + 1,
-                target,
+                source: index as i64 + 1,
+                target: i64::from(target),
             }
         }))
     }
@@ -108,52 +108,46 @@ impl CliRidMap {
         Self { entries: deduped }
     }
 
-    fn from_rift_table(table_id: u8, rift: &RiftTable) -> CliMapResult<Self> {
+    fn from_rift_table(_table_id: u8, rift: &RiftTable) -> CliMapResult<Self> {
         let mut entries = Vec::with_capacity(rift.entries.len());
         for entry in &rift.entries {
-            let source = u32::try_from(entry.source).map_err(|_| {
-                CliCodedTokenMapError::InvalidRidMapEntry {
-                    table_id,
-                    map_source: entry.source,
-                    map_target: entry.target,
-                }
-            })?;
-            let target = u32::try_from(entry.target).map_err(|_| {
-                CliCodedTokenMapError::InvalidRidMapEntry {
-                    table_id,
-                    map_source: entry.source,
-                    map_target: entry.target,
-                }
-            })?;
-            entries.push(CliRidMapEntry { source, target });
+            entries.push(CliRidMapEntry {
+                source: entry.source,
+                target: entry.target,
+            });
         }
         Ok(Self::from_entries(entries))
     }
 
-    fn map_rid(&self, table_id: u8, source_rid: u32) -> CliMapResult<u32> {
-        if source_rid == 0 || self.entries.is_empty() {
-            return Ok(source_rid);
+    fn map_rid(&self, source_rid: u32) -> u32 {
+        if self.entries.is_empty() {
+            return source_rid;
         }
 
+        let source_rid = i64::from(source_rid);
         let entry = match self
             .entries
             .binary_search_by_key(&source_rid, |entry| entry.source)
         {
             Ok(index) => self.entries[index],
-            Err(0) => return Ok(source_rid),
+            Err(0) => *self
+                .entries
+                .last()
+                .expect("non-empty RID map should have a last entry"),
             Err(index) => self.entries[index - 1],
         };
-        apply_rid_offset(table_id, source_rid, entry)
+        source_rid.wrapping_add(entry.target.wrapping_sub(entry.source)) as u32
     }
 
     fn map_rid_exact(&self, source_rid: u32) -> Option<u32> {
-        if source_rid == 0 || self.entries.is_empty() {
-            return Some(source_rid);
+        if self.entries.is_empty() {
+            return None;
         }
+        let source_rid = i64::from(source_rid);
         self.entries
             .binary_search_by_key(&source_rid, |entry| entry.source)
             .ok()
-            .map(|index| self.entries[index].target)
+            .map(|index| self.entries[index].target as u32)
     }
 }
 
@@ -322,28 +316,21 @@ impl CliCodedTokenMap {
     }
 
     pub(crate) fn map_coded_token(&self, raw: u32, kind: CodedIndexKind) -> CliMapResult<u32> {
-        let token = split_coded_token(raw, kind)?;
+        let Some(token) = split_coded_token_for_native_mapping(raw, kind) else {
+            return Ok(raw);
+        };
         if token.table_id == TABLE_SENTINEL {
             return Ok(raw);
         }
-        if token.rid == 0 {
-            return reassemble_coded_token(token.kind, token.table_id, token.tag, 0);
-        }
 
         let Some(rid_map) = &self.table_maps[token.table_id as usize] else {
-            return reassemble_coded_token(token.kind, token.table_id, token.tag, token.rid);
+            return Ok(raw);
         };
 
-        let mapped_rid = rid_map.map_rid(token.table_id, token.rid)?;
-        if mapped_rid == 0 {
-            return Err(CliCodedTokenMapError::InvalidMappedRid {
-                table_id: token.table_id,
-                source_rid: token.rid,
-                mapped_rid,
-            });
-        }
-
-        reassemble_coded_token(token.kind, token.table_id, token.tag, mapped_rid)
+        let mapped_rid = rid_map.map_rid(token.rid);
+        Ok(reassemble_coded_token_native(
+            token.kind, token.tag, mapped_rid,
+        ))
     }
 
     pub(crate) fn map_coded_token_exact(
@@ -351,30 +338,27 @@ impl CliCodedTokenMap {
         raw: u32,
         kind: CodedIndexKind,
     ) -> CliMapResult<u32> {
-        let token = split_coded_token(raw, kind)?;
+        let Some(token) = split_coded_token_for_native_mapping(raw, kind) else {
+            return Ok(CLI_CODED_TOKEN_EXACT_MISS);
+        };
         if token.table_id == TABLE_SENTINEL {
-            return Ok(raw);
-        }
-        if token.rid == 0 {
-            return reassemble_coded_token(token.kind, token.table_id, token.tag, 0);
+            return Ok(CLI_CODED_TOKEN_EXACT_MISS);
         }
 
         let Some(rid_map) = &self.table_maps[token.table_id as usize] else {
-            return reassemble_coded_token(token.kind, token.table_id, token.tag, token.rid);
+            return Ok(CLI_CODED_TOKEN_EXACT_MISS);
         };
 
         let Some(mapped_rid) = rid_map.map_rid_exact(token.rid) else {
             return Ok(CLI_CODED_TOKEN_EXACT_MISS);
         };
-        if mapped_rid == 0 {
-            return Err(CliCodedTokenMapError::InvalidMappedRid {
-                table_id: token.table_id,
-                source_rid: token.rid,
-                mapped_rid,
-            });
+        if mapped_rid == CLI_CODED_TOKEN_EXACT_MISS {
+            return Ok(CLI_CODED_TOKEN_EXACT_MISS);
         }
 
-        reassemble_coded_token(token.kind, token.table_id, token.tag, mapped_rid)
+        Ok(reassemble_coded_token_native(
+            token.kind, token.tag, mapped_rid,
+        ))
     }
 }
 
@@ -411,6 +395,20 @@ pub(crate) fn split_coded_token(raw: u32, kind: CodedIndexKind) -> CliMapResult<
         .ok_or(CliCodedTokenMapError::InvalidTag { kind, tag })?;
 
     Ok(CliCodedToken {
+        kind,
+        table_id,
+        tag,
+        rid: raw >> schema.tag_bits,
+    })
+}
+
+fn split_coded_token_for_native_mapping(raw: u32, kind: CodedIndexKind) -> Option<CliCodedToken> {
+    let schema = coded_index_schema(kind);
+    let tag_mask = tag_mask(schema.tag_bits);
+    let tag = raw & tag_mask;
+    let table_id = schema.tag_to_table.get(tag as usize).copied()?;
+
+    Some(CliCodedToken {
         kind,
         table_id,
         tag,
@@ -469,6 +467,11 @@ fn tag_mask(tag_bits: u8) -> u32 {
     (1u32 << tag_bits) - 1
 }
 
+fn reassemble_coded_token_native(kind: CodedIndexKind, tag: u32, rid: u32) -> u32 {
+    let schema = coded_index_schema(kind);
+    (rid << schema.tag_bits) | tag
+}
+
 fn empty_rift_table() -> RiftTable {
     RiftTable {
         entries: Vec::new(),
@@ -497,21 +500,12 @@ fn collect_rift_deltas<'a>(
     (source_deltas, target_deltas)
 }
 
-fn apply_rid_offset(table_id: u8, source_rid: u32, entry: CliRidMapEntry) -> CliMapResult<u32> {
-    let mapped = i64::from(source_rid) + (i64::from(entry.target) - i64::from(entry.source));
-    u32::try_from(mapped).map_err(|_| CliCodedTokenMapError::MappedRidOutOfRange {
-        table_id,
-        source_rid,
-        mapped_rid: mapped,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::lzx::rift::{IntFormat, RiftEntry, RiftTable};
     use crate::pe::cli_schema::CODED_INDEXES;
-    use serde::Deserialize;
+    use serde::{Deserialize, Deserializer};
     use std::path::Path;
 
     const TYPE_DEF: u8 = 0x02;
@@ -706,6 +700,70 @@ mod tests {
     }
 
     #[test]
+    fn cli_coded_token_map_matches_win26100_stage_fixture_calls() {
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/atoms/FridaStageCapture/cli-coded-token-map-win26100");
+        let object_dir = fixture.join("objects");
+        if !object_dir.exists() {
+            return;
+        }
+
+        let mut paths = std::fs::read_dir(&object_dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect::<Vec<_>>();
+        paths.sort();
+        assert_eq!(paths.len(), 80);
+
+        let mut map_coded = 0usize;
+        let mut map_coded_exact = 0usize;
+        let mut exact_misses = 0usize;
+        let mut large_s64_values = 0usize;
+        for path in paths {
+            let text = std::fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+            if text.contains("\"9223372036854775807\"") {
+                large_s64_values += 1;
+            }
+            let native: NativeCliCodedTokenMapCallRecord = serde_json::from_str(&text)
+                .unwrap_or_else(|error| panic!("parse {}: {error}", path.display()));
+            assert_eq!(native.record_type, "CliCodedTokenMapCallRecord");
+            assert_eq!(
+                native.native_layout,
+                "msdelta-win26100-compo-cli-map-coded-token-v1"
+            );
+
+            let model = native_to_cli_map_model(&native.map, &path);
+            let token_map = model.coded_token_map().unwrap_or_else(|error| {
+                panic!("build coded-token map {}: {error}", path.display())
+            });
+            let kind = native_coded_kind(native.kind, &path);
+            let actual = match native.operation.as_str() {
+                "MapCoded" => {
+                    map_coded += 1;
+                    token_map.map_coded_token(native.raw, kind)
+                }
+                "MapCodedExact" => {
+                    map_coded_exact += 1;
+                    token_map.map_coded_token_exact(native.raw, kind)
+                }
+                operation => panic!("{} unexpected operation {operation}", path.display()),
+            }
+            .unwrap_or_else(|error| panic!("map coded token {}: {error}", path.display()));
+
+            if native.result == CLI_CODED_TOKEN_EXACT_MISS {
+                exact_misses += 1;
+            }
+            assert_eq!(actual, native.result, "{}", path.display());
+        }
+
+        assert_eq!(map_coded, 52);
+        assert_eq!(map_coded_exact, 28);
+        assert_eq!(exact_misses, 4);
+        assert_eq!(large_s64_values, 28);
+    }
+
+    #[test]
     fn splits_typedef_or_ref_tokens() {
         let token = split_coded_token((7 << 2) | 1, CodedIndexKind::TypeDefOrRef).unwrap();
 
@@ -766,12 +824,29 @@ mod tests {
         assert_eq!(
             map.map_coded_token_exact(raw, CodedIndexKind::CustomAttributeType)
                 .unwrap(),
-            raw
+            CLI_CODED_TOKEN_EXACT_MISS
         );
     }
 
     #[test]
-    fn preserves_null_rid_without_looking_up_map() {
+    fn native_mapping_handles_invalid_tags_without_error() {
+        let map = CliCodedTokenMap::new();
+        let raw = 3;
+
+        assert_eq!(
+            map.map_coded_token(raw, CodedIndexKind::TypeDefOrRef)
+                .unwrap(),
+            raw
+        );
+        assert_eq!(
+            map.map_coded_token_exact(raw, CodedIndexKind::TypeDefOrRef)
+                .unwrap(),
+            CLI_CODED_TOKEN_EXACT_MISS
+        );
+    }
+
+    #[test]
+    fn preserves_null_rid_when_no_table_entries_exist() {
         let map = CliCodedTokenMap::new()
             .with_table_map(TYPE_REF, Vec::new())
             .unwrap();
@@ -780,6 +855,11 @@ mod tests {
             map.map_coded_token(1, CodedIndexKind::TypeDefOrRef)
                 .unwrap(),
             1
+        );
+        assert_eq!(
+            map.map_coded_token_exact(1, CodedIndexKind::TypeDefOrRef)
+                .unwrap(),
+            CLI_CODED_TOKEN_EXACT_MISS
         );
     }
 
@@ -830,6 +910,11 @@ mod tests {
             map.map_coded_token((7 << 2) | 1, CodedIndexKind::TypeDefOrRef)
                 .unwrap(),
             (11 << 2) | 1
+        );
+        assert_eq!(
+            map.map_coded_token((3 << 2) | 1, CodedIndexKind::TypeDefOrRef)
+                .unwrap(),
+            (13 << 2) | 1
         );
     }
 
@@ -890,7 +975,7 @@ mod tests {
     }
 
     #[test]
-    fn exact_map_preserves_rid_when_no_table_map_exists() {
+    fn exact_map_misses_when_no_selected_table_map_exists() {
         let map = CliCodedTokenMap::new()
             .with_table_map(TYPE_DEF, vec![4])
             .unwrap();
@@ -898,42 +983,35 @@ mod tests {
         assert_eq!(
             map.map_coded_token_exact(3 << 2, CodedIndexKind::HasConstant)
                 .unwrap(),
-            3 << 2
+            CLI_CODED_TOKEN_EXACT_MISS
         );
     }
 
     #[test]
-    fn rejects_zero_mapped_non_null_rid() {
+    fn permits_zero_mapped_non_null_rid_like_native() {
         let map = CliCodedTokenMap::new()
             .with_table_map(TYPE_DEF, vec![0])
             .unwrap();
 
-        assert!(matches!(
-            map.map_coded_token(1 << 2, CodedIndexKind::TypeDefOrRef),
-            Err(CliCodedTokenMapError::InvalidMappedRid {
-                table_id: TYPE_DEF,
-                source_rid: 1,
-                mapped_rid: 0,
-            })
-        ));
+        assert_eq!(
+            map.map_coded_token(1 << 2, CodedIndexKind::TypeDefOrRef)
+                .unwrap(),
+            0
+        );
     }
 
     #[test]
-    fn rejects_rid_that_cannot_be_reassembled() {
+    fn native_reassembly_uses_wrapping_u32_result() {
         let too_large = (u32::MAX >> 2) + 1;
         let map = CliCodedTokenMap::new()
             .with_table_map(TYPE_DEF, vec![too_large])
             .unwrap();
 
-        assert!(matches!(
-            map.map_coded_token(1 << 2, CodedIndexKind::TypeDefOrRef),
-            Err(CliCodedTokenMapError::RidOverflow {
-                kind: CodedIndexKind::TypeDefOrRef,
-                table_id: TYPE_DEF,
-                rid,
-                tag_bits: 2,
-            }) if rid == too_large
-        ));
+        assert_eq!(
+            map.map_coded_token(1 << 2, CodedIndexKind::TypeDefOrRef)
+                .unwrap(),
+            0
+        );
     }
 
     fn present_empty_cli_map() -> Vec<u8> {
@@ -996,8 +1074,22 @@ mod tests {
 
     #[derive(Debug, Deserialize)]
     struct NativeRiftEntry {
+        #[serde(deserialize_with = "deserialize_i64_value")]
         source: i64,
+        #[serde(deserialize_with = "deserialize_i64_value")]
         target: i64,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct NativeCliCodedTokenMapCallRecord {
+        #[serde(rename = "type")]
+        record_type: String,
+        native_layout: String,
+        operation: String,
+        kind: usize,
+        raw: u32,
+        result: u32,
+        map: NativeCliMapRecord,
     }
 
     fn native_to_cli_map_model(native: &NativeCliMapRecord, path: &Path) -> CliMapModel {
@@ -1042,6 +1134,30 @@ mod tests {
                     target: entry.target,
                 })
                 .collect(),
+        }
+    }
+
+    fn native_coded_kind(kind: usize, path: &Path) -> CodedIndexKind {
+        CODED_INDEXES
+            .get(kind)
+            .unwrap_or_else(|| panic!("{} invalid coded-token kind {kind}", path.display()))
+            .kind
+    }
+
+    fn deserialize_i64_value<'de, D>(deserializer: D) -> std::result::Result<i64, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum I64Value {
+            Number(i64),
+            String(String),
+        }
+
+        match I64Value::deserialize(deserializer)? {
+            I64Value::Number(value) => Ok(value),
+            I64Value::String(value) => value.parse::<i64>().map_err(serde::de::Error::custom),
         }
     }
 }

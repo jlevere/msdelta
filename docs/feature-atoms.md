@@ -80,6 +80,20 @@ Registry status is intentionally conservative:
 Do not mark an atom `supported` only because a broad corpus happens to pass.
 The atom needs a specific contract and evidence at the right stage.
 
+## Revising Atoms
+
+The registry is a working map, not a schema freeze. Native evidence can and
+should change atom boundaries. Split an atom when two behaviors need different
+state, fixtures, or fuzz generators; merge atoms when a boundary was only an
+implementation convenience and cannot be independently observed. When a split is
+about the oracle workflow rather than the Rust behavior, add a `lab` atom and
+leave the implementation atom focused on the code contract.
+
+Record coverage gaps as first-class next steps instead of promoting an atom
+prematurely. `CliCodedTokenMap` is the current example: natural native calls
+prove exact hit/miss behavior and non-exact identity behavior, but a forced
+non-identity `MapCoded` call still needs a targeted oracle case.
+
 ## Oracle Levels
 
 The registry has a single `oracle_level` field. It records the strongest
@@ -252,6 +266,13 @@ the same hash-selected `msdelta.dll` hook lane for
 `compo::CliMap::FromBitReader`. It emits normalized `CliMapBitstream` rift maps
 plus reader-window blobs for both empty and populated maps.
 
+The third internal stage capture is
+`FridaStageCapture/cli-coded-token-map-win26100`: a non-reader method oracle
+for `compo::CliMap::MapCoded` and `compo::CliMap::MapCodedExact`. It emits
+normalized call records containing the coded-token kind, raw input, native
+return value, and a logical `CliMap` snapshot. This is the first managed
+algebra atom validated by call replay rather than by parser bitstreams.
+
 The stage agent snapshots the native reader before and after the call, then
 extracts the full consumed bit window into a fresh standalone `BitReader`
 stream and rejects the capture if replaying that window does not match the
@@ -261,6 +282,11 @@ actual fixture contract: native Huffman/rift readers can consume bits without
 going through the public `Read(n)` helper. The normalized object remains the
 stable cross-version assertion; the reader-window blob is the parser input that
 proves the wire contract.
+
+For non-reader stage hooks, the fixture contract is the normalized call record:
+stable inputs, native return value, and enough normalized object state to replay
+the call in Rust. `CliCodedTokenMap` also taught the normalizer to emit signed
+64-bit rift values outside JavaScript's safe integer range as decimal strings.
 
 Use this shape for future oracle atoms:
 
@@ -275,6 +301,9 @@ Use this shape for future oracle atoms:
 5. Promote only the smallest capture that proves the behavior.
 6. For stage captures, commit normalized logical objects, reader-window blobs,
    and stripped fixture metadata with no volatile file-sink paths.
+7. For pure method captures, commit normalized call records and object
+   snapshots; do not invent reader blobs when the native function did not
+   consume a bitstream.
 
 ## Near-Term Milestones
 

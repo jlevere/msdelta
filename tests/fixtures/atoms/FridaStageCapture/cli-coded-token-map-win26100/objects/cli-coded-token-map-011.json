@@ -1,0 +1,286 @@
+{
+  "type": "CliCodedTokenMapCallRecord",
+  "native_layout": "msdelta-win26100-compo-cli-map-coded-token-v1",
+  "operation": "MapCoded",
+  "kind": 2,
+  "raw": 65,
+  "result": 65,
+  "map": {
+    "type": "CliMapBitstreamRecord",
+    "native_layout": "msdelta-win26100-compo-cli-map-v1",
+    "strings": {
+      "entries": [],
+      "sorted": true
+    },
+    "user_strings": {
+      "entries": [],
+      "sorted": true
+    },
+    "blob": {
+      "entries": [],
+      "sorted": true
+    },
+    "guid": {
+      "entries": [],
+      "sorted": true
+    },
+    "tables": [
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      },
+      {
+        "entries": [],
+        "sorted": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,4571 @@
+{
+  "schema": 1,
+  "atom": "FridaStageCapture",
+  "case_id": "cli-coded-token-map-win26100",
+  "source_case_id": "managed-corpus-msdelta",
+  "module_sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb",
+  "target_atom": "CliCodedTokenMap",
+  "selection": "one representative per operation/kind/raw/result/table-entry-count/large-s64 tuple",
+  "events": [
+    {
+      "event_id": "cli-coded-token-map-001-enter",
+      "call_id": "cli-coded-token-map-001",
+      "seq": 1,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 0,
+        "raw": 0
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-001-leave",
+      "call_id": "cli-coded-token-map-001",
+      "seq": 1,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 0,
+        "raw": 0
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-001.json",
+          "size": 4605,
+          "sha256": "0f93e41bfeb15547a811951ec85654f1a7ccd4e22e99e58b18b40458d87b30c1",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-002-enter",
+      "call_id": "cli-coded-token-map-002",
+      "seq": 2,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 0,
+        "raw": 0
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-002-leave",
+      "call_id": "cli-coded-token-map-002",
+      "seq": 2,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 0,
+        "raw": 0
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-002.json",
+          "size": 5113,
+          "sha256": "c543db03d4c63d2863d5a213211130b2c421be7ec773edc6bc2c4ec88ad89de7",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-003-enter",
+      "call_id": "cli-coded-token-map-003",
+      "seq": 3,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 0,
+        "raw": 5
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-003-leave",
+      "call_id": "cli-coded-token-map-003",
+      "seq": 3,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 0,
+        "raw": 5
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-003.json",
+          "size": 4605,
+          "sha256": "96510afa64af4ef4c8671c521302cc539bd511a8608dd2036db8949aad8f1c23",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-004-enter",
+      "call_id": "cli-coded-token-map-004",
+      "seq": 4,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 0,
+        "raw": 5
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-004-leave",
+      "call_id": "cli-coded-token-map-004",
+      "seq": 4,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 0,
+        "raw": 5
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-004.json",
+          "size": 5113,
+          "sha256": "806ce7cb16a10647033355ed929725e17087424a6ad081b5566381f098a9a54e",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-005-enter",
+      "call_id": "cli-coded-token-map-005",
+      "seq": 5,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 0,
+        "raw": 9
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-005-leave",
+      "call_id": "cli-coded-token-map-005",
+      "seq": 5,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 0,
+        "raw": 9
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-005.json",
+          "size": 4605,
+          "sha256": "0cff07bbad26d9305f673f7874fd351ed1640229a9d85d7b8eb50110edaed3ee",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-006-enter",
+      "call_id": "cli-coded-token-map-006",
+      "seq": 6,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 0,
+        "raw": 9
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-006-leave",
+      "call_id": "cli-coded-token-map-006",
+      "seq": 6,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 0,
+        "raw": 9
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-006.json",
+          "size": 4903,
+          "sha256": "e8ca37ecca941f7aa70d8e92e6fe64b3f8867632ceac68a45df7085df5c636d9",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-007-enter",
+      "call_id": "cli-coded-token-map-007",
+      "seq": 7,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 46
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-007-leave",
+      "call_id": "cli-coded-token-map-007",
+      "seq": 7,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 46
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-007.json",
+          "size": 4607,
+          "sha256": "b5154c1d97ba835ffa22845fd988f397c5e4642f4d3e6cb2efb7d73d342d20a6",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-008-enter",
+      "call_id": "cli-coded-token-map-008",
+      "seq": 8,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 46
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-008-leave",
+      "call_id": "cli-coded-token-map-008",
+      "seq": 8,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 46
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-008.json",
+          "size": 5115,
+          "sha256": "8975328244fbf365dc94dd97b686756b467363453496acf417f6096d094ff60a",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-009-enter",
+      "call_id": "cli-coded-token-map-009",
+      "seq": 9,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 64
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-009-leave",
+      "call_id": "cli-coded-token-map-009",
+      "seq": 9,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 64
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-009.json",
+          "size": 4607,
+          "sha256": "a74f683cd4c31dec795d4013fb61c73d99caf6d67480668188e9c69fdb1c4c43",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-010-enter",
+      "call_id": "cli-coded-token-map-010",
+      "seq": 10,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 64
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-010-leave",
+      "call_id": "cli-coded-token-map-010",
+      "seq": 10,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 64
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-010.json",
+          "size": 4905,
+          "sha256": "9d7da3332731d085fdc8d2f6f16e9ca21008e6e069c805b23f1336246e78be92",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-011-enter",
+      "call_id": "cli-coded-token-map-011",
+      "seq": 11,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 65
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-011-leave",
+      "call_id": "cli-coded-token-map-011",
+      "seq": 11,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 65
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-011.json",
+          "size": 4607,
+          "sha256": "42b55b6b778dc21d6e1472a14bf2302bea428fb2d5792444a037e1da9c15a1c4",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-012-enter",
+      "call_id": "cli-coded-token-map-012",
+      "seq": 12,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 65
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-012-leave",
+      "call_id": "cli-coded-token-map-012",
+      "seq": 12,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 65
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-012.json",
+          "size": 4905,
+          "sha256": "930896ed4d91f84ad287e8cbb106dade956a14a11dc045d17af9b734cbe55159",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-013-enter",
+      "call_id": "cli-coded-token-map-013",
+      "seq": 13,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 67
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-013-leave",
+      "call_id": "cli-coded-token-map-013",
+      "seq": 13,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 67
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-013.json",
+          "size": 4607,
+          "sha256": "ad9eefcba95a535314c8f1f06327e2a381541221a9ab7b3fc0465bca8cb344aa",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-014-enter",
+      "call_id": "cli-coded-token-map-014",
+      "seq": 14,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 67
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-014-leave",
+      "call_id": "cli-coded-token-map-014",
+      "seq": 14,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 67
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-014.json",
+          "size": 4905,
+          "sha256": "81a6abd4961b79034ed08f75854bad35b0b336fdea19cf6546fca8bf738f4783",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-015-enter",
+      "call_id": "cli-coded-token-map-015",
+      "seq": 15,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 96
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-015-leave",
+      "call_id": "cli-coded-token-map-015",
+      "seq": 15,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 96
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-015.json",
+          "size": 4607,
+          "sha256": "8c25ded7e8c5a3ac16a547ca67a8e6b21c83a7c9c934e074794d0f7760520a7e",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-016-enter",
+      "call_id": "cli-coded-token-map-016",
+      "seq": 16,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 96
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-016-leave",
+      "call_id": "cli-coded-token-map-016",
+      "seq": 16,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 96
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-016.json",
+          "size": 4905,
+          "sha256": "8982ee950d767aeb227fe94c0403ac2dd23b7bb17b29485f336213fef6fefa2c",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-017-enter",
+      "call_id": "cli-coded-token-map-017",
+      "seq": 17,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 99
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-017-leave",
+      "call_id": "cli-coded-token-map-017",
+      "seq": 17,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 99
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-017.json",
+          "size": 4607,
+          "sha256": "d59fa49046c30a534515786b87791edfd0840661c5b4c589937c382bffb1e17c",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-018-enter",
+      "call_id": "cli-coded-token-map-018",
+      "seq": 18,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 99
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-018-leave",
+      "call_id": "cli-coded-token-map-018",
+      "seq": 18,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 99
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-018.json",
+          "size": 4905,
+          "sha256": "afc9a7eac192901cf42e23e1ea653633b9c0bdaa930f1b951b22e928b2b4cef3",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-019-enter",
+      "call_id": "cli-coded-token-map-019",
+      "seq": 19,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 128
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-019-leave",
+      "call_id": "cli-coded-token-map-019",
+      "seq": 19,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 128
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-019.json",
+          "size": 4609,
+          "sha256": "af352c24aaff92e10e6e9ed6a0c73fb6507f303275321d2d6b3de123f4c09e57",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-020-enter",
+      "call_id": "cli-coded-token-map-020",
+      "seq": 20,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 128
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-020-leave",
+      "call_id": "cli-coded-token-map-020",
+      "seq": 20,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 128
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-020.json",
+          "size": 4907,
+          "sha256": "f4fe58d2f8a532268f0466d743c8b37ffa127aba8a19419e85ed076dd5340efe",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-021-enter",
+      "call_id": "cli-coded-token-map-021",
+      "seq": 21,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 9
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-021-leave",
+      "call_id": "cli-coded-token-map-021",
+      "seq": 21,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 9
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-021.json",
+          "size": 4605,
+          "sha256": "e797d8bb0213493cf8237d3e953ebe1df78b5da0100a16bcf9484129a152ceba",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-022-enter",
+      "call_id": "cli-coded-token-map-022",
+      "seq": 22,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 9
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-022-leave",
+      "call_id": "cli-coded-token-map-022",
+      "seq": 22,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 9
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-022.json",
+          "size": 5113,
+          "sha256": "1ae05533cfa4ac919b3968b1bec49978c1b465808b6caf780c3608580cec2477",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-023-enter",
+      "call_id": "cli-coded-token-map-023",
+      "seq": 23,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 12
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-023-leave",
+      "call_id": "cli-coded-token-map-023",
+      "seq": 23,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 12
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-023.json",
+          "size": 4607,
+          "sha256": "291112ef247863e1958b751eea4ec1847bbec70cb2f406923f36ad809a92a336",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-024-enter",
+      "call_id": "cli-coded-token-map-024",
+      "seq": 24,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 17
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-024-leave",
+      "call_id": "cli-coded-token-map-024",
+      "seq": 24,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 17
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-024.json",
+          "size": 4607,
+          "sha256": "fafc15da62b159867b1765606dd8f78d6a547a20823d40e24130c269fda88797",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-025-enter",
+      "call_id": "cli-coded-token-map-025",
+      "seq": 25,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 17
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-025-leave",
+      "call_id": "cli-coded-token-map-025",
+      "seq": 25,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 17
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-025.json",
+          "size": 5115,
+          "sha256": "56803c62e51584bddc89712b0db01a21eca4f283a0ca1ec88dda704d1551522d",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-026-enter",
+      "call_id": "cli-coded-token-map-026",
+      "seq": 26,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 20
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-026-leave",
+      "call_id": "cli-coded-token-map-026",
+      "seq": 26,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 20
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-026.json",
+          "size": 4607,
+          "sha256": "b9f148a6f711258eaa46c13257c436e2035fdb0b8e795935ec08217c692de23a",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-027-enter",
+      "call_id": "cli-coded-token-map-027",
+      "seq": 27,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 25
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-027-leave",
+      "call_id": "cli-coded-token-map-027",
+      "seq": 27,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 25
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-027.json",
+          "size": 4607,
+          "sha256": "fee8a1f1dc8d387996e4eb373e7528317f0ec837b8487c4cea9a26c8abc0e841",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-028-enter",
+      "call_id": "cli-coded-token-map-028",
+      "seq": 28,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 25
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-028-leave",
+      "call_id": "cli-coded-token-map-028",
+      "seq": 28,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 25
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-028.json",
+          "size": 5115,
+          "sha256": "f44c751bc53672bc0bd3e774fd3ec017f7c1bd60e1cd6e33e8c44b6feef3fe0e",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-029-enter",
+      "call_id": "cli-coded-token-map-029",
+      "seq": 29,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 33
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-029-leave",
+      "call_id": "cli-coded-token-map-029",
+      "seq": 29,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 33
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-029.json",
+          "size": 4607,
+          "sha256": "7c02681053bb058345ae5c64ca163266f916c228320d1f27b8769eae43e8afee",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-030-enter",
+      "call_id": "cli-coded-token-map-030",
+      "seq": 30,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 33
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-030-leave",
+      "call_id": "cli-coded-token-map-030",
+      "seq": 30,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 33
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-030.json",
+          "size": 4905,
+          "sha256": "d14367b6ad0e3003e63bce7188bb9dd93d878896d78ace0a34ad1a733f3cc19a",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-031-enter",
+      "call_id": "cli-coded-token-map-031",
+      "seq": 31,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 41
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-031-leave",
+      "call_id": "cli-coded-token-map-031",
+      "seq": 31,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 41
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-031.json",
+          "size": 4607,
+          "sha256": "d9185b252fd3a887224d0990f53ded23db0d01781d9ac927f894ffff4ceb55cc",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-032-enter",
+      "call_id": "cli-coded-token-map-032",
+      "seq": 32,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 41
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-032-leave",
+      "call_id": "cli-coded-token-map-032",
+      "seq": 32,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 41
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-032.json",
+          "size": 4905,
+          "sha256": "7bf8fc39a81cb37a20d80018401609317a367df0f7315975ef06fd14555a343c",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-033-enter",
+      "call_id": "cli-coded-token-map-033",
+      "seq": 33,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 57
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-033-leave",
+      "call_id": "cli-coded-token-map-033",
+      "seq": 33,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 57
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-033.json",
+          "size": 4607,
+          "sha256": "521a11949c60ad48cc4b98cad18c9b89f1579d5fd4a58624a1f29d5bf8741da5",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-034-enter",
+      "call_id": "cli-coded-token-map-034",
+      "seq": 34,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 57
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-034-leave",
+      "call_id": "cli-coded-token-map-034",
+      "seq": 34,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 57
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-034.json",
+          "size": 4905,
+          "sha256": "47b010d200c2b88e8023f2664039c0f8d93d9713f8c8a381058f198b18ba101b",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-035-enter",
+      "call_id": "cli-coded-token-map-035",
+      "seq": 35,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 6,
+        "raw": 3
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-035-leave",
+      "call_id": "cli-coded-token-map-035",
+      "seq": 35,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 6,
+        "raw": 3
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-035.json",
+          "size": 4605,
+          "sha256": "ab6ffc6370f2c5118eb986c0ebb8bcca382ce4b1639b9311ebd57d95ff489ce4",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-036-enter",
+      "call_id": "cli-coded-token-map-036",
+      "seq": 36,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 6,
+        "raw": 3
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-036-leave",
+      "call_id": "cli-coded-token-map-036",
+      "seq": 36,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 6,
+        "raw": 3
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-036.json",
+          "size": 4903,
+          "sha256": "404364884544b8ec36288e27ee46be1908b713c3ab4f6b0ce4ca08e263a19822",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-037-enter",
+      "call_id": "cli-coded-token-map-037",
+      "seq": 37,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 7,
+        "raw": 11
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-037-leave",
+      "call_id": "cli-coded-token-map-037",
+      "seq": 37,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 7,
+        "raw": 11
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-037.json",
+          "size": 4607,
+          "sha256": "ec4794a9af71abdf812f01e1a7c62933b49f3dedb37a2bb4a254aa279f8fc336",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-038-enter",
+      "call_id": "cli-coded-token-map-038",
+      "seq": 38,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 9,
+        "raw": 0
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-038-leave",
+      "call_id": "cli-coded-token-map-038",
+      "seq": 38,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 9,
+        "raw": 0
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-038.json",
+          "size": 4605,
+          "sha256": "93ec0d3cb77e8de6ebd42257304d0b13bec27206a699a2f4d70ba899820b987f",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-039-enter",
+      "call_id": "cli-coded-token-map-039",
+      "seq": 39,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 9,
+        "raw": 0
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-039-leave",
+      "call_id": "cli-coded-token-map-039",
+      "seq": 39,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 9,
+        "raw": 0
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-039.json",
+          "size": 4903,
+          "sha256": "bf836a760a2824f6701203414dce9e8e2a8ee3233cd4a5d4d7348eb9d955d23a",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-040-enter",
+      "call_id": "cli-coded-token-map-040",
+      "seq": 40,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 10
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-040-leave",
+      "call_id": "cli-coded-token-map-040",
+      "seq": 40,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 10
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-040.json",
+          "size": 4608,
+          "sha256": "b4d4a364fa67a2318036869f676d3a5238b761e6c221810ec9ccd3e961d481ae",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-041-enter",
+      "call_id": "cli-coded-token-map-041",
+      "seq": 41,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 10
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-041-leave",
+      "call_id": "cli-coded-token-map-041",
+      "seq": 41,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 10
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-041.json",
+          "size": 4906,
+          "sha256": "6b46bc12bd5136fd30a0d9e3a92b3ad65487fab5ddfb2dcf75384e054843e42b",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-042-enter",
+      "call_id": "cli-coded-token-map-042",
+      "seq": 42,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 11
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-042-leave",
+      "call_id": "cli-coded-token-map-042",
+      "seq": 42,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 11
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-042.json",
+          "size": 4608,
+          "sha256": "d6441b1c7604ae4e46fd0e6be3eaa7948ea1bf69c89704806b6ef2ca161b820b",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-043-enter",
+      "call_id": "cli-coded-token-map-043",
+      "seq": 43,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 11
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-043-leave",
+      "call_id": "cli-coded-token-map-043",
+      "seq": 43,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 11
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-043.json",
+          "size": 5116,
+          "sha256": "7c21f6fdcd1aa3d7cc0748c062d49c0ff9bf70a1be40a49a58a94f928611009b",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-044-enter",
+      "call_id": "cli-coded-token-map-044",
+      "seq": 44,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 19
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-044-leave",
+      "call_id": "cli-coded-token-map-044",
+      "seq": 44,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 19
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-044.json",
+          "size": 4608,
+          "sha256": "9cb3381b80e0593552348835c1dd3fdb741811e05c208dcbf0eab9b555888e10",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-045-enter",
+      "call_id": "cli-coded-token-map-045",
+      "seq": 45,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 19
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-045-leave",
+      "call_id": "cli-coded-token-map-045",
+      "seq": 45,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 19
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-045.json",
+          "size": 5116,
+          "sha256": "76a2e3f08c138dfc65b9bea4ca4a257f0a8cc4cec19951acf21bad2167259974",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-046-enter",
+      "call_id": "cli-coded-token-map-046",
+      "seq": 46,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 27
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-046-leave",
+      "call_id": "cli-coded-token-map-046",
+      "seq": 46,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 27
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-046.json",
+          "size": 4608,
+          "sha256": "b06f149169e60bc0ba00f218c3a8039c5097f5990350e9b577d3d59ff6d9d068",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-047-enter",
+      "call_id": "cli-coded-token-map-047",
+      "seq": 47,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 27
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-047-leave",
+      "call_id": "cli-coded-token-map-047",
+      "seq": 47,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 27
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-047.json",
+          "size": 4906,
+          "sha256": "9d181a337a1ab15392588c748ce5eef07d8b47d62f8cf8ddcf7fee6cb7edc2a0",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-048-enter",
+      "call_id": "cli-coded-token-map-048",
+      "seq": 48,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 43
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-048-leave",
+      "call_id": "cli-coded-token-map-048",
+      "seq": 48,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 43
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-048.json",
+          "size": 4608,
+          "sha256": "300a03bc2945187dfe7dadc35a27f67fbdc6cc6cf0c2bc089815e4f4687b53ef",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-049-enter",
+      "call_id": "cli-coded-token-map-049",
+      "seq": 49,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 43
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-049-leave",
+      "call_id": "cli-coded-token-map-049",
+      "seq": 49,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 10,
+        "raw": 43
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-049.json",
+          "size": 4906,
+          "sha256": "8f718ba4acaa3ed4132853e27ed78ca1b5e36fd90136a01cf5fdbed41c8697c2",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-050-enter",
+      "call_id": "cli-coded-token-map-050",
+      "seq": 50,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 11,
+        "raw": 6
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-050-leave",
+      "call_id": "cli-coded-token-map-050",
+      "seq": 50,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 11,
+        "raw": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-050.json",
+          "size": 4606,
+          "sha256": "dd5c50aae6805443ed27e307cd18ea916145f3e95aa53600f3e83d5694548707",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-051-enter",
+      "call_id": "cli-coded-token-map-051",
+      "seq": 51,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 11,
+        "raw": 6
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-051-leave",
+      "call_id": "cli-coded-token-map-051",
+      "seq": 51,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 11,
+        "raw": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-051.json",
+          "size": 5114,
+          "sha256": "95a3041555d34487ecf01ec0c8e0fd10e8f67cab6a21b283d058a49a69fcb27c",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-052-enter",
+      "call_id": "cli-coded-token-map-052",
+      "seq": 52,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 12,
+        "raw": 4
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-052-leave",
+      "call_id": "cli-coded-token-map-052",
+      "seq": 52,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCoded",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x22578",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 12,
+        "raw": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-052.json",
+          "size": 4606,
+          "sha256": "650646557e0e740f6d452120402f54520598b0c15147f3b9c32771ad3c659e65",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-053-enter",
+      "call_id": "cli-coded-token-map-053",
+      "seq": 53,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 46
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-053-leave",
+      "call_id": "cli-coded-token-map-053",
+      "seq": 53,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 46
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-053.json",
+          "size": 7950,
+          "sha256": "0cec9a7346196df15ab8e5e22d135dec79c2fa7715f7e947328a0f0e1a6e075e",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-054-enter",
+      "call_id": "cli-coded-token-map-054",
+      "seq": 54,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 46
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-054-leave",
+      "call_id": "cli-coded-token-map-054",
+      "seq": 54,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 46
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-054.json",
+          "size": 8102,
+          "sha256": "3272b43a428a044b9617f63fdc7931368166820d9e8dafd2404b63b4a046b04d",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-055-enter",
+      "call_id": "cli-coded-token-map-055",
+      "seq": 55,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 46
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-055-leave",
+      "call_id": "cli-coded-token-map-055",
+      "seq": 55,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 46
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-055.json",
+          "size": 8244,
+          "sha256": "8f985694e75dfbad8941bd5dfd8c5d16a38197a4dec49901e1f501bde7972761",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-056-enter",
+      "call_id": "cli-coded-token-map-056",
+      "seq": 56,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 46
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-056-leave",
+      "call_id": "cli-coded-token-map-056",
+      "seq": 56,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 46
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-056.json",
+          "size": 10808,
+          "sha256": "b1fa6b38d322bbfaed6da2a4df5b9102db67549136bce9bab63dcb92d76b0165",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-057-enter",
+      "call_id": "cli-coded-token-map-057",
+      "seq": 57,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 64
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-057-leave",
+      "call_id": "cli-coded-token-map-057",
+      "seq": 57,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 64
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-057.json",
+          "size": 10800,
+          "sha256": "e9c320c067f1372e8ad1d2e9c2d126aaf3f17fdbd7d388a38948a2e10b7a0c8d",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-058-enter",
+      "call_id": "cli-coded-token-map-058",
+      "seq": 58,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 65
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-058-leave",
+      "call_id": "cli-coded-token-map-058",
+      "seq": 58,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 65
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-058.json",
+          "size": 10800,
+          "sha256": "8888de19e7d0d457daed26ee369dc7dcaeb9b255ac5c31b67837077eb5df45c8",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-059-enter",
+      "call_id": "cli-coded-token-map-059",
+      "seq": 59,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 67
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-059-leave",
+      "call_id": "cli-coded-token-map-059",
+      "seq": 59,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 67
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-059.json",
+          "size": 10800,
+          "sha256": "8a0c0adf7a17db427980b190b10539564bd194dccbf25e597bd58a82281a3b4e",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-060-enter",
+      "call_id": "cli-coded-token-map-060",
+      "seq": 60,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 96
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-060-leave",
+      "call_id": "cli-coded-token-map-060",
+      "seq": 60,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 96
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-060.json",
+          "size": 10800,
+          "sha256": "7aad659ce57092580f66703e797d9434e57d252dcf72274d38b8daa2052c2280",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-061-enter",
+      "call_id": "cli-coded-token-map-061",
+      "seq": 61,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 99
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-061-leave",
+      "call_id": "cli-coded-token-map-061",
+      "seq": 61,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 99
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-061.json",
+          "size": 10800,
+          "sha256": "0b99da8a9f8591f8bc1edcc96158da28c76c6775f2206aaf17c1565e573074c0",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-062-enter",
+      "call_id": "cli-coded-token-map-062",
+      "seq": 62,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 128
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-062-leave",
+      "call_id": "cli-coded-token-map-062",
+      "seq": 62,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 2,
+        "raw": 128
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-062.json",
+          "size": 10802,
+          "sha256": "832861a824cc13ac544839ab0a2e97041ef6cc9606f33f37310f896dd69c4a96",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-063-enter",
+      "call_id": "cli-coded-token-map-063",
+      "seq": 63,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 9
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-063-leave",
+      "call_id": "cli-coded-token-map-063",
+      "seq": 63,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 9
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-063.json",
+          "size": 8020,
+          "sha256": "25cea49682f29174d9cd51c0c9b55cb0a5a4f4fa97aa2d6bceb734cdcbb8d36d",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-064-enter",
+      "call_id": "cli-coded-token-map-064",
+      "seq": 64,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 9
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-064-leave",
+      "call_id": "cli-coded-token-map-064",
+      "seq": 64,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 9
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-064.json",
+          "size": 8172,
+          "sha256": "da70f75e4730c1054c4c9530d6b0a090b2d6f71cac73809aef4cffe05145f646",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-065-enter",
+      "call_id": "cli-coded-token-map-065",
+      "seq": 65,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 9
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-065-leave",
+      "call_id": "cli-coded-token-map-065",
+      "seq": 65,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 9
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-065.json",
+          "size": 8294,
+          "sha256": "e7c60c0ca353a90cf971ed7f8de45a241f16963fdf8b5dec9e0efb0edd2f8c96",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-066-enter",
+      "call_id": "cli-coded-token-map-066",
+      "seq": 66,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 9
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-066-leave",
+      "call_id": "cli-coded-token-map-066",
+      "seq": 66,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 9
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-066.json",
+          "size": 10998,
+          "sha256": "16bca8581d59d02605eec5fc0d122663c74ae92ed31e824fc2220c6cfde22c48",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-067-enter",
+      "call_id": "cli-coded-token-map-067",
+      "seq": 67,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 17
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-067-leave",
+      "call_id": "cli-coded-token-map-067",
+      "seq": 67,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 17
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-067.json",
+          "size": 8022,
+          "sha256": "84103b4a462a9eecbe4ee57e4f966ba63c9180b456e35e46c1d2a51528e1f9f3",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-068-enter",
+      "call_id": "cli-coded-token-map-068",
+      "seq": 68,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 17
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-068-leave",
+      "call_id": "cli-coded-token-map-068",
+      "seq": 68,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 17
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-068.json",
+          "size": 8174,
+          "sha256": "53a6924677d764f2109f04c2768b67eb615c02cf33520d501cf297a1b1b5fed4",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-069-enter",
+      "call_id": "cli-coded-token-map-069",
+      "seq": 69,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 17
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-069-leave",
+      "call_id": "cli-coded-token-map-069",
+      "seq": 69,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 17
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-069.json",
+          "size": 8296,
+          "sha256": "882b3a7442dfe9c10cc7461df39c9c9a90dca3f7cc238643af8583da33178148",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-070-enter",
+      "call_id": "cli-coded-token-map-070",
+      "seq": 70,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 17
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-070-leave",
+      "call_id": "cli-coded-token-map-070",
+      "seq": 70,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 17
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-070.json",
+          "size": 11000,
+          "sha256": "f774f167313fb0cc11705e708994fd743aaa33ed93b17f97c522904fca3c30e2",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-071-enter",
+      "call_id": "cli-coded-token-map-071",
+      "seq": 71,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 25
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-071-leave",
+      "call_id": "cli-coded-token-map-071",
+      "seq": 71,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 25
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-071.json",
+          "size": 8022,
+          "sha256": "ffceece5ff65c975dd3b7cbbb7bef7083449d60568b63e959de50d20b1bb3a4d",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-072-enter",
+      "call_id": "cli-coded-token-map-072",
+      "seq": 72,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 25
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-072-leave",
+      "call_id": "cli-coded-token-map-072",
+      "seq": 72,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 25
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-072.json",
+          "size": 8174,
+          "sha256": "d41fd9dcba299f0875e589b94df7be71692c63440b63c16e2756c79e14e3acb2",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-073-enter",
+      "call_id": "cli-coded-token-map-073",
+      "seq": 73,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 25
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-073-leave",
+      "call_id": "cli-coded-token-map-073",
+      "seq": 73,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 25
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-073.json",
+          "size": 8296,
+          "sha256": "df6fc4bb2be380709fd6c9cf354e485993fc0c711e1b6fdf457eef9122f46f28",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-074-enter",
+      "call_id": "cli-coded-token-map-074",
+      "seq": 74,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 25
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-074-leave",
+      "call_id": "cli-coded-token-map-074",
+      "seq": 74,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 25
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-074.json",
+          "size": 11000,
+          "sha256": "b95295844e86a39f1c98589336222cf3bb33a26848c9e775698db518544bef4a",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-075-enter",
+      "call_id": "cli-coded-token-map-075",
+      "seq": 75,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 33
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-075-leave",
+      "call_id": "cli-coded-token-map-075",
+      "seq": 75,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 33
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-075.json",
+          "size": 8022,
+          "sha256": "f063ade419989cb885c30577316f3a1dc34eaf0f629fde7e369bcee1415b35c2",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-076-enter",
+      "call_id": "cli-coded-token-map-076",
+      "seq": 76,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 33
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-076-leave",
+      "call_id": "cli-coded-token-map-076",
+      "seq": 76,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 33
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-076.json",
+          "size": 8174,
+          "sha256": "9ee528c36939190ecec9abf72076d9ecce4a50b97423f3cb25bfcc6a2f2ec769",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-077-enter",
+      "call_id": "cli-coded-token-map-077",
+      "seq": 77,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 33
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-077-leave",
+      "call_id": "cli-coded-token-map-077",
+      "seq": 77,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 33
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-077.json",
+          "size": 8424,
+          "sha256": "fd53694f693b1a6cc1c5918dbd3b0e6b0dbd01b6874691647de295b872904ab0",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-078-enter",
+      "call_id": "cli-coded-token-map-078",
+      "seq": 78,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 33
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-078-leave",
+      "call_id": "cli-coded-token-map-078",
+      "seq": 78,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 33
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-078.json",
+          "size": 11000,
+          "sha256": "c18f402b52f15a45a2df9e01510ee0aa958e5cbdc938a6aa981e2b7eacc882b7",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-079-enter",
+      "call_id": "cli-coded-token-map-079",
+      "seq": 79,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 41
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-079-leave",
+      "call_id": "cli-coded-token-map-079",
+      "seq": 79,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 41
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-079.json",
+          "size": 11000,
+          "sha256": "fb9e05c91dea18c0afdc420b9edd844899a25c56e423ac6a25899ddbe43c1ca3",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-080-enter",
+      "call_id": "cli-coded-token-map-080",
+      "seq": 80,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 57
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-coded-token-map-080-leave",
+      "call_id": "cli-coded-token-map-080",
+      "seq": 80,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliCodedTokenMap",
+      "symbol": "compo::CliMap::MapCodedExact",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x499c0",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_coded_token_call"
+      },
+      "inputs": {
+        "kind": 5,
+        "raw": 57
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-coded-token-map-080.json",
+          "size": 11000,
+          "sha256": "f918730c4ccac4f394b151b3e9435a63141539143cd065242f518e4026e5df06",
+          "note": "",
+          "type": "CliCodedTokenMapCallRecord"
+        }
+      ],
+      "blobs": []
+    }
+  ]
+}

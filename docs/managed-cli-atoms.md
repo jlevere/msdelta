@@ -11,6 +11,14 @@ The near-term goal is decode/apply support. Create-side atoms are listed because
 the native graph exposes them, but they should not block the first parser and
 apply milestones.
 
+Atom boundaries in this document are expected to move as native evidence
+improves. Split an atom when a smaller transition can be independently
+captured, fuzzed, and documented; keep it merged when the split would only name
+an implementation helper with no separate oracle. When a lesson is about the
+lab workflow rather than the managed behavior itself, update
+`docs/feature-atoms.tsv` with a `lab` atom instead of inflating the managed
+pipeline.
+
 ## Terminology
 
 `CLI` in these symbols means the ECMA-335 Common Language Infrastructure
@@ -200,10 +208,13 @@ rid = value >> tag_bits
 target_table = coded_schema[kind].tag_to_table[tag]
 ```
 
-If `target_table == 0x40`, the token is identity. Otherwise the RID is mapped
-through the `CliMap` table rift for `target_table` and reassembled with the
-original tag. `MapCodedExact` is the same operation, but returns
-`0xffffffff` when the RID has no exact map.
+For `MapCoded`, invalid tags and `target_table == 0x40` are identity returns.
+Otherwise the RID is mapped through the `CliMap` table rift for
+`target_table` and reassembled with the original tag. For `MapCodedExact`,
+invalid tags, sentinel-table tags, absent table maps, non-exact RIDs, and exact
+targets with low 32 bits of `0xffffffff` return `0xffffffff`. Native
+reassembly uses the low 32 bits of the mapped RID; it does not surface
+overflow or zero-RID errors at this method boundary.
 
 ## Apply Atoms
 
@@ -392,17 +403,30 @@ the RID through the selected table rift, then reassemble.
 
 Outputs: mapped token value, or `0xffffffff` for exact-map miss.
 
-Done when: unit tests cover every coded-token kind and every sentinel table id
-`0x40`.
+Done when: unit tests cover every coded-token kind and sentinel table id
+`0x40`, and native call fixtures replay both `MapCoded` and `MapCodedExact`
+outputs against Rust.
 
 Current state: `src/pe/cli_map.rs` implements the pure coded-token algebra
 against the static schema. It covers tag/RID split and reassembly, sentinel
-table identity, null RID handling, identity when no table map is present,
-piecewise non-exact RID mapping, exact RID lookup with the `0xffffffff` miss
-sentinel, and mapped-RID overflow/zero checks. The current RID map type is a
-semantic source-RID to target-RID model; the next step is to feed it from the
-`CliMapBitstream` shared-format rift parser and confirm sentinel/exact behavior
-against a native object oracle.
+table identity for non-exact mapping, exact miss behavior, identity when no
+table map is present for non-exact mapping, native wrapping reassembly,
+piecewise non-exact RID mapping, exact RID lookup, and feeding table maps from
+`CliMapBitstream`.
+
+Current evidence: the Win26100 stage fixture
+`FridaStageCapture/cli-coded-token-map-win26100` captures 80 representative
+native call records selected from 2,258 `CliCodedTokenMap` leaves in the
+managed corpus. It covers `MapCoded` across nine coded-token kinds with empty
+and non-empty maps, and `MapCodedExact` hit/miss behavior over non-empty maps
+that include native `i64::MAX` sentinel entries. The Rust replay test compares
+every fixture call result with `CliCodedTokenMap`.
+
+Known coverage gap: the natural managed corpus did not produce a non-exact
+`MapCoded` call whose result differs from the raw input. The synthetic
+piecewise-remap tests cover the disassembled behavior, but this still needs a
+targeted internal harness or corpus case that forces a native non-identity
+remap.
 
 ### TransformContextManaged
 

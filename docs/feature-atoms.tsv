@@ -45,7 +45,7 @@ Cli4MetadataFromPe	cli	parser	0x10,0x20,0x40,0x80	-	Cli4Metadata::Init	missing	r
 CliMetadataBitstream	cli	parser	0x2,0x4,0x8	0x8000	CliMetadata::FromBitReader / compo::CliMetadata::InternalFromBitReader	partial	reject	curated	Native reader-window fixture validates parser; wire parsed target metadata into managed transform context after CliMap parity
 Cli4MetadataBitstream	cli	parser	0x10,0x20,0x40,0x80	0x400000	PortableExecutableInfoCli4::FromBitReader and CliMetadata::FromBitReader	missing	reject	needs_fixture	Parse CLI4 target metadata record from preprocess bitstream
 CliMapBitstream	cli	parser	pe,cli	-	CliMap::FromBitReader	partial	reject	curated	Native reader-window fixture validates parser; populated-map writer is decode-equivalent but not native bit-identical until IntFormat canonicalization
-CliCodedTokenMap	cli	algebra	pe,cli	-	CliMap::MapCoded and CliMap::MapCodedExact	partial	reject	unit	Wire to CliMapBitstream table maps and confirm sentinel/exact-miss behavior with native oracle
+CliCodedTokenMap	cli	algebra	pe,cli	-	CliMap::MapCoded and CliMap::MapCodedExact	partial	reject	curated	Native call fixture replays natural MapCoded identity cases and MapCodedExact hit/miss cases; add targeted non-identity MapCoded oracle
 TransformContextManaged	cli	pipeline	pe,cli	-	TransformBase::SetCliMetadata SetCli4Metadata SetCliMap	missing	reject	needs_fixture	Attach source/target metadata and CliMap to every transform before execution
 MarkNonExeCliMethods	cli	source_transform	pe,cli	0x2	MarkNonExe::RunCli and MarkNonExe::RunCli4	missing	reject	needs_fixture	Mark method bodies from MethodDef rows in the hint map
 TransformCliDisasm	cli	source_transform	0x2,0x4,0x8	0x4000	TransformCliDisasm::Run	missing	reject	needs_fixture	Remap IL metadata-token and user-string operands through CliMap
@@ -72,8 +72,9 @@ CreateArm64	create	create	0x80	-	CreateDeltaB file_type_set 0xf5 path	missing	re
 UnsupportedFeatureGate	pipeline	gate	all	-	apply feature dispatch policy	partial	allow	unit	Generate fail-loud diagnostics from this registry
 FridaExportOracle	lab	fixture	all	-	ApplyDeltaB ApplyDeltaGetReverseB CreateDeltaB exports	partial	lab_only	curated	Add reverse/CreateDeltaB smoke captures after RAW ApplyDeltaB fixture
 FridaSymbolMap	lab	fixture	all	-	module hash plus internal RVA hook map	partial	lab_only	curated	Add maps for CliMap and compression-rift functions across DLL builds
-FridaStageCapture	lab	fixture	pe,cli	-	internal function entry and exit hooks	partial	lab_only	curated	CliMetadata captures normalized objects plus replay-checked reader bitstreams; add CliMap and compression-rift stage hooks next
-FridaObjectNormalizer	lab	fixture	pe,cli	-	Frida logical object readers	partial	lab_only	curated	Add RiftTable CliMap and PE info object normalizers
+FridaStageCapture	lab	fixture	pe,cli	-	internal function entry and exit hooks	partial	lab_only	curated	Parser atoms capture normalized objects plus replay-checked reader bitstreams for CliMetadata and CliMap
+FridaCallStageCapture	lab	fixture	pe,cli	-	internal pure-method entry and exit hooks	partial	lab_only	curated	CliCodedTokenMap captures stable call inputs, return values, and object snapshots; generalize for more algebra atoms
+FridaObjectNormalizer	lab	fixture	pe,cli	-	Frida logical object readers	partial	lab_only	curated	Add PE info, CLI4 map, and compression-rift normalizers
 FridaFixturePromotion	lab	fixture	all	-	capture to atom fixture promotion	partial	lab_only	curated	Generalize first promoted export packet into a reusable promotion tool
 WindowsVersionMatrix	lab	fixture	all	-	Windows build and DLL hash matrix	missing	lab_only	none	Run the same capture set across builds and group drift by atom
 NativeOracleDiff	lab	fixture	all	-	normalized native capture comparator	missing	lab_only	none	Compare Rust stage outputs against normalized native capture objects

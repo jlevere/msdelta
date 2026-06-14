@@ -11,6 +11,10 @@ const CLI_MAP_FIXTURE_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/tests/fixtures/atoms/FridaStageCapture/cli-map-win26100"
 );
+const CLI_CODED_TOKEN_MAP_FIXTURE_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/atoms/FridaStageCapture/cli-coded-token-map-win26100"
+);
 
 #[test]
 fn cli_metadata_stage_fixture_is_curated_from_live_lab_capture() {
@@ -389,6 +393,153 @@ fn cli_map_stage_objects_and_bitstreams_are_hashed_and_diverse() {
         distinct_blob_hashes.len(),
         read_usize(&case, "distinct_blob_hash_count")
     );
+}
+
+#[test]
+fn cli_coded_token_map_stage_fixture_is_curated_from_live_lab_capture() {
+    let fixture = Path::new(CLI_CODED_TOKEN_MAP_FIXTURE_DIR);
+    let case = fs::read_to_string(fixture.join("case.toml")).expect("read case.toml");
+    let capture = fs::read_to_string(fixture.join("capture.json")).expect("read capture.json");
+
+    for required in [
+        "atom = \"FridaStageCapture\"",
+        "case = \"cli-coded-token-map-win26100\"",
+        "source_case = \"managed-corpus-msdelta\"",
+        "module = \"msdelta.dll\"",
+        "module_sha256 = \"ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb\"",
+        "symbols = [\"compo::CliMap::MapCoded\", \"compo::CliMap::MapCodedExact\"]",
+        "rvas = [\"0x22578\", \"0x499c0\"]",
+        "abi = \"ms-x64-thiscall\"",
+        "capture_adapter = \"cli_map_coded_token_call\"",
+        "call_layout = \"msdelta-win26100-compo-cli-map-coded-token-v1\"",
+        "object_layout = \"msdelta-win26100-compo-cli-map-v1\"",
+        "target_atom = \"CliCodedTokenMap\"",
+        "transport = \"frida-inject\"",
+        "normalization_error_count = 0",
+    ] {
+        assert!(case.contains(required), "case.toml missing {required}");
+    }
+
+    assert_eq!(read_usize(&case, "export_event_count"), 36);
+    assert_eq!(read_usize(&case, "source_stage_event_count"), 4516);
+    assert_eq!(read_usize(&case, "stage_event_count"), 160);
+    assert_eq!(read_usize(&case, "stage_leave_object_count"), 80);
+    assert_eq!(read_usize(&case, "stage_leave_blob_count"), 0);
+    assert_eq!(read_usize(&case, "distinct_object_hash_count"), 80);
+    assert_eq!(read_usize(&case, "map_coded_case_count"), 52);
+    assert_eq!(read_usize(&case, "map_coded_exact_case_count"), 28);
+    assert_eq!(read_usize(&case, "non_empty_map_count"), 52);
+    assert_eq!(read_usize(&case, "exact_miss_count"), 4);
+    assert_eq!(read_usize(&case, "large_s64_value_count"), 28);
+
+    for volatile in [
+        "file_sink_path",
+        ".claude",
+        "lab/frida/out",
+        "this_ptr",
+        "reader_ptr",
+        "timestamp_ms",
+        "thread_id",
+        "\"retval\"",
+    ] {
+        assert!(
+            !capture.contains(volatile),
+            "curated stage fixture should not retain volatile field {volatile}"
+        );
+    }
+
+    assert!(capture.contains("\"target_atom\": \"CliCodedTokenMap\""));
+    assert!(capture.contains("\"symbol\": \"compo::CliMap::MapCoded\""));
+    assert!(capture.contains("\"symbol\": \"compo::CliMap::MapCodedExact\""));
+    assert_eq!(capture.matches("\"phase\": \"enter\"").count(), 80);
+    assert_eq!(capture.matches("\"phase\": \"leave\"").count(), 80);
+    assert_eq!(
+        capture
+            .matches("\"type\": \"CliCodedTokenMapCallRecord\"")
+            .count(),
+        80
+    );
+    assert!(
+        !capture.contains("\"error\""),
+        "curated call fixture should not contain capture errors"
+    );
+}
+
+#[test]
+fn cli_coded_token_map_stage_objects_are_hashed_and_diverse() {
+    let fixture = Path::new(CLI_CODED_TOKEN_MAP_FIXTURE_DIR);
+    let case = fs::read_to_string(fixture.join("case.toml")).expect("read case.toml");
+    let capture = fs::read_to_string(fixture.join("capture.json")).expect("read capture.json");
+    let object_dir = fixture.join("objects");
+
+    let mut objects = fs::read_dir(&object_dir)
+        .expect("read objects dir")
+        .map(|entry| entry.expect("read object entry").path())
+        .collect::<Vec<_>>();
+    objects.sort();
+    assert_eq!(objects.len(), read_usize(&case, "stage_leave_object_count"));
+
+    let mut distinct_hashes = BTreeSet::new();
+    let mut map_coded = 0usize;
+    let mut map_coded_exact = 0usize;
+    let mut exact_miss = 0usize;
+    let mut large_s64 = 0usize;
+    let mut non_empty_maps = 0usize;
+    for object_path in objects {
+        let text = fs::read_to_string(&object_path)
+            .unwrap_or_else(|error| panic!("read {}: {error}", object_path.display()));
+        let hash = sha256_file(&object_path);
+        distinct_hashes.insert(hash.clone());
+        assert!(
+            capture.contains(&hash),
+            "capture should reference hash for {}",
+            object_path.display()
+        );
+        for required in [
+            "\"type\": \"CliCodedTokenMapCallRecord\"",
+            "\"native_layout\": \"msdelta-win26100-compo-cli-map-coded-token-v1\"",
+            "\"kind\"",
+            "\"raw\"",
+            "\"result\"",
+            "\"map\"",
+            "\"type\": \"CliMapBitstreamRecord\"",
+            "\"tables\"",
+        ] {
+            assert!(
+                text.contains(required),
+                "{} missing {required}",
+                object_path.display()
+            );
+        }
+        if text.contains("\"operation\": \"MapCoded\"") {
+            map_coded += 1;
+        }
+        if text.contains("\"operation\": \"MapCodedExact\"") {
+            map_coded_exact += 1;
+        }
+        if text.contains("\"result\": 4294967295") {
+            exact_miss += 1;
+        }
+        if text.contains("\"9223372036854775807\"") {
+            large_s64 += 1;
+        }
+        if text.matches("\"source\"").count() > 0 {
+            non_empty_maps += 1;
+        }
+    }
+
+    assert_eq!(
+        distinct_hashes.len(),
+        read_usize(&case, "distinct_object_hash_count")
+    );
+    assert_eq!(map_coded, read_usize(&case, "map_coded_case_count"));
+    assert_eq!(
+        map_coded_exact,
+        read_usize(&case, "map_coded_exact_case_count")
+    );
+    assert_eq!(exact_miss, read_usize(&case, "exact_miss_count"));
+    assert_eq!(large_s64, read_usize(&case, "large_s64_value_count"));
+    assert_eq!(non_empty_maps, read_usize(&case, "non_empty_map_count"));
 }
 
 fn read_usize(case: &str, key: &str) -> usize {

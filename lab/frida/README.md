@@ -176,11 +176,17 @@ Supported now:
   `lab/frida/symbol-maps`.
 - Logical object normalization for managed metadata and CLI map bitstream records.
 - Replay-checked native reader-window blob capture for stage parser atoms.
+- Pure method call records for stage algebra atoms: stable call inputs, native
+  return values, and normalized object snapshots.
 - `CliMetadataBitstream` object and reader-bitstream capture for Win26100 `msdelta.dll`
   (`compo::CliMetadata::InternalFromBitReader`, RVA `0x1cba0` for
   `ac96e0c3...f4358eb`).
 - `CliMapBitstream` object and reader-bitstream capture for Win26100 `msdelta.dll`
   (`compo::CliMap::FromBitReader`, RVA `0x1a160` for
+  `ac96e0c3...f4358eb`).
+- `CliCodedTokenMap` call-record capture for Win26100 `msdelta.dll`
+  (`compo::CliMap::MapCoded`, RVA `0x22578`, and
+  `compo::CliMap::MapCodedExact`, RVA `0x499c0`, for
   `ac96e0c3...f4358eb`).
 - Local import of stage object JSON into `objects/*.json` and standalone reader
   inputs into `blobs/*.bin`.

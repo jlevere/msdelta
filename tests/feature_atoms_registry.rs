@@ -83,6 +83,7 @@ const REQUIRED_FRIDA_LAB_ATOMS: &[&str] = &[
     "FridaExportOracle",
     "FridaSymbolMap",
     "FridaStageCapture",
+    "FridaCallStageCapture",
     "FridaObjectNormalizer",
     "FridaFixturePromotion",
     "WindowsVersionMatrix",
