@@ -28,6 +28,7 @@ CLR metadata subsystem, not as miscellaneous PE helper code:
 | `metadata.rs` | CLR metadata root, typed rows/heaps, and MSDelta metadata-bitstream models |
 | `map.rs` | semantic `CliMap`, MSDelta map bitstream, and coded-token remapping |
 | `blob.rs` | compressed unsigned integers used by signature blobs |
+| `create_map.rs` | create-side managed map producers split into testable atoms |
 | `tokens.rs` | metadata table IDs, nonzero RIDs, raw metadata tokens, and typed heap offsets/indexes |
 
 Future splits should move toward `root.rs`, `tables.rs`, `heaps.rs`,
@@ -781,11 +782,20 @@ apply-side models are stable.
 | `GetPortableExecutableInfoManaged` | `GetPortableExecutableInfo`, `GetPortableExecutableInfoCli4` | Emit target PE info and target metadata for CreateDeltaB. |
 
 Current state: `pe::cli::create_map` now contains the first create-side
-building block. `CliMapStringsHash` parses `#Strings` heaps, matches exact byte
+building blocks. `CliMapStringsHash` parses `#Strings` heaps, matches exact byte
 string values from source to target, emits source-offset to target-offset rift
 entries, keeps `0 -> 0` for non-empty heaps, and uses the first target duplicate
 for deterministic unit coverage. Native hash collision and duplicate-selection
 behavior still need a fixture before this can feed `CliMapFromPEs`.
+
+`CliMapBlobAndRvas` is table-map driven rather than a standalone blob-content
+matcher. It walks exact source-RID to target-RID table-map entries, copies
+nonzero `#Blob` column offsets into the blob rift, and emits nonzero typed
+`Rva` columns into a separate RVA rift. Unit coverage proves MethodDef
+signature/RVA mapping, zero and unmapped-row skipping, that plain `U32` columns
+are not treated as RVAs, and truncated row rejection. The next gap is native
+fixture parity plus the create graph step that composes RVA maps with PE section
+maps.
 
 ## Current Implementation Plan
 
@@ -800,7 +810,7 @@ The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 23
 partial, 0 missing, and 0 rejected. All 24 remain `apply_policy=reject`.
 
 The broader managed workstream tracks 31 atoms including create-side map and
-encoder atoms. Current state: 1 supported, 24 partial, 6 missing, and 0
+encoder atoms. Current state: 1 supported, 25 partial, 5 missing, and 0
 rejected. All 31 remain `apply_policy=reject`.
 
 That is the important reading of current progress: the parser/context

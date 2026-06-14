@@ -42,6 +42,7 @@ pub(crate) enum ColumnKind {
     U8,
     U16,
     U32,
+    Rva,
     Heap(HeapKind),
     Table(u8),
     Coded(CodedIndexKind),
@@ -115,7 +116,7 @@ const FIELD_COLUMNS: &[ColumnSchema] = &[
 const METHOD_PTR_COLUMNS: &[ColumnSchema] = &[col("Method", ColumnKind::Table(0x06))];
 
 const METHOD_DEF_COLUMNS: &[ColumnSchema] = &[
-    col("Rva", ColumnKind::U32),
+    col("Rva", ColumnKind::Rva),
     col("ImplFlags", ColumnKind::U16),
     col("Flags", ColumnKind::U16),
     col("Name", ColumnKind::Heap(HeapKind::Strings)),
@@ -248,7 +249,7 @@ const IMPL_MAP_COLUMNS: &[ColumnSchema] = &[
 ];
 
 const FIELD_RVA_COLUMNS: &[ColumnSchema] = &[
-    col("Rva", ColumnKind::U32),
+    col("Rva", ColumnKind::Rva),
     col("Field", ColumnKind::Table(0x04)),
 ];
 
@@ -582,7 +583,7 @@ pub(crate) fn column_width(
     match kind {
         ColumnKind::U8 => 1,
         ColumnKind::U16 => 2,
-        ColumnKind::U32 => 4,
+        ColumnKind::U32 | ColumnKind::Rva => 4,
         ColumnKind::Heap(HeapKind::Strings) => heap_widths.strings,
         ColumnKind::Heap(HeapKind::Guid) => heap_widths.guid,
         ColumnKind::Heap(HeapKind::Blob) => heap_widths.blob,

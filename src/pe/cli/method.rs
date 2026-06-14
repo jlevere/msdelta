@@ -54,7 +54,7 @@ pub(crate) fn cli_method_body(
         .table_row_by_id(image, METHOD_DEF_TABLE_ID as u8, rid)
         .ok()?;
     let rva = match row.column("Rva").ok()? {
-        CliColumnValue::U32(rva) if rva != 0 => rva,
+        CliColumnValue::Rva(rva) if rva != 0 => rva,
         _ => return None,
     };
     let (file_offset, available) = method_rva_to_file_offset(pe, rva)?;

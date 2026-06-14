@@ -76,7 +76,7 @@ pub(crate) fn transform_cli_metadata(
                         .as_ref()
                         .and_then(|map| map.map_coded_token(value, kind).ok())
                         .unwrap_or(value),
-                    ColumnKind::U8 | ColumnKind::U16 | ColumnKind::U32 => value,
+                    ColumnKind::U8 | ColumnKind::U16 | ColumnKind::U32 | ColumnKind::Rva => value,
                 };
 
                 if mapped != value && write_index(image, cell_offset, width, mapped) {

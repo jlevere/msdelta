@@ -1,7 +1,8 @@
 //! Create-side CLI map producers.
 
 use crate::lzx::rift::{RiftEntry, RiftTable};
-use crate::pe::cli::metadata::CliMetadataModel;
+use crate::pe::cli::metadata::{CliColumnValue, CliMetadataModel};
+use crate::pe::cli::schema::{table_schema, ColumnKind, HeapKind};
 use crate::{Error, Result};
 use std::collections::BTreeMap;
 
@@ -16,6 +17,20 @@ pub(crate) struct CliStringsHeapMatchStats {
 pub(crate) struct CliStringsHeapMap {
     pub(crate) rift: RiftTable,
     pub(crate) stats: CliStringsHeapMatchStats,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CliBlobAndRvaMapStats {
+    pub(crate) mapped_blob_columns: usize,
+    pub(crate) mapped_rva_columns: usize,
+    pub(crate) skipped_unmapped_rows: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CliBlobAndRvaMaps {
+    pub(crate) blob: RiftTable,
+    pub(crate) rvas: RiftTable,
+    pub(crate) stats: CliBlobAndRvaMapStats,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -101,6 +116,127 @@ pub(crate) fn build_cli_strings_heap_map(
     })
 }
 
+pub(crate) fn build_cli_blob_and_rva_maps(
+    source_image: &[u8],
+    source_metadata: &CliMetadataModel,
+    target_image: &[u8],
+    target_metadata: &CliMetadataModel,
+    table_maps: &[RiftTable; 64],
+) -> Result<CliBlobAndRvaMaps> {
+    let mut blob_entries = vec![RiftEntry {
+        source: 0,
+        target: 0,
+    }];
+    let mut rva_entries = Vec::new();
+    let mut stats = CliBlobAndRvaMapStats {
+        mapped_blob_columns: 0,
+        mapped_rva_columns: 0,
+        skipped_unmapped_rows: 0,
+    };
+
+    for table_id in 0..64u8 {
+        let Some(schema) = table_schema(table_id) else {
+            continue;
+        };
+        let table_map = &table_maps[table_id as usize];
+        if table_map.entries.is_empty() {
+            continue;
+        }
+
+        let source_row_count = source_metadata.row_counts[table_id as usize];
+        if source_row_count == 0 {
+            continue;
+        }
+        let target_row_count = target_metadata.row_counts[table_id as usize];
+
+        for source_rid in 1..=source_row_count {
+            let Some(target_rid) = exact_table_target_rid(table_map, source_rid) else {
+                stats.skipped_unmapped_rows += 1;
+                continue;
+            };
+            if target_rid == 0 || target_rid > target_row_count {
+                stats.skipped_unmapped_rows += 1;
+                continue;
+            }
+
+            let source_row = source_metadata.table_row_by_id(source_image, table_id, source_rid)?;
+            let target_row = target_metadata.table_row_by_id(target_image, table_id, target_rid)?;
+
+            for (column_index, column) in schema.columns.iter().enumerate() {
+                match column.kind {
+                    ColumnKind::Heap(HeapKind::Blob) => {
+                        let source_offset =
+                            blob_column_offset(source_row.column_by_index(column_index)?)?;
+                        let target_offset =
+                            blob_column_offset(target_row.column_by_index(column_index)?)?;
+                        if source_offset == 0 || target_offset == 0 {
+                            continue;
+                        }
+                        blob_entries.push(RiftEntry {
+                            source: i64::from(source_offset),
+                            target: i64::from(target_offset),
+                        });
+                        stats.mapped_blob_columns += 1;
+                    }
+                    ColumnKind::Rva => {
+                        let source_rva =
+                            rva_column_value(source_row.column_by_index(column_index)?)?;
+                        let target_rva =
+                            rva_column_value(target_row.column_by_index(column_index)?)?;
+                        if source_rva == 0 || target_rva == 0 {
+                            continue;
+                        }
+                        rva_entries.push(RiftEntry {
+                            source: i64::from(source_rva),
+                            target: i64::from(target_rva),
+                        });
+                        stats.mapped_rva_columns += 1;
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    blob_entries.sort_by_key(|entry| entry.source);
+    rva_entries.sort_by_key(|entry| entry.source);
+
+    Ok(CliBlobAndRvaMaps {
+        blob: RiftTable {
+            entries: blob_entries,
+        },
+        rvas: RiftTable {
+            entries: rva_entries,
+        },
+        stats,
+    })
+}
+
+fn exact_table_target_rid(table_map: &RiftTable, source_rid: u32) -> Option<u32> {
+    let entry = table_map
+        .entries
+        .iter()
+        .find(|entry| entry.source == i64::from(source_rid))?;
+    u32::try_from(entry.target).ok()
+}
+
+fn blob_column_offset(value: CliColumnValue) -> Result<u32> {
+    match value {
+        CliColumnValue::Heap {
+            kind: HeapKind::Blob,
+            offset,
+        } => Ok(offset),
+        _ => Err(Error::Malformed("CLI map create: expected #Blob column")),
+    }
+}
+
+fn rva_column_value(value: CliColumnValue) -> Result<u32> {
+    match value {
+        CliColumnValue::Rva(value) => Ok(value),
+        _ => Err(Error::Malformed("CLI map create: expected RVA column")),
+    }
+}
+
 fn empty_strings_heap_map() -> CliStringsHeapMap {
     CliStringsHeapMap {
         rift: RiftTable {
@@ -141,7 +277,7 @@ fn parse_strings_heap_entries(heap: &[u8]) -> Result<Vec<StringsHeapEntry<'_>>> 
 mod tests {
     use super::*;
     use crate::pe::cli::metadata::{CliMetadataModel, CliStream, CliStreamSet};
-    use crate::pe::cli::schema::{CliSchemaFlavor, HeapIndexWidths};
+    use crate::pe::cli::schema::{row_size, CliSchemaFlavor, HeapIndexWidths};
 
     fn pairs(table: &RiftTable) -> Vec<(i64, i64)> {
         table
@@ -149,6 +285,15 @@ mod tests {
             .iter()
             .map(|entry| (entry.source, entry.target))
             .collect()
+    }
+
+    fn rift(entries: &[(i64, i64)]) -> RiftTable {
+        RiftTable {
+            entries: entries
+                .iter()
+                .map(|&(source, target)| RiftEntry { source, target })
+                .collect(),
+        }
     }
 
     #[test]
@@ -211,14 +356,133 @@ mod tests {
         assert_eq!(pairs(&map.rift), vec![(0, 0), (1, 5), (5, 1)]);
     }
 
+    #[test]
+    fn blob_and_rva_map_follows_exact_table_maps() {
+        let heap_widths = narrow_heap_widths();
+        let source_row_size = row_size(0x06, &method_rows(1), heap_widths).unwrap();
+        let target_row_size = row_size(0x06, &method_rows(2), heap_widths).unwrap();
+        let mut source_image = vec![0u8; 0x80];
+        let mut target_image = vec![0u8; 0x80];
+
+        put_u32(&mut source_image, 0x20, 0x2100);
+        put_u16(&mut source_image, 0x2a, 1);
+        put_u16(&mut source_image, 0x2c, 1);
+        put_u32(&mut target_image, 0x30 + target_row_size, 0x2400);
+        put_u16(&mut target_image, 0x30 + target_row_size + 10, 4);
+        put_u16(&mut target_image, 0x30 + target_row_size + 12, 1);
+
+        let source_metadata = metadata_with_table(0x06, 1, source_row_size as u32, 0x20);
+        let target_metadata = metadata_with_table(0x06, 2, target_row_size as u32, 0x30);
+        let mut table_maps = empty_table_maps();
+        table_maps[0x06] = rift(&[(0, 0), (1, 2)]);
+
+        let maps = build_cli_blob_and_rva_maps(
+            &source_image,
+            &source_metadata,
+            &target_image,
+            &target_metadata,
+            &table_maps,
+        )
+        .unwrap();
+
+        assert_eq!(pairs(&maps.blob), vec![(0, 0), (1, 4)]);
+        assert_eq!(pairs(&maps.rvas), vec![(0x2100, 0x2400)]);
+        assert_eq!(maps.stats.mapped_blob_columns, 1);
+        assert_eq!(maps.stats.mapped_rva_columns, 1);
+        assert_eq!(maps.stats.skipped_unmapped_rows, 0);
+    }
+
+    #[test]
+    fn blob_and_rva_map_skips_unmapped_and_zero_rows() {
+        let heap_widths = narrow_heap_widths();
+        let row_size = row_size(0x06, &method_rows(2), heap_widths).unwrap();
+        let mut source_image = vec![0u8; 0x80];
+        let mut target_image = vec![0u8; 0x80];
+
+        put_u32(&mut source_image, 0x20, 0x2100);
+        put_u16(&mut source_image, 0x2a, 1);
+        put_u32(&mut source_image, 0x20 + row_size, 0x2200);
+        put_u16(&mut source_image, 0x20 + row_size + 10, 7);
+        put_u32(&mut target_image, 0x30, 0);
+        put_u16(&mut target_image, 0x3a, 0);
+
+        let source_metadata = metadata_with_table(0x06, 2, row_size as u32, 0x20);
+        let target_metadata = metadata_with_table(0x06, 1, row_size as u32, 0x30);
+        let mut table_maps = empty_table_maps();
+        table_maps[0x06] = rift(&[(0, 0), (1, 1)]);
+
+        let maps = build_cli_blob_and_rva_maps(
+            &source_image,
+            &source_metadata,
+            &target_image,
+            &target_metadata,
+            &table_maps,
+        )
+        .unwrap();
+
+        assert_eq!(pairs(&maps.blob), vec![(0, 0)]);
+        assert!(maps.rvas.entries.is_empty());
+        assert_eq!(maps.stats.mapped_blob_columns, 0);
+        assert_eq!(maps.stats.mapped_rva_columns, 0);
+        assert_eq!(maps.stats.skipped_unmapped_rows, 1);
+    }
+
+    #[test]
+    fn blob_and_rva_map_does_not_treat_plain_u32_as_rva() {
+        let heap_widths = narrow_heap_widths();
+        let mut row_counts = [0u32; 64];
+        row_counts[0x02] = 1;
+        let row_size = row_size(0x02, &row_counts, heap_widths).unwrap();
+        let mut source_image = vec![0u8; 0x80];
+        let mut target_image = vec![0u8; 0x80];
+
+        put_u32(&mut source_image, 0x20, 0x1234);
+        put_u32(&mut target_image, 0x30, 0x5678);
+
+        let source_metadata = metadata_with_table(0x02, 1, row_size as u32, 0x20);
+        let target_metadata = metadata_with_table(0x02, 1, row_size as u32, 0x30);
+        let mut table_maps = empty_table_maps();
+        table_maps[0x02] = rift(&[(0, 0), (1, 1)]);
+
+        let maps = build_cli_blob_and_rva_maps(
+            &source_image,
+            &source_metadata,
+            &target_image,
+            &target_metadata,
+            &table_maps,
+        )
+        .unwrap();
+
+        assert_eq!(pairs(&maps.blob), vec![(0, 0)]);
+        assert!(maps.rvas.entries.is_empty());
+    }
+
+    #[test]
+    fn blob_and_rva_map_rejects_truncated_rows() {
+        let heap_widths = narrow_heap_widths();
+        let row_size = row_size(0x06, &method_rows(1), heap_widths).unwrap();
+        let source_image = vec![0u8; 0x24];
+        let target_image = vec![0u8; 0x80];
+        let source_metadata = metadata_with_table(0x06, 1, row_size as u32, 0x20);
+        let target_metadata = metadata_with_table(0x06, 1, row_size as u32, 0x30);
+        let mut table_maps = empty_table_maps();
+        table_maps[0x06] = rift(&[(0, 0), (1, 1)]);
+
+        assert!(matches!(
+            build_cli_blob_and_rva_maps(
+                &source_image,
+                &source_metadata,
+                &target_image,
+                &target_metadata,
+                &table_maps,
+            ),
+            Err(Error::Truncated)
+        ));
+    }
+
     fn metadata_with_strings(file_offset: usize, size: u32) -> CliMetadataModel {
-        CliMetadataModel {
-            flavor: CliSchemaFlavor::Classic,
-            metadata_rva: 0,
-            metadata_file_offset: 0,
-            metadata_size: 0,
-            version: "v4.0.30319".to_owned(),
-            streams: CliStreamSet {
+        metadata_with_streams(
+            CliStreamSet {
                 strings: Some(CliStream {
                     metadata_offset: 0,
                     file_offset,
@@ -233,6 +497,60 @@ mod tests {
                     size: 0,
                 },
             },
+            [0; 64],
+            [0; 64],
+            [None; 64],
+        )
+    }
+
+    fn metadata_with_table(
+        table_id: usize,
+        row_count: u32,
+        row_size: u32,
+        table_file_offset: usize,
+    ) -> CliMetadataModel {
+        let mut row_counts = [0u32; 64];
+        row_counts[table_id] = row_count;
+        let mut row_sizes = [0u32; 64];
+        row_sizes[table_id] = row_size;
+        let mut table_file_offsets = [None; 64];
+        table_file_offsets[table_id] = Some(table_file_offset);
+
+        metadata_with_streams(
+            CliStreamSet {
+                strings: None,
+                user_strings: None,
+                blob: Some(CliStream {
+                    metadata_offset: 0,
+                    file_offset: 0x60,
+                    size: 0x10,
+                }),
+                guid: None,
+                tables: CliStream {
+                    metadata_offset: 0,
+                    file_offset: table_file_offset,
+                    size: row_count * row_size,
+                },
+            },
+            row_counts,
+            row_sizes,
+            table_file_offsets,
+        )
+    }
+
+    fn metadata_with_streams(
+        streams: CliStreamSet,
+        row_counts: [u32; 64],
+        row_sizes: [u32; 64],
+        table_file_offsets: [Option<usize>; 64],
+    ) -> CliMetadataModel {
+        CliMetadataModel {
+            flavor: CliSchemaFlavor::Classic,
+            metadata_rva: 0,
+            metadata_file_offset: 0,
+            metadata_size: 0,
+            version: "v4.0.30319".to_owned(),
+            streams,
             heap_widths: HeapIndexWidths {
                 strings: 2,
                 guid: 2,
@@ -240,9 +558,35 @@ mod tests {
             },
             valid_table_mask: 0,
             sorted_table_mask: 0,
-            row_counts: [0; 64],
-            row_sizes: [0; 64],
-            table_file_offsets: [None; 64],
+            row_counts,
+            row_sizes,
+            table_file_offsets,
         }
+    }
+
+    const fn narrow_heap_widths() -> HeapIndexWidths {
+        HeapIndexWidths {
+            strings: 2,
+            guid: 2,
+            blob: 2,
+        }
+    }
+
+    fn method_rows(row_count: u32) -> [u32; 64] {
+        let mut row_counts = [0u32; 64];
+        row_counts[0x06] = row_count;
+        row_counts
+    }
+
+    fn empty_table_maps() -> [RiftTable; 64] {
+        std::array::from_fn(|_| rift(&[]))
+    }
+
+    fn put_u16(image: &mut [u8], offset: usize, value: u16) {
+        image[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn put_u32(image: &mut [u8], offset: usize, value: u32) {
+        image[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
     }
 }

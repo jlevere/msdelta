@@ -64,6 +64,7 @@ pub(crate) enum CliColumnValue {
     U8(u8),
     U16(u16),
     U32(u32),
+    Rva(u32),
     Heap {
         kind: HeapKind,
         offset: u32,
@@ -841,6 +842,7 @@ fn read_column_value(
         ColumnKind::U8 => Ok(CliColumnValue::U8(raw as u8)),
         ColumnKind::U16 => Ok(CliColumnValue::U16(raw as u16)),
         ColumnKind::U32 => Ok(CliColumnValue::U32(raw)),
+        ColumnKind::Rva => Ok(CliColumnValue::Rva(raw)),
         ColumnKind::Heap(kind) => Ok(CliColumnValue::Heap { kind, offset: raw }),
         ColumnKind::Table(table_id) => {
             let table = MetadataTableId::new(table_id)?;
@@ -1021,7 +1023,7 @@ mod tests {
         let method = model.table_row_by_id(&image, 0x06, 1).unwrap();
         assert_eq!(method.table_id().get(), 0x06);
         assert_eq!(method.rid().get(), 1);
-        assert_eq!(method.column("Rva").unwrap(), CliColumnValue::U32(0x2222));
+        assert_eq!(method.column("Rva").unwrap(), CliColumnValue::Rva(0x2222));
         assert_eq!(method.column("ImplFlags").unwrap(), CliColumnValue::U16(1));
         assert_eq!(method.column("Flags").unwrap(), CliColumnValue::U16(6));
         assert_eq!(

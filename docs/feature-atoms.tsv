@@ -68,7 +68,7 @@ CreatePeNative	create	create	0x2,0x8	-	CreateDeltaB native PE path	partial	allow
 CreateCliMapFromPEs	create	create	0x2,0x4,0x8	-	CliMapFromPEs::Run	missing	reject	needs_fixture	Defer until apply-side CliMap and metadata atoms pass
 CreateCli4MapFromPEs	create	create	0x10,0x20,0x40,0x80	-	Cli4MapFromPEs::Run	missing	reject	needs_fixture	Defer until apply-side CLI4 CliMap and metadata atoms pass
 CliMapStringsHash	create	create	pe,cli	-	StringsStreamHashTable::Init	partial	reject	unit	Exact #Strings heap matcher emits source-offset to target-offset maps with duplicate-target first-match behavior; next gap is native hash collision and duplicate selection parity
-CliMapBlobAndRvas	create	create	pe,cli	-	ProcessBlobStreamAndRvas	missing	reject	needs_fixture	Define blob stream and method RVA matching rules
+CliMapBlobAndRvas	create	create	pe,cli	-	ProcessBlobStreamAndRvas	partial	reject	unit	Table-map driven #Blob and typed-RVA column mapper emits blob and RVA rifts from exact mapped rows; next gap is native fixture parity and PE section-map composition
 CliMapSequenceTables	create	create	pe,cli	-	ProcessSequenceTable and ProcessTripletTable	missing	reject	needs_fixture	Define schema-specific table matching keys
 CreateCli	create	create	0x2,0x4,0x8	-	CreateDeltaB managed classic graph	missing	reject	needs_fixture	Do not start until decode classic CLI atoms pass
 CreateCli4	create	create	0x10,0x20,0x40,0x80	-	CreateDeltaB managed CLI4 graph	missing	reject	needs_fixture	Do not start until decode CLI4 atoms pass

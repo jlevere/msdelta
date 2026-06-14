@@ -249,13 +249,13 @@ fn managed_workstream_readiness_counts_are_explicit() {
 
     assert_eq!(rows.len(), REQUIRED_MANAGED_ATOMS.len());
     assert_eq!(count_by(&rows, |row| row.status, "supported"), 1);
-    assert_eq!(count_by(&rows, |row| row.status, "partial"), 24);
-    assert_eq!(count_by(&rows, |row| row.status, "missing"), 6);
+    assert_eq!(count_by(&rows, |row| row.status, "partial"), 25);
+    assert_eq!(count_by(&rows, |row| row.status, "missing"), 5);
     assert_eq!(count_by(&rows, |row| row.status, "rejected"), 0);
     assert_eq!(count_by(&rows, |row| row.apply_policy, "reject"), 31);
     assert_eq!(count_by(&rows, |row| row.oracle_level, "curated"), 6);
-    assert_eq!(count_by(&rows, |row| row.oracle_level, "unit"), 19);
-    assert_eq!(count_by(&rows, |row| row.oracle_level, "needs_fixture"), 6);
+    assert_eq!(count_by(&rows, |row| row.oracle_level, "unit"), 20);
+    assert_eq!(count_by(&rows, |row| row.oracle_level, "needs_fixture"), 5);
 }
 
 #[test]
