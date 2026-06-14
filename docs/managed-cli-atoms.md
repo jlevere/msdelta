@@ -419,7 +419,9 @@ Current evidence: the Win26100 stage fixture captures 50
 `compo::CliMetadata::InternalFromBitReader` calls from six managed PE deltas.
 Each fixture record has a normalized native object and a standalone BitReader
 blob reconstructed from the native reader state; the Rust parser consumes those
-blobs and the Rust writer reproduces them bit-for-bit.
+blobs and the Rust writer reproduces them bit-for-bit. CLI4-specific reader and
+flavor-checked writer entry points now round-trip a synthetic present metadata
+record and derive row sizes/table offsets through the same schema path.
 
 Done when: this same reader-window evidence exists for the CLI4 metadata path
 and the parsed target metadata is wired into the managed transform context.
@@ -785,11 +787,11 @@ the release gate below is satisfied.
 
 ### Readiness Snapshot
 
-The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 21
-partial, 1 missing, and 1 rejected. All 24 remain `apply_policy=reject`.
+The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 22
+partial, 0 missing, and 1 rejected. All 24 remain `apply_policy=reject`.
 
 The broader managed workstream tracks 31 atoms including create-side map and
-encoder atoms. Current state: 1 supported, 21 partial, 8 missing, and 1
+encoder atoms. Current state: 1 supported, 22 partial, 7 missing, and 1
 rejected. All 31 remain `apply_policy=reject`.
 
 That is the important reading of current progress: the parser/context
@@ -809,6 +811,7 @@ These atoms are useful building blocks today, but not all are release gates:
 | `Cli4MetadataFromPe` | CLI4-specific raw PE and existing-`PeInfo` parser tests | native `Cli4Metadata::Init` object oracle |
 | `CliMetadataRowsAndHeaps` | synthetic metadata row/heap tests | native row and heap accessor samples from real managed PE metadata |
 | `CliMetadataBitstream` | Win26100 reader-window fixtures | broader target-metadata fixture diversity and CLI4 equivalent |
+| `Cli4MetadataBitstream` | synthetic CLI4 bitstream read/write round-trip | native CLI4 reader-window fixture parity |
 | `CliMapBitstream` | Win26100 reader-window fixtures | native-like writer canonicalization for encode |
 | `CliCodedTokenMap` | Win26100 call-record fixtures | targeted non-identity `MapCoded` native case |
 | `TransformContextManaged` | unit validation plus managed native corpus construction | native fixture proving actual transform slot attachment |

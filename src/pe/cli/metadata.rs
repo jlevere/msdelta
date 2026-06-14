@@ -387,6 +387,12 @@ pub(crate) fn read_cli_metadata_bitstream(
     })
 }
 
+pub(crate) fn read_cli4_metadata_bitstream(
+    reader: &mut BitReader<'_>,
+) -> Result<CliMetadataBitstreamRecord> {
+    read_cli_metadata_bitstream(reader, CliSchemaFlavor::Cli4)
+}
+
 pub(crate) fn write_cli_metadata_bitstream(
     writer: &mut BitWriter,
     record: &CliMetadataBitstreamRecord,
@@ -424,6 +430,20 @@ pub(crate) fn write_cli_metadata_bitstream(
             writer.write_bits(*row_count as u64, 32);
         }
     }
+}
+
+pub(crate) fn write_cli4_metadata_bitstream(
+    writer: &mut BitWriter,
+    record: &CliMetadataBitstreamRecord,
+) -> Result<()> {
+    if record.flavor != CliSchemaFlavor::Cli4 {
+        return Err(Error::Malformed(
+            "CLI4 metadata bitstream: metadata flavor mismatch",
+        ));
+    }
+
+    write_cli_metadata_bitstream(writer, record);
+    Ok(())
 }
 
 pub(crate) fn parse_cli_metadata_from_pe(
@@ -1175,6 +1195,78 @@ mod tests {
 
         assert!(present > 0, "stage fixture should include present records");
         assert!(empty > 0, "stage fixture should include empty records");
+    }
+
+    #[test]
+    fn cli4_metadata_bitstream_roundtrips_synthetic_record() {
+        let mut row_counts = [0u32; 64];
+        row_counts[0x06] = 2;
+        let expected = build_cli_metadata_bitstream_record(CliMetadataBitstreamRecord {
+            flavor: CliSchemaFlavor::Cli4,
+            present: true,
+            metadata_file_offset: 0x100,
+            metadata_size: 0x400,
+            metadata_rva: 0x2000,
+            stream_count: 5,
+            stream_headers_end: 0x160,
+            streams: CliMetadataBitstreamStreams {
+                strings: CliMetadataBitstreamStream {
+                    file_offset: 0x200,
+                    size: 0x20,
+                },
+                user_strings: CliMetadataBitstreamStream {
+                    file_offset: 0,
+                    size: 0,
+                },
+                blob: CliMetadataBitstreamStream {
+                    file_offset: 0x230,
+                    size: 0x20,
+                },
+                guid: CliMetadataBitstreamStream {
+                    file_offset: 0x260,
+                    size: 0x10,
+                },
+                tables: CliMetadataBitstreamStream {
+                    file_offset: 0x180,
+                    size: 0x100,
+                },
+            },
+            heap_widths: HeapIndexWidths {
+                strings: 2,
+                guid: 2,
+                blob: 2,
+            },
+            valid_table_mask: 1 << 0x06,
+            row_counts,
+            row_sizes: [0; 64],
+            table_file_offsets: [None; 64],
+        })
+        .unwrap();
+
+        let mut writer = BitWriter::new();
+        write_cli4_metadata_bitstream(&mut writer, &expected).unwrap();
+        let bytes = writer.finish();
+        let mut reader = BitReader::new(&bytes).unwrap();
+        let parsed = read_cli4_metadata_bitstream(&mut reader).unwrap();
+
+        assert_eq!(reader.remaining(), 0);
+        assert_eq!(parsed, expected);
+        assert_eq!(parsed.flavor, CliSchemaFlavor::Cli4);
+        assert_eq!(parsed.row_sizes[0x06], 14);
+        assert_eq!(parsed.table_file_offsets[0x06], Some(0x19c));
+    }
+
+    #[test]
+    fn cli4_metadata_bitstream_writer_rejects_classic_record() {
+        let record = CliMetadataBitstreamRecord::empty(CliSchemaFlavor::Classic);
+        let mut writer = BitWriter::new();
+
+        let err = write_cli4_metadata_bitstream(&mut writer, &record).unwrap_err();
+
+        assert!(matches!(
+            err,
+            Error::Malformed("CLI4 metadata bitstream: metadata flavor mismatch")
+        ));
     }
 
     #[test]
