@@ -10,6 +10,7 @@
 //! - [`ManifestPairGen`] — real WinSxS base -> decoded-manifest pairs (the
 //!   crate's primary use; where the complex-mode Huffman bug lives).
 //! - [`PePairGen`] — cross-version and cross-binary PE pairs.
+//! - [`ManagedNativeCorpusGen`] — checked-in managed PE source/target pairs.
 //! - [`CorpusReplayGen`] — the legacy curated 12-case corpus, so the oracle
 //!   subsumes it (incl. bsdiff / MD5 / SHA-256 / PA31 variants).
 //!
@@ -17,7 +18,7 @@
 //! separate [`Domain`](crate::kernel::Domain), not msdelta.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use msdelta::pa30::{Codec, CreateOptions, FileType, FormatVersion, HASH_ALG_MD5, HASH_ALG_SHA256};
 
@@ -39,6 +40,19 @@ fn read_fixture(name: &str) -> Option<Vec<u8>> {
 /// PE source binaries live one level down, under `deltas/sources/`.
 fn read_source(name: &str) -> Option<Vec<u8>> {
     fs::read(fixtures_dir().join("deltas/sources").join(name)).ok()
+}
+
+fn managed_native_corpus_dir() -> PathBuf {
+    fixtures_dir().join("atoms/ManagedNativeCorpus")
+}
+
+fn read_quoted_scalar(toml: &str, key: &str) -> Option<String> {
+    let prefix = format!("{key} = ");
+    let value = toml.lines().find_map(|line| line.strip_prefix(&prefix))?;
+    value
+        .strip_prefix('"')
+        .and_then(|value| value.strip_suffix('"'))
+        .map(|value| value.replace("\\\\", "\\"))
 }
 
 // --- generic mutation helpers ------------------------------------------------
@@ -353,6 +367,58 @@ impl Generator<MsDeltaCase> for PePairGen {
     }
 }
 
+/// Checked-in managed PE pairs created by the Windows lab with native
+/// `CreateDeltaB`. These are decode-first cases: native create -> our apply plus
+/// native create -> native apply control. Managed create is intentionally not in
+/// this matrix yet.
+pub struct ManagedNativeCorpusGen;
+
+impl Generator<MsDeltaCase> for ManagedNativeCorpusGen {
+    fn category(&self) -> &str {
+        "managed_native_corpus"
+    }
+
+    fn generate(&self, _seed: u64, _count: usize) -> Vec<MsDeltaCase> {
+        let root = managed_native_corpus_dir();
+        let Ok(entries) = fs::read_dir(&root) else {
+            return Vec::new();
+        };
+        let mut case_dirs = entries
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.is_dir() && path.join("case.toml").is_file())
+            .collect::<Vec<_>>();
+        case_dirs.sort();
+
+        case_dirs
+            .iter()
+            .filter_map(|case_dir| managed_native_corpus_case(case_dir))
+            .collect()
+    }
+}
+
+fn managed_native_corpus_case(case_dir: &Path) -> Option<MsDeltaCase> {
+    let case_toml = fs::read_to_string(case_dir.join("case.toml")).ok()?;
+    let case_id = read_quoted_scalar(&case_toml, "case")?;
+    let category = read_quoted_scalar(&case_toml, "category")?;
+    let source_name = read_quoted_scalar(&case_toml, "source")?;
+    let target_name = read_quoted_scalar(&case_toml, "target")?;
+    let reference = fs::read(case_dir.join(source_name)).ok()?;
+    let target = fs::read(case_dir.join(target_name)).ok()?;
+
+    Some(
+        MsDeltaCase::new(
+            format!("managed_native_corpus.{case_id}"),
+            category,
+            reference,
+            target,
+            CreateOptions::new().file_type(FileType::Auto),
+            CreateSpec::executables(),
+        )
+        .with_directions(vec![Direction::NativeToOurs, Direction::NativeToNative]),
+    )
+}
+
 /// The legacy curated corpus, so the oracle fully subsumes it.
 pub struct CorpusReplayGen;
 
@@ -617,6 +683,7 @@ pub fn default_suite(seed: u64, per_category: usize) -> Vec<MsDeltaCase> {
     cases.extend(FuzzDerivedGen.generate(seed, per_category));
     cases.extend(ManifestPairGen.generate(seed, per_category));
     cases.extend(PePairGen.generate(seed, per_category));
+    cases.extend(ManagedNativeCorpusGen.generate(seed, per_category));
     cases.extend(CorpusReplayGen.generate(seed, per_category));
     cases.extend(CreateModeSweepGen.generate(seed, per_category));
     cases.extend(ReverseGen.generate(seed, per_category));
