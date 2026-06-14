@@ -3,7 +3,9 @@
 use crate::pe::cli::map::CliMapModel;
 use crate::pe::cli::metadata::CliMetadataModel;
 use crate::pe::cli::method::cli_method_bodies;
+use crate::pe::cli::schema::CliSchemaFlavor;
 use crate::pe::parse::PeInfo;
+use crate::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum IlOperand {
@@ -34,6 +36,21 @@ pub(crate) fn transform_cli_disasm_tokens(
     }
 
     rewrites
+}
+
+pub(crate) fn transform_cli4_disasm_tokens(
+    image: &mut [u8],
+    pe: &PeInfo,
+    metadata: &CliMetadataModel,
+    cli_map: &CliMapModel,
+) -> Result<usize> {
+    if metadata.flavor != CliSchemaFlavor::Cli4 {
+        return Err(Error::Malformed(
+            "CLI4 disasm transform: source metadata flavor mismatch",
+        ));
+    }
+
+    Ok(transform_cli_disasm_tokens(image, pe, metadata, cli_map))
 }
 
 pub(crate) fn transform_il_tokens(il: &mut [u8], cli_map: &CliMapModel) -> usize {
@@ -155,7 +172,6 @@ mod tests {
     use crate::lzx::rift::{RiftEntry, RiftTable};
     use crate::pe::cli::metadata::parse_cli_metadata_from_pe;
     use crate::pe::cli::method::cli_method_bodies;
-    use crate::pe::cli::schema::CliSchemaFlavor;
     use std::path::PathBuf;
 
     const MANAGED_NATIVE_CASES: &[&str] = &[
@@ -290,5 +306,80 @@ mod tests {
             cases_with_rewrites > 0,
             "managed corpus should include at least one IL token rewrite"
         );
+    }
+
+    #[test]
+    fn cli4_disasm_transform_runs_through_cli4_metadata_model() {
+        let root = managed_native_corpus_dir();
+        if !root.exists() {
+            return;
+        }
+
+        let mut cases_with_methods = 0usize;
+        let mut cases_with_rewrites = 0usize;
+        for case in MANAGED_NATIVE_CASES {
+            let case_dir = root.join(case);
+            let source =
+                std::fs::read(case_dir.join("source.dll")).expect("read managed source fixture");
+            let delta =
+                std::fs::read(case_dir.join("delta.pa30")).expect("read managed delta fixture");
+            let pe = PeInfo::parse_lenient(&source).expect("parse managed source PE");
+            let metadata = parse_cli_metadata_from_pe(&source, CliSchemaFlavor::Cli4)
+                .expect("parse source CLI4 metadata");
+            let bodies = cli_method_bodies(&source, &pe, &metadata);
+            if bodies.is_empty() {
+                continue;
+            }
+            cases_with_methods += 1;
+
+            let parsed = crate::pa30::parse(&delta).expect("parse managed delta");
+            let preprocess = crate::pa30::preprocess::parse_pe_preprocess(&parsed.preprocess)
+                .expect("parse managed preprocess");
+            let mut transformed = source.clone();
+            let rewrites =
+                transform_cli4_disasm_tokens(&mut transformed, &pe, &metadata, &preprocess.cli_map)
+                    .unwrap();
+            if rewrites > 0 {
+                cases_with_rewrites += 1;
+                assert_ne!(
+                    transformed, source,
+                    "{case}: reported CLI4 rewrites should mutate the source image"
+                );
+            }
+        }
+
+        assert!(
+            cases_with_methods > 0,
+            "managed corpus should include CLI method bodies for CLI4 wrapper coverage"
+        );
+        assert!(
+            cases_with_rewrites > 0,
+            "managed corpus should include at least one CLI4 wrapper token rewrite"
+        );
+    }
+
+    #[test]
+    fn cli4_disasm_transform_rejects_classic_metadata_model() {
+        let root = managed_native_corpus_dir();
+        if !root.exists() {
+            return;
+        }
+
+        let case_dir = root.join(MANAGED_NATIVE_CASES[0]);
+        let source =
+            std::fs::read(case_dir.join("source.dll")).expect("read managed source fixture");
+        let pe = PeInfo::parse_lenient(&source).expect("parse managed source PE");
+        let metadata = parse_cli_metadata_from_pe(&source, CliSchemaFlavor::Classic)
+            .expect("parse source CLI metadata");
+        let mut transformed = source.clone();
+
+        let err =
+            transform_cli4_disasm_tokens(&mut transformed, &pe, &metadata, &CliMapModel::default())
+                .unwrap_err();
+
+        assert!(matches!(
+            err,
+            Error::Malformed("CLI4 disasm transform: source metadata flavor mismatch")
+        ));
     }
 }

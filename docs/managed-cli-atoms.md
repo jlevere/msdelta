@@ -567,7 +567,9 @@ Current state: `pe::cli::disasm` remaps classic CLI metadata and user-string
 tokens in IL method bodies using the parsed `CliMap`. Unit coverage includes
 one-byte token opcodes, `0xfe` two-byte token opcodes, switch-table skipping,
 and truncated operand handling. The managed native corpus also produces at
-least one real source-image rewrite through this path.
+least one real source-image rewrite through this path. The CLI4 entry point
+validates that the source metadata model is `Cli4` and reuses the same typed
+method-body and IL token scanner.
 
 Done when: native entry/exit fixtures prove parity for isolated one-byte
 opcodes, `0xfe` two-byte opcodes, token operands, user-string operands, and
@@ -780,11 +782,11 @@ the release gate below is satisfied.
 
 ### Readiness Snapshot
 
-The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 18
-partial, 4 missing, and 1 rejected. All 24 remain `apply_policy=reject`.
+The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 19
+partial, 3 missing, and 1 rejected. All 24 remain `apply_policy=reject`.
 
 The broader managed workstream tracks 31 atoms including create-side map and
-encoder atoms. Current state: 1 supported, 18 partial, 11 missing, and 1
+encoder atoms. Current state: 1 supported, 19 partial, 10 missing, and 1
 rejected. All 31 remain `apply_policy=reject`.
 
 That is the important reading of current progress: the parser/context
@@ -807,6 +809,7 @@ These atoms are useful building blocks today, but not all are release gates:
 | `CliCodedTokenMap` | Win26100 call-record fixtures | targeted non-identity `MapCoded` native case |
 | `TransformContextManaged` | unit validation plus managed native corpus construction | native fixture proving actual transform slot attachment |
 | `CliBlobCompressedInteger` | synthetic boundary tests plus Win26100 successful 1-byte `GetBlobContent` fixtures | native 2-byte, 4-byte, malformed, and non-canonical `GetNumber` behavior |
+| `TransformCli4Disasm` | flavor-guarded CLI4 wrapper over typed method-body IL token scanning | native `TransformCli4Disasm::Run` entry/exit fixture parity |
 | `CliHeapRift` | pure unit tests plus managed native corpus construction | native `AddHeapMap` or `FromCliMap` rift-output parity before final rift use |
 | `CliTableRift` | pure row-start and typed width-hole unit tests plus managed native corpus construction | native `AddTableMap` output parity, including source-fill offset cases |
 | `CliCompressionRift` | heap/GUID/table composition tests, managed native corpus construction, and Win26100 `FromCliMap` shape comparator | sum with the PE-copy rift before final rift use |
@@ -871,6 +874,7 @@ order:
 2. `TransformCliDisasm`
 3. `CliBlobTypeTokenRemap`
 4. `TransformCliMetadata`
+5. `TransformCli4Disasm`
 
 Each transform needs an entry/exit fixture at its own boundary. Full
 `ApplyDeltaB` success is not a substitute for proving which bytes the transform
