@@ -5,7 +5,8 @@ use crate::pe::cli::map::CliMapModel;
 use crate::pe::cli::metadata::{
     CliMetadataBitstreamRecord, CliMetadataBitstreamStream, CliMetadataModel, CliStream,
 };
-use crate::pe::cli::schema::{column_width, table_schema, HeapIndexWidths};
+use crate::pe::cli::schema::{column_width, table_schema, CliSchemaFlavor, HeapIndexWidths};
+use crate::{Error, Result};
 
 const CLI_MAP_SOURCE_SENTINEL: i64 = u32::MAX as i64;
 
@@ -127,11 +128,72 @@ pub(crate) fn build_cli_compression_rift_from_transformed_source(
     )
 }
 
+pub(crate) fn build_cli4_compression_rift(
+    source_metadata: &CliMetadataModel,
+    target_metadata: &CliMetadataBitstreamRecord,
+    cli_map: &CliMapModel,
+) -> Result<RiftTable> {
+    build_cli4_compression_rift_impl(source_metadata, target_metadata, cli_map, None)
+}
+
+pub(crate) fn build_cli4_compression_rift_with_source_fill_offset(
+    source_metadata: &CliMetadataModel,
+    target_metadata: &CliMetadataBitstreamRecord,
+    cli_map: &CliMapModel,
+    source_widening_fill_offset: i64,
+) -> Result<RiftTable> {
+    build_cli4_compression_rift_impl(
+        source_metadata,
+        target_metadata,
+        cli_map,
+        Some(source_widening_fill_offset),
+    )
+}
+
+pub(crate) fn build_cli4_compression_rift_from_transformed_source(
+    source_metadata: &CliMetadataModel,
+    target_metadata: &CliMetadataBitstreamRecord,
+    cli_map: &CliMapModel,
+    transformed_source: &[u8],
+) -> Result<RiftTable> {
+    build_cli4_compression_rift_with_source_fill_offset(
+        source_metadata,
+        target_metadata,
+        cli_map,
+        cli_source_widening_fill_offset(transformed_source),
+    )
+}
+
 pub(crate) fn cli_source_widening_fill_offset(transformed_source: &[u8]) -> i64 {
     transformed_source
         .windows(2)
         .position(|window| window == [0, 0])
         .unwrap_or(transformed_source.len()) as i64
+}
+
+fn build_cli4_compression_rift_impl(
+    source_metadata: &CliMetadataModel,
+    target_metadata: &CliMetadataBitstreamRecord,
+    cli_map: &CliMapModel,
+    source_widening_fill_offset: Option<i64>,
+) -> Result<RiftTable> {
+    if source_metadata.flavor != CliSchemaFlavor::Cli4 {
+        return Err(Error::Malformed(
+            "CLI4 compression rift: source metadata flavor mismatch",
+        ));
+    }
+    if target_metadata.flavor != CliSchemaFlavor::Cli4 {
+        return Err(Error::Malformed(
+            "CLI4 compression rift: target metadata flavor mismatch",
+        ));
+    }
+
+    Ok(build_cli_compression_rift_impl(
+        source_metadata,
+        target_metadata,
+        cli_map,
+        source_widening_fill_offset,
+    ))
 }
 
 fn build_cli_compression_rift_impl(
@@ -1081,6 +1143,102 @@ mod tests {
             rust_shapes, native_shapes,
             "Rust CLI compression rift output should match promoted Win26100 native stage records"
         );
+    }
+
+    #[test]
+    fn cli4_compression_rift_composes_typed_heap_guid_and_table_rifts() {
+        let source_metadata = as_cli4_source(source_metadata_with_tables());
+        let target_metadata = as_cli4_target(target_metadata_with_tables());
+        let mut cli_map = CliMapModel {
+            strings: rift(&[(0, 0), (0x20, 0x28)]),
+            blob: rift(&[(0, 0), (0x10, 0x18)]),
+            guid: rift(&[(0, 0), (2, 3)]),
+            ..CliMapModel::default()
+        };
+        cli_map.tables[0x02] = rift(&[(0, 0), (2, 3)]);
+
+        let table =
+            build_cli4_compression_rift(&source_metadata, &target_metadata, &cli_map).unwrap();
+
+        assert_eq!(
+            pairs(&table),
+            vec![
+                (0x6000, 0x5000),
+                (0x6028, 0x5020),
+                (0x6200, 0x5100),
+                (0x6400, 0x5300),
+                (0x6418, 0x5310),
+                (0x6500, 0x5400),
+                (0x6520, 0x5410),
+                (0x6600, 0x5500),
+                (0x6618, 0x550a),
+            ]
+        );
+    }
+
+    #[test]
+    fn cli4_compression_rift_from_transformed_source_uses_fill_offset() {
+        let heap_widths = narrow_heap_widths();
+        let mut source_metadata = as_cli4_source(source_metadata_model());
+        source_metadata.heap_widths = heap_widths;
+        source_metadata.valid_table_mask = 1 << 0x02;
+        source_metadata.row_counts[0x02] = 1;
+        source_metadata.row_sizes[0x02] =
+            row_size(0x02, &source_metadata.row_counts, heap_widths).unwrap() as u32;
+        source_metadata.table_file_offsets[0x02] = Some(0x5500);
+
+        let mut target_metadata = as_cli4_target(target_metadata_record());
+        target_metadata.streams.strings.size = 0;
+        target_metadata.streams.user_strings.size = 0;
+        target_metadata.streams.blob.size = 0;
+        target_metadata.heap_widths = heap_widths;
+        target_metadata.valid_table_mask = (1 << 0x02) | (1 << 0x04);
+        target_metadata.row_counts[0x02] = 1;
+        target_metadata.row_counts[0x04] = 1 << 16;
+        target_metadata.row_sizes[0x02] =
+            row_size(0x02, &target_metadata.row_counts, heap_widths).unwrap() as u32;
+        target_metadata.table_file_offsets[0x02] = Some(0x6600);
+
+        let table = build_cli4_compression_rift_from_transformed_source(
+            &source_metadata,
+            &target_metadata,
+            &CliMapModel::default(),
+            &[0xaa, 0, 0, 0xbb],
+        )
+        .unwrap();
+
+        assert_eq!(
+            pairs(&table),
+            vec![(0x6600, 0x5500), (0x660c, 1), (0x660e, 0x550c)]
+        );
+    }
+
+    #[test]
+    fn cli4_compression_rift_rejects_classic_metadata() {
+        let source_metadata = source_metadata_with_tables();
+        let target_metadata = as_cli4_target(target_metadata_with_tables());
+
+        let err = build_cli4_compression_rift(
+            &source_metadata,
+            &target_metadata,
+            &CliMapModel::default(),
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            err,
+            Error::Malformed("CLI4 compression rift: source metadata flavor mismatch")
+        ));
+    }
+
+    fn as_cli4_source(mut model: CliMetadataModel) -> CliMetadataModel {
+        model.flavor = CliSchemaFlavor::Cli4;
+        model
+    }
+
+    fn as_cli4_target(mut record: CliMetadataBitstreamRecord) -> CliMetadataBitstreamRecord {
+        record.flavor = CliSchemaFlavor::Cli4;
+        record
     }
 
     fn source_metadata_model() -> CliMetadataModel {

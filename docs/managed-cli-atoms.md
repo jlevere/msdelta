@@ -721,7 +721,9 @@ summed into the final PE-copy rift.
 Current state: classic CLI compression-rift construction composes heap,
 `#GUID`, and metadata table row-start rifts into one sorted target-to-source
 rift. A transformed-source-aware variant derives the native source-fill offset
-and composes typed metadata width-hole entries.
+and composes typed metadata width-hole entries. The CLI4 entry point validates
+that both source and target metadata are `Cli4` and reuses the same typed heap,
+GUID, table, and width-hole composition logic.
 
 Win26100 stage capture now hooks
 `CompressionRiftTableFromCliMap::Generate` at RVA `0x1da60` and promotes a
@@ -731,7 +733,8 @@ after stripping native pointers. The fixture proves source buffer size,
 source-fill offset, sorted rift entries, and the zero-entry case for the classic
 CLI path. The remaining native-parity gap is a Rust/native replay comparator
 that rebuilds these exact rifts from the fixture inputs and compares against
-the promoted sorted native output before wiring the rift into apply.
+the promoted sorted native output before wiring the rift into apply. CLI4 still
+needs an equivalent `CompressionRiftTableCli4::FromCli4Map` fixture.
 
 ### FinalPeCopyRiftManaged
 
@@ -777,11 +780,11 @@ the release gate below is satisfied.
 
 ### Readiness Snapshot
 
-The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 12
-partial, 10 missing, and 1 rejected. All 24 remain `apply_policy=reject`.
+The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 18
+partial, 4 missing, and 1 rejected. All 24 remain `apply_policy=reject`.
 
 The broader managed workstream tracks 31 atoms including create-side map and
-encoder atoms. Current state: 1 supported, 12 partial, 17 missing, and 1
+encoder atoms. Current state: 1 supported, 18 partial, 11 missing, and 1
 rejected. All 31 remain `apply_policy=reject`.
 
 That is the important reading of current progress: the parser/context
@@ -807,6 +810,7 @@ These atoms are useful building blocks today, but not all are release gates:
 | `CliHeapRift` | pure unit tests plus managed native corpus construction | native `AddHeapMap` or `FromCliMap` rift-output parity before final rift use |
 | `CliTableRift` | pure row-start and typed width-hole unit tests plus managed native corpus construction | native `AddTableMap` output parity, including source-fill offset cases |
 | `CliCompressionRift` | heap/GUID/table composition tests, managed native corpus construction, and Win26100 `FromCliMap` shape comparator | sum with the PE-copy rift before final rift use |
+| `Cli4CompressionRift` | flavor-guarded CLI4 wrapper over typed heap/GUID/table/width-hole composition | native CLI4 `FromCli4Map` fixture parity |
 
 Treat these as the base for the next phase. Do not re-implement them as part of
 larger atoms; improve their fixture coverage when a downstream atom exposes a
@@ -851,6 +855,7 @@ Build this ladder before broad IL or metadata rewriting:
 2. `CliTableRift`
 3. `CliCompressionRift`
 4. `FinalPeCopyRiftManaged`
+5. `Cli4CompressionRift`
 
 The rift ladder is the highest-leverage managed work because it can be tested
 against native sorted rift objects without requiring full target equality. It
