@@ -434,6 +434,10 @@ pub(crate) fn parse_cli_metadata_from_pe(
     parse_cli_metadata_from_pe_info(image, &pe, flavor)
 }
 
+pub(crate) fn parse_cli4_metadata_from_pe(image: &[u8]) -> Result<CliMetadataModel> {
+    parse_cli_metadata_from_pe(image, CliSchemaFlavor::Cli4)
+}
+
 pub(crate) fn parse_cli_metadata_from_pe_info(
     image: &[u8],
     pe: &PeInfo,
@@ -466,6 +470,13 @@ pub(crate) fn parse_cli_metadata_from_pe_info(
         metadata_file_offset,
         metadata_size,
     )
+}
+
+pub(crate) fn parse_cli4_metadata_from_pe_info(
+    image: &[u8],
+    pe: &PeInfo,
+) -> Result<CliMetadataModel> {
+    parse_cli_metadata_from_pe_info(image, pe, CliSchemaFlavor::Cli4)
 }
 
 fn parse_cli_metadata_root(
@@ -897,7 +908,7 @@ fn align_4(value: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pe::parse::{PeMachine, PeOptionalHeaderKind};
+    use crate::pe::parse::{PeInfo, PeMachine, PeOptionalHeaderKind};
     use serde::Deserialize;
     use std::path::{Path, PathBuf};
 
@@ -931,12 +942,31 @@ mod tests {
     #[test]
     fn parses_minimal_cli_metadata_from_pe32_plus() {
         let image = synthetic_managed_pe(true, StreamMutation::None);
-        let model = parse_cli_metadata_from_pe(&image, CliSchemaFlavor::Cli4).unwrap();
+        let model = parse_cli4_metadata_from_pe(&image).unwrap();
 
         assert_eq!(model.flavor, CliSchemaFlavor::Cli4);
         assert_eq!(model.metadata_rva, 0x2100);
         assert_eq!(model.row_counts[0x06], 4);
         assert_eq!(model.row_sizes[0x06], 18);
+    }
+
+    #[test]
+    fn parses_cli4_metadata_from_existing_pe_info() {
+        let image = synthetic_managed_pe(true, StreamMutation::None);
+        let pe = PeInfo::parse_lenient(&image).unwrap();
+        let model = parse_cli4_metadata_from_pe_info(&image, &pe).unwrap();
+
+        assert_eq!(model.flavor, CliSchemaFlavor::Cli4);
+        assert_eq!(model.metadata_file_offset, 0x300);
+        assert!(model.streams.tables.file_offset > model.metadata_file_offset);
+        assert!(
+            model.streams.tables.file_offset
+                < model
+                    .metadata_file_offset
+                    .checked_add(model.metadata_size as usize)
+                    .unwrap()
+        );
+        assert_eq!(model.valid_table_mask & (1 << 0x06), 1 << 0x06);
     }
 
     #[test]

@@ -348,7 +348,9 @@ string, `#Strings`/`#US`/`#Blob`/`#GUID`/`#~` stream ranges, heap index widths,
 valid/sorted table masks, row counts, row byte sizes, and first-row file
 offsets. Tests cover synthetic PE32 and PE32+ managed images, duplicate stream
 names, missing `#~`, truncated table rows, and an optional real BGPCore managed
-assembly from the local ignored corpus when present.
+assembly from the local ignored corpus when present. CLI4-specific entry points
+now parse from raw PE bytes or an existing `PeInfo` and produce a
+`CliSchemaFlavor::Cli4` metadata model through the same typed parser.
 
 This atom is still not native-validated. The next evidence step is a curated
 managed fixture plus a Frida stage/object oracle for native `CliMetadata::Init`
@@ -783,11 +785,11 @@ the release gate below is satisfied.
 
 ### Readiness Snapshot
 
-The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 20
-partial, 2 missing, and 1 rejected. All 24 remain `apply_policy=reject`.
+The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 21
+partial, 1 missing, and 1 rejected. All 24 remain `apply_policy=reject`.
 
 The broader managed workstream tracks 31 atoms including create-side map and
-encoder atoms. Current state: 1 supported, 20 partial, 9 missing, and 1
+encoder atoms. Current state: 1 supported, 21 partial, 8 missing, and 1
 rejected. All 31 remain `apply_policy=reject`.
 
 That is the important reading of current progress: the parser/context
@@ -804,6 +806,7 @@ These atoms are useful building blocks today, but not all are release gates:
 | `PePreprocessManagedClassic` | managed native corpus preprocess/context test | consume the context in native-backed rift and transform atoms; keep CLI4 separate |
 | `CliMetadataStaticSchema` | Rust schema self-checks | native `CheckStaticData` parity hook |
 | `CliMetadataFromPe` | synthetic PE32/PE32+ tests | native `CliMetadata::Init` object oracle |
+| `Cli4MetadataFromPe` | CLI4-specific raw PE and existing-`PeInfo` parser tests | native `Cli4Metadata::Init` object oracle |
 | `CliMetadataRowsAndHeaps` | synthetic metadata row/heap tests | native row and heap accessor samples from real managed PE metadata |
 | `CliMetadataBitstream` | Win26100 reader-window fixtures | broader target-metadata fixture diversity and CLI4 equivalent |
 | `CliMapBitstream` | Win26100 reader-window fixtures | native-like writer canonicalization for encode |
