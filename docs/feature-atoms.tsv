@@ -60,7 +60,7 @@ TransformCliMetadata	cli	source_transform	0x2,0x4,0x8	0x8000	TransformCliMetadat
 TransformCli4Metadata	cli	source_transform	0x10,0x20,0x40,0x80	0x400000	TransformCli4Metadata::Run	missing	reject	needs_fixture	Phase 4 transform ladder: port metadata-table and signature-blob remap to CLI4 schema
 CliHeapRift	cli	producer	pe,cli	-	CompressionRiftTableCli::AddHeapMap	partial	reject	unit	Generates target-to-source heap rift entries for Strings UserStrings and Blob maps; next gap is native AddHeapMap or FromCliMap rift output parity
 CliTableRift	cli	producer	pe,cli	-	CompressionRiftTableCli::AddTableMap	partial	reject	unit	Generates target-to-source row-start entries and typed 2-byte/4-byte column width-hole entries; next gap is native AddTableMap output parity
-CliCompressionRift	cli	producer	0x2,0x4,0x8	-	CompressionRiftTableCli::FromCliMap	partial	reject	curated	Win26100 FromCliMap fixture captures six stable classic CLI rift shapes; next gap is replaying Rust output against the sorted native rift fixture
+CliCompressionRift	cli	producer	0x2,0x4,0x8	-	CompressionRiftTableCli::FromCliMap	partial	reject	curated	Rust output matches six promoted Win26100 classic CLI native rift shapes; next gap is summing it with the PE-copy rift
 Cli4CompressionRift	cli	producer	0x10,0x20,0x40,0x80	-	CompressionRiftTableCli4::FromCli4Map	missing	reject	needs_fixture	Phase 3 rift ladder: compose CLI4 heap/table rifts after classic path is understood
 FinalPeCopyRiftManaged	cli	producer	pe,cli	-	PreProcessPEForApply and RiftTable::Sum	missing	reject	needs_fixture	Phase 3 release input: sum native PE-copy rift with CLI compression rift and fixture the result
 CreateRaw	create	create	0x1	-	CreateDeltaB RAW path	supported	allow	release	Keep Windows oracle on raw PA30/PA31 cases
@@ -81,5 +81,5 @@ FridaCallStageCapture	lab	fixture	pe,cli	-	internal pure-method entry and exit h
 FridaObjectNormalizer	lab	fixture	pe,cli	-	Frida logical object readers	partial	lab_only	curated	Add PE info, CLI4 metadata/map, and compression-rift normalizers before broad transform hooks
 FridaFixturePromotion	lab	fixture	all	-	capture to atom fixture promotion	partial	lab_only	curated	Extend promote-stage-fixture beyond CliBlobCompressedInteger call records to stage objects reader-window blobs and more call records
 WindowsVersionMatrix	lab	fixture	all	-	Windows build and DLL hash matrix	missing	lab_only	none	After promotion tooling, run the same capture set across another Windows build and group drift by atom
-NativeOracleDiff	lab	fixture	all	-	normalized native capture comparator	missing	lab_only	none	Build comparator for Rust stage outputs against promoted native capture objects before CLI rift work scales up
+NativeOracleDiff	lab	fixture	all	-	normalized native capture comparator	partial	lab_only	curated	CliCompressionRift has a fixture-backed Rust/native shape comparator; generalize for later transform-stage outputs
 BulkFailureClassifier	lab	fixture	all	-	corpus failure bucketing	missing	lab_only	none	After each composed milestone, bucket native mismatches by atom, section, flags, and byte range

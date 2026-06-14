@@ -772,7 +772,7 @@ These atoms are useful building blocks today, but not all are release gates:
 | `CliBlobCompressedInteger` | synthetic boundary tests plus Win26100 successful 1-byte `GetBlobContent` fixtures | native 2-byte, 4-byte, malformed, and non-canonical `GetNumber` behavior |
 | `CliHeapRift` | pure unit tests plus managed native corpus construction | native `AddHeapMap` or `FromCliMap` rift-output parity before final rift use |
 | `CliTableRift` | pure row-start and typed width-hole unit tests plus managed native corpus construction | native `AddTableMap` output parity, including source-fill offset cases |
-| `CliCompressionRift` | heap/GUID/table and transformed-source-aware width-hole composition tests plus managed native corpus construction | compare native `FromCliMap` sorted output before final rift use |
+| `CliCompressionRift` | heap/GUID/table composition tests, managed native corpus construction, and Win26100 `FromCliMap` shape comparator | sum with the PE-copy rift before final rift use |
 
 Treat these as the base for the next phase. Do not re-implement them as part of
 larger atoms; improve their fixture coverage when a downstream atom exposes a

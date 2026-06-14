@@ -495,6 +495,8 @@ mod tests {
         CliStreamSet,
     };
     use crate::pe::cli::schema::{row_size, CliSchemaFlavor, HeapIndexWidths};
+    use serde_json::Value;
+    use std::collections::BTreeSet;
     use std::path::PathBuf;
 
     const MANAGED_NATIVE_CASES: &[&str] = &[
@@ -531,6 +533,13 @@ mod tests {
         PathBuf::from(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/fixtures/atoms/ManagedNativeCorpus"
+        ))
+    }
+
+    fn cli_compression_rift_fixture_dir() -> PathBuf {
+        PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/atoms/FridaStageCapture/cli-compression-rift-win26100/objects"
         ))
     }
 
@@ -1001,6 +1010,76 @@ mod tests {
         assert!(
             cases_with_cli_rift > 0,
             "managed corpus should include at least one non-empty CLI compression rift"
+        );
+    }
+
+    #[test]
+    fn cli_compression_rift_matches_win26100_stage_fixture_shapes() {
+        let corpus_root = managed_native_corpus_dir();
+        let fixture_root = cli_compression_rift_fixture_dir();
+        if !corpus_root.exists() || !fixture_root.exists() {
+            return;
+        }
+
+        let mut rust_shapes = BTreeSet::new();
+        for case in MANAGED_NATIVE_CASES {
+            let case_dir = corpus_root.join(case);
+            let source =
+                std::fs::read(case_dir.join("source.dll")).expect("read managed source fixture");
+            let delta =
+                std::fs::read(case_dir.join("delta.pa30")).expect("read managed delta fixture");
+            let parsed = crate::pa30::parse(&delta).expect("parse managed delta");
+            let preprocess = crate::pa30::preprocess::parse_pe_preprocess(&parsed.preprocess)
+                .expect("parse classic managed preprocess");
+            let source_metadata = parse_cli_metadata_from_pe(&source, CliSchemaFlavor::Classic)
+                .expect("parse source CLI metadata");
+
+            let table = build_cli_compression_rift_from_transformed_source(
+                &source_metadata,
+                &preprocess.target_info.target_metadata,
+                &preprocess.cli_map,
+                &source,
+            );
+            rust_shapes.insert((
+                source.len() as i64,
+                cli_source_widening_fill_offset(&source),
+                pairs(&table),
+            ));
+        }
+
+        let mut native_shapes = BTreeSet::new();
+        for entry in std::fs::read_dir(&fixture_root).expect("read compression rift fixture dir") {
+            let path = entry.expect("read fixture entry").path();
+            if path.extension().and_then(|extension| extension.to_str()) != Some("json") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+            let value: Value = serde_json::from_str(&text)
+                .unwrap_or_else(|error| panic!("parse {}: {error}", path.display()));
+            let source_buffer_size = value["source_buffer"]["size"]
+                .as_i64()
+                .expect("native source buffer size should be numeric");
+            let fill_offset = value["source_widening_fill_offset"]
+                .as_i64()
+                .expect("native fill offset should be numeric");
+            let entries = value["rift"]["entries"]
+                .as_array()
+                .expect("native rift entries should be an array")
+                .iter()
+                .map(|entry| {
+                    (
+                        entry["source"].as_i64().expect("native source offset"),
+                        entry["target"].as_i64().expect("native target offset"),
+                    )
+                })
+                .collect::<Vec<_>>();
+            native_shapes.insert((source_buffer_size, fill_offset, entries));
+        }
+
+        assert_eq!(
+            rust_shapes, native_shapes,
+            "Rust CLI compression rift output should match promoted Win26100 native stage records"
         );
     }
 
