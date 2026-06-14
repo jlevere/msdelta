@@ -644,7 +644,8 @@ Current state: `pe::cli::metadata_transform` walks typed metadata schemas and
 rewrites heap indexes, direct table indexes, coded indexes, and selected source
 signature blobs through `CliMap`. Unit coverage exercises heap, table,
 TypeDefOrRef coded, and MethodDef signature blob rewrites in one synthetic
-metadata image.
+metadata image. The CLI4 entry point validates that the source metadata model
+is `Cli4` and reuses the same schema-driven table and signature-blob transform.
 
 Done when: native `TransformCliMetadata::Run` entry/exit fixtures prove table
 column parity across the managed corpus, and blob transform coverage expands
@@ -782,11 +783,11 @@ the release gate below is satisfied.
 
 ### Readiness Snapshot
 
-The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 19
-partial, 3 missing, and 1 rejected. All 24 remain `apply_policy=reject`.
+The registry tracks 24 `layer=cli` atoms. Current state: 1 supported, 20
+partial, 2 missing, and 1 rejected. All 24 remain `apply_policy=reject`.
 
 The broader managed workstream tracks 31 atoms including create-side map and
-encoder atoms. Current state: 1 supported, 19 partial, 10 missing, and 1
+encoder atoms. Current state: 1 supported, 20 partial, 9 missing, and 1
 rejected. All 31 remain `apply_policy=reject`.
 
 That is the important reading of current progress: the parser/context
@@ -810,6 +811,7 @@ These atoms are useful building blocks today, but not all are release gates:
 | `TransformContextManaged` | unit validation plus managed native corpus construction | native fixture proving actual transform slot attachment |
 | `CliBlobCompressedInteger` | synthetic boundary tests plus Win26100 successful 1-byte `GetBlobContent` fixtures | native 2-byte, 4-byte, malformed, and non-canonical `GetNumber` behavior |
 | `TransformCli4Disasm` | flavor-guarded CLI4 wrapper over typed method-body IL token scanning | native `TransformCli4Disasm::Run` entry/exit fixture parity |
+| `TransformCli4Metadata` | flavor-guarded CLI4 wrapper over schema-driven table and signature-blob remaps | native `TransformCli4Metadata::Run` entry/exit fixture parity |
 | `CliHeapRift` | pure unit tests plus managed native corpus construction | native `AddHeapMap` or `FromCliMap` rift-output parity before final rift use |
 | `CliTableRift` | pure row-start and typed width-hole unit tests plus managed native corpus construction | native `AddTableMap` output parity, including source-fill offset cases |
 | `CliCompressionRift` | heap/GUID/table composition tests, managed native corpus construction, and Win26100 `FromCliMap` shape comparator | sum with the PE-copy rift before final rift use |
@@ -875,6 +877,7 @@ order:
 3. `CliBlobTypeTokenRemap`
 4. `TransformCliMetadata`
 5. `TransformCli4Disasm`
+6. `TransformCli4Metadata`
 
 Each transform needs an entry/exit fixture at its own boundary. Full
 `ApplyDeltaB` success is not a substitute for proving which bytes the transform

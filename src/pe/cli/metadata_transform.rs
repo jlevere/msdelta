@@ -4,11 +4,12 @@ use crate::lzx::rift::RiftTable;
 use crate::pe::cli::blob::read_compressed_u32;
 use crate::pe::cli::map::CliMapModel;
 use crate::pe::cli::metadata::{CliMetadataModel, CliStream};
-use crate::pe::cli::schema::{column_width, table_schema, ColumnKind, HeapKind};
+use crate::pe::cli::schema::{column_width, table_schema, CliSchemaFlavor, ColumnKind, HeapKind};
 use crate::pe::cli::signature::{
     transform_field_signature_blob, transform_method_signature_blob,
     transform_property_signature_blob, transform_type_spec_blob,
 };
+use crate::{Error, Result};
 use std::collections::BTreeSet;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -43,7 +44,10 @@ pub(crate) fn transform_cli_metadata(
         };
 
         for row_index in 0..row_count {
-            let Some(row_start) = table_file_offset.checked_add(row_index * row_size) else {
+            let Some(row_delta) = row_index.checked_mul(row_size) else {
+                continue;
+            };
+            let Some(row_start) = table_file_offset.checked_add(row_delta) else {
                 continue;
             };
             let mut column_offset = 0usize;
@@ -95,6 +99,20 @@ pub(crate) fn transform_cli_metadata(
     }
 
     stats
+}
+
+pub(crate) fn transform_cli4_metadata(
+    image: &mut [u8],
+    metadata: &CliMetadataModel,
+    cli_map: &CliMapModel,
+) -> Result<CliMetadataTransformStats> {
+    if metadata.flavor != CliSchemaFlavor::Cli4 {
+        return Err(Error::Malformed(
+            "CLI4 metadata transform: source metadata flavor mismatch",
+        ));
+    }
+
+    Ok(transform_cli_metadata(image, metadata, cli_map))
 }
 
 fn is_signature_blob_column(table_id: u8, column_name: &str) -> bool {
@@ -211,7 +229,14 @@ mod tests {
     use super::*;
     use crate::lzx::rift::{RiftEntry, RiftTable};
     use crate::pe::cli::metadata::{CliMetadataModel, CliStreamSet};
-    use crate::pe::cli::schema::{row_size, CliSchemaFlavor, HeapIndexWidths};
+    use crate::pe::cli::schema::{row_size, HeapIndexWidths};
+
+    struct MetadataTransformFixture {
+        metadata: CliMetadataModel,
+        image: Vec<u8>,
+        cli_map: CliMapModel,
+        blob_start: usize,
+    }
 
     fn rift(entries: &[(i64, i64)]) -> RiftTable {
         RiftTable {
@@ -284,9 +309,9 @@ mod tests {
         }
     }
 
-    #[test]
-    fn transforms_metadata_indices_and_source_signature_blob() {
-        let metadata = test_metadata_model();
+    fn metadata_transform_fixture(flavor: CliSchemaFlavor) -> MetadataTransformFixture {
+        let mut metadata = test_metadata_model();
+        metadata.flavor = flavor;
         let mut image = vec![0u8; 0x180];
 
         put_u16(&mut image, 0x08, 3); // MethodDef.Name
@@ -316,17 +341,61 @@ mod tests {
         cli_map.tables[0x06] = rift(&[(1, 6)]);
         cli_map.tables[0x08] = rift(&[(1, 2)]);
 
-        let stats = transform_cli_metadata(&mut image, &metadata, &cli_map);
+        MetadataTransformFixture {
+            metadata,
+            image,
+            cli_map,
+            blob_start,
+        }
+    }
 
+    fn assert_fixture_was_transformed(
+        image: &[u8],
+        blob_start: usize,
+        stats: CliMetadataTransformStats,
+    ) {
         assert!(stats.index_rewrites >= 6);
         assert_eq!(stats.signature_blob_rewrites, 1);
-        assert_eq!(read_u16(&image, 0x08), 7);
-        assert_eq!(read_u16(&image, 0x0a), 5);
-        assert_eq!(read_u16(&image, 0x0c), 2);
-        assert_eq!(read_u16(&image, 0x24), 7);
-        assert_eq!(read_u16(&image, 0x28), (7 << 2) | 1);
-        assert_eq!(read_u16(&image, 0x2a), 4);
-        assert_eq!(read_u16(&image, 0x2c), 6);
+        assert_eq!(read_u16(image, 0x08), 7);
+        assert_eq!(read_u16(image, 0x0a), 5);
+        assert_eq!(read_u16(image, 0x0c), 2);
+        assert_eq!(read_u16(image, 0x24), 7);
+        assert_eq!(read_u16(image, 0x28), (7 << 2) | 1);
+        assert_eq!(read_u16(image, 0x2a), 4);
+        assert_eq!(read_u16(image, 0x2c), 6);
         assert_eq!(image[blob_start + 5], (7 << 2) | 1);
+    }
+
+    #[test]
+    fn transforms_metadata_indices_and_source_signature_blob() {
+        let mut fixture = metadata_transform_fixture(CliSchemaFlavor::Classic);
+
+        let stats = transform_cli_metadata(&mut fixture.image, &fixture.metadata, &fixture.cli_map);
+
+        assert_fixture_was_transformed(&fixture.image, fixture.blob_start, stats);
+    }
+
+    #[test]
+    fn cli4_metadata_transform_runs_through_cli4_model() {
+        let mut fixture = metadata_transform_fixture(CliSchemaFlavor::Cli4);
+
+        let stats =
+            transform_cli4_metadata(&mut fixture.image, &fixture.metadata, &fixture.cli_map)
+                .unwrap();
+
+        assert_fixture_was_transformed(&fixture.image, fixture.blob_start, stats);
+    }
+
+    #[test]
+    fn cli4_metadata_transform_rejects_classic_model() {
+        let mut fixture = metadata_transform_fixture(CliSchemaFlavor::Classic);
+
+        let err = transform_cli4_metadata(&mut fixture.image, &fixture.metadata, &fixture.cli_map)
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            Error::Malformed("CLI4 metadata transform: source metadata flavor mismatch")
+        ));
     }
 }
