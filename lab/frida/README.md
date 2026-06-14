@@ -155,6 +155,30 @@ bytes and different native deltas. Treat `tests/fixtures/atoms/ManagedNativeCorp
 as a curated snapshot and treat fresh `lab/frida/out/managed-corpus` output as a
 new validated sample set.
 
+## DLL Build Updates
+
+Export capture is not locked to the current DLL build: it hooks public exports
+by name. Internal stage capture is intentionally hash-locked because it hooks
+private RVAs and reads private object layouts. When Windows updates
+`msdelta.dll`, the generic Frida harness should still be usable, but stage
+capture will not run until the new DLL hash has a validated symbol map under
+`lab/frida/symbol-maps`.
+
+Run this before spending time on a full managed-corpus capture against a fresh
+VM or after Windows Update changes the lab host:
+
+```sh
+nix develop -c lab/frida/check-stage-symbol-map.sh
+```
+
+If `stage_supported=false`, the next step is not to copy the old map blindly.
+Create a new map for the reported SHA-256 only after confirming the internal
+function RVAs, reader layout, and object layout against that exact DLL. The
+managed-corpus wrapper fails before the oracle run starts when the map is
+missing, and the stage agent also rejects mismatched hashes or image sizes, so a
+future build should produce an unmapped preflight failure rather than corrupt
+fixtures.
+
 ## Current Scope
 
 Supported now:

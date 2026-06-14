@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# lab/frida/capture-managed-corpus.sh
 # Capture a repeatable managed/.NET corpus from a Windows lab host.
 #
 # Produces:
@@ -72,7 +73,7 @@ $modulePath = Join-Path $env:WINDIR "System32\msdelta.dll"
 $moduleHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $modulePath).Hash.ToLowerInvariant()
 $symbolMapPath = Join-Path $root "symbol-maps\msdelta\$moduleHash.json"
 if (-not (Test-Path -LiteralPath $symbolMapPath)) {
-    throw "missing Frida stage symbol map for $modulePath hash $moduleHash at $symbolMapPath"
+    throw "missing Frida stage symbol map for $modulePath hash $moduleHash at $symbolMapPath; stage hooks are hash-locked by design, so validate private RVAs/object layouts and add a symbol map for this exact DLL before collecting stage fixtures"
 }
 $symbolMapJson = Get-Content -LiteralPath $symbolMapPath -Raw
 

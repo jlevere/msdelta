@@ -218,6 +218,22 @@ The `name` is a local label for humans. The hook is keyed by module hash plus
 RVA. If a build changes enough that the RVA or object layout no longer matches,
 the lab should fail closed and mark the capture as unmapped.
 
+This means the fixture extraction system is reusable across future Windows
+builds, but internal stage hooks are not build-agnostic. Public export capture
+can continue by export name. Stage capture requires one validated symbol map per
+DLL hash because private function addresses and C++ object layouts are not part
+of Microsoft's stable API contract.
+
+The repeatable update workflow for a new DLL build is:
+
+1. Run `nix develop -c lab/frida/check-stage-symbol-map.sh` against the lab VM.
+2. If the reported hash already has a map, run the normal managed-corpus capture.
+3. If the hash is unknown, create a candidate map for that exact SHA-256 only
+   after checking private RVAs and native object layouts in the disassembly.
+4. Smoke-capture one small case and verify reader replay, normalized objects,
+   and native apply controls before promoting any new fixtures.
+5. Keep the old map in place so older fixture provenance remains reproducible.
+
 There are two managed metadata implementations in the research corpus. The
 older DPX/`UpdateCompression.dll` path exposes labels like
 `CliMetadata::FromBitReader`. The Win26100 `msdelta.dll` loaded by the managed
@@ -426,6 +442,12 @@ CliTableRift
 The Rust compatibility claim should be tied to this matrix. A final target hash
 mismatch should be the last line of defense, not the first diagnostic.
 
+The matrix is expected to grow by adding symbol maps and fixture provenance for
+new DLL hashes, not by weakening the stage hook checks. If a future binary has a
+new hash but unchanged private layouts, it still gets a new map file after
+validation. If the layouts changed, the corresponding atom should be marked as
+unmapped until its normalizer and Rust model are updated.
+
 ## Hook Strategy
 
 Start with stable boundaries:
@@ -459,6 +481,7 @@ The lab should fail closed:
   disabled.
 - Missing symbol map in managed-corpus mode: wrapper failure before the oracle
   run starts.
+- Hash changed but no validated replacement map: no stage fixture collection.
 - Object layout mismatch: capture error, no fixture promotion.
 - Truncated or incoherent object: capture error, no fixture promotion.
 - Final native API failure: preserve error code and inputs for triage.

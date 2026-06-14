@@ -5,6 +5,7 @@ const PNPM_WORKSPACE: &str = include_str!("../lab/frida/pnpm-workspace.yaml");
 const HOST_WRAPPER: &str = include_str!("../lab/frida/capture-export-oracle.mjs");
 const INJECT_IMPORTER: &str = include_str!("../lab/frida/import-inject-capture.mjs");
 const MANAGED_CAPTURE: &str = include_str!("../lab/frida/capture-managed-corpus.sh");
+const STAGE_MAP_STATUS: &str = include_str!("../lab/frida/check-stage-symbol-map.sh");
 const MANAGED_CORPUS: &str = include_str!("../lab/frida/managed-corpus.ps1");
 const AGENT: &str = include_str!("../lab/frida/agent/export-oracle.js");
 const STAGE_AGENT: &str = include_str!("../lab/frida/agent/stage-oracle.js");
@@ -154,6 +155,7 @@ fn managed_corpus_capture_wrapper_runs_full_lab_loop() {
         "MSDELTA_STAGE_ORACLE_OBJECT_DIR",
         "MSDELTA_STAGE_ORACLE_BLOB_DIR",
         "MSDELTA_STAGE_ORACLE_READY_FILE",
+        "stage hooks are hash-locked by design",
         "stage-agent-ready.txt",
         "--object-dir",
         "frida-inject.exe",
@@ -167,6 +169,52 @@ fn managed_corpus_capture_wrapper_runs_full_lab_loop() {
         assert!(
             MANAGED_CAPTURE.contains(required) || LAB_README.contains(required),
             "managed capture wrapper should document or contain {required}"
+        );
+    }
+}
+
+#[test]
+fn stage_symbol_map_status_preflights_new_dll_builds() {
+    for required in [
+        "check-stage-symbol-map.sh",
+        "SSH_HOST",
+        "MODULE",
+        "SYMBOL_MODULE_DIR",
+        "MODULE_PATH",
+        "Get-FileHash",
+        "symbol-maps/$SYMBOL_MODULE_DIR/$module_hash.json",
+        "stage_supported=true",
+        "stage_supported=false",
+        "validate private RVAs and object layouts",
+    ] {
+        assert!(
+            STAGE_MAP_STATUS.contains(required),
+            "stage map status helper should contain {required}"
+        );
+    }
+
+    for required in [
+        "DLL Build Updates",
+        "Export capture is not locked to the current DLL build",
+        "Internal stage capture is intentionally hash-locked",
+        "check-stage-symbol-map.sh",
+        "future build should produce an unmapped preflight failure",
+    ] {
+        assert!(
+            LAB_README.contains(required),
+            "lab README should document new DLL build handling: {required}"
+        );
+    }
+
+    for required in [
+        "fixture extraction system is reusable across future Windows",
+        "one validated symbol map per",
+        "Run `nix develop -c lab/frida/check-stage-symbol-map.sh`",
+        "Hash changed but no validated replacement map",
+    ] {
+        assert!(
+            FRIDA_SYSTEM_DOC.contains(required),
+            "Frida system doc should document new DLL build handling: {required}"
         );
     }
 }
