@@ -174,10 +174,13 @@ Supported now:
   delta controls.
 - Internal stage hooks: hash-selected, module-specific Frida hooks from
   `lab/frida/symbol-maps`.
-- Logical object normalization for the first managed metadata bitstream record.
+- Logical object normalization for managed metadata and CLI map bitstream records.
 - Replay-checked native reader-window blob capture for stage parser atoms.
 - `CliMetadataBitstream` object and reader-bitstream capture for Win26100 `msdelta.dll`
   (`compo::CliMetadata::InternalFromBitReader`, RVA `0x1cba0` for
+  `ac96e0c3...f4358eb`).
+- `CliMapBitstream` object and reader-bitstream capture for Win26100 `msdelta.dll`
+  (`compo::CliMap::FromBitReader`, RVA `0x1a160` for
   `ac96e0c3...f4358eb`).
 - Local import of stage object JSON into `objects/*.json` and standalone reader
   inputs into `blobs/*.bin`.
@@ -186,7 +189,7 @@ Not supported yet:
 
 - x86 process ABI.
 - Automatic fixture promotion.
-- `CliMap` and CLI compression-rift object normalization.
+- CLI compression-rift object normalization.
 
 ## Contract Notes
 

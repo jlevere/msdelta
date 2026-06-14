@@ -4,7 +4,52 @@
   "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb",
   "file_size": 595360,
   "image_size": 585728,
+  "reader_read": {
+    "name": "BitReader::Read",
+    "rva": "0x1af80",
+    "abi": "ms-x64-thiscall"
+  },
   "functions": [
+    {
+      "atom": "CliMapBitstream",
+      "name": "compo::CliMap::FromBitReader",
+      "legacy_name": "CliMap::FromBitReader",
+      "rva": "0x1a160",
+      "abi": "ms-x64-thiscall",
+      "capture": "cli_map_from_bitreader",
+      "reader_layout": {
+        "name": "msdelta-win26100-bitreader-read-v1",
+        "tail_bits_offset": 24,
+        "word_cursor_offset": 32,
+        "word_end_offset": 40,
+        "accumulator_offset": 48,
+        "available_bits_offset": 56,
+        "max_remaining_bits": 67108864,
+        "max_window_bits": 1048576
+      },
+      "object_layout": {
+        "name": "msdelta-win26100-compo-cli-map-v1",
+        "strings_offset": 16,
+        "user_strings_offset": 64,
+        "blob_offset": 112,
+        "guid_offset": 160,
+        "tables_offset": 208,
+        "table_stride": 48,
+        "table_count": 64,
+        "rift_table_layout": {
+          "name": "msdelta-win26100-compo-rift-table-v1",
+          "initialized_offset": 8,
+          "count_offset": 16,
+          "capacity_offset": 24,
+          "entries_offset": 32,
+          "sorted_offset": 40,
+          "entry_size": 16,
+          "entry_source_offset": 0,
+          "entry_target_offset": 8,
+          "max_entries": 1048576
+        }
+      }
+    },
     {
       "atom": "CliMetadataBitstream",
       "name": "compo::CliMetadata::InternalFromBitReader",

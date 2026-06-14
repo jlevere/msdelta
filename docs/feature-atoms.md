@@ -245,11 +245,22 @@ The first internal stage capture is
 `FridaStageCapture/cli-metadata-win26100`: a hash-selected
 `msdelta.dll` hook for `compo::CliMetadata::InternalFromBitReader` that emits
 logical `CliMetadataBitstream` records plus standalone native reader-window
-bitstreams. The stage agent snapshots the native reader before and after the
-call, replays the exact native read widths for the atom into a fresh BitReader
-stream, and rejects the capture if the replayed state does not match the native
-exit state. The normalized object remains the stable cross-version assertion;
-the reader-window blob is the parser input that proves the wire contract.
+bitstreams.
+
+The second internal stage capture is `FridaStageCapture/cli-map-win26100`:
+the same hash-selected `msdelta.dll` hook lane for
+`compo::CliMap::FromBitReader`. It emits normalized `CliMapBitstream` rift maps
+plus reader-window blobs for both empty and populated maps.
+
+The stage agent snapshots the native reader before and after the call, then
+extracts the full consumed bit window into a fresh standalone `BitReader`
+stream and rejects the capture if replaying that window does not match the
+native exit state. It also traces explicit native `BitReader::Read` calls when
+available, but `CliMapBitstream` showed why the full-window extraction is the
+actual fixture contract: native Huffman/rift readers can consume bits without
+going through the public `Read(n)` helper. The normalized object remains the
+stable cross-version assertion; the reader-window blob is the parser input that
+proves the wire contract.
 
 Use this shape for future oracle atoms:
 

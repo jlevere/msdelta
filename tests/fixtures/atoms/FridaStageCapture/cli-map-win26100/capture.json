@@ -1,0 +1,3510 @@
+{
+  "schema": 1,
+  "atom": "FridaStageCapture",
+  "case_id": "cli-map-win26100",
+  "source_case_id": "managed-corpus-msdelta",
+  "module_sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb",
+  "target_atom": "CliMapBitstream",
+  "events": [
+    {
+      "event_id": "cli-map-001-enter",
+      "call_id": "cli-map-001",
+      "seq": 1,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-001-leave",
+      "call_id": "cli-map-001",
+      "seq": 1,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-001.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-001-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-002-enter",
+      "call_id": "cli-map-002",
+      "seq": 2,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-002-leave",
+      "call_id": "cli-map-002",
+      "seq": 2,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-002.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-002-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-003-enter",
+      "call_id": "cli-map-003",
+      "seq": 3,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-003-leave",
+      "call_id": "cli-map-003",
+      "seq": 3,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-003.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-003-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-004-enter",
+      "call_id": "cli-map-004",
+      "seq": 4,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-004-leave",
+      "call_id": "cli-map-004",
+      "seq": 4,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-004.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-004-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-005-enter",
+      "call_id": "cli-map-005",
+      "seq": 5,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-005-leave",
+      "call_id": "cli-map-005",
+      "seq": 5,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-005.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-005-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-006-enter",
+      "call_id": "cli-map-006",
+      "seq": 6,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-006-leave",
+      "call_id": "cli-map-006",
+      "seq": 6,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-006.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-006-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-007-enter",
+      "call_id": "cli-map-007",
+      "seq": 7,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-007-leave",
+      "call_id": "cli-map-007",
+      "seq": 7,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-007.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-007-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-008-enter",
+      "call_id": "cli-map-008",
+      "seq": 8,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-008-leave",
+      "call_id": "cli-map-008",
+      "seq": 8,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-008.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-008-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-009-enter",
+      "call_id": "cli-map-009",
+      "seq": 9,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-009-leave",
+      "call_id": "cli-map-009",
+      "seq": 9,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-009.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-009-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-010-enter",
+      "call_id": "cli-map-010",
+      "seq": 10,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-010-leave",
+      "call_id": "cli-map-010",
+      "seq": 10,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 600,
+        "read_count": 44,
+        "traced_bit_count": 221,
+        "remaining_bits_before": 600,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 5
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-010.json",
+          "size": 4618,
+          "sha256": "a38a4c191faca9bd7baf948e886f2624c39b18297ca2ad4702919f1b67b1c680",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-010-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "0fa33f0d359469c96816252ed837f25889402e4e83efd3e2ef7996700f0d9bc7",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-011-enter",
+      "call_id": "cli-map-011",
+      "seq": 11,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-011-leave",
+      "call_id": "cli-map-011",
+      "seq": 11,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 600,
+        "read_count": 44,
+        "traced_bit_count": 221,
+        "remaining_bits_before": 600,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 5
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-011.json",
+          "size": 4618,
+          "sha256": "a38a4c191faca9bd7baf948e886f2624c39b18297ca2ad4702919f1b67b1c680",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-011-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "0fa33f0d359469c96816252ed837f25889402e4e83efd3e2ef7996700f0d9bc7",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-012-enter",
+      "call_id": "cli-map-012",
+      "seq": 12,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-012-leave",
+      "call_id": "cli-map-012",
+      "seq": 12,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 600,
+        "read_count": 44,
+        "traced_bit_count": 221,
+        "remaining_bits_before": 600,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 5
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-012.json",
+          "size": 4618,
+          "sha256": "a38a4c191faca9bd7baf948e886f2624c39b18297ca2ad4702919f1b67b1c680",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-012-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "0fa33f0d359469c96816252ed837f25889402e4e83efd3e2ef7996700f0d9bc7",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-013-enter",
+      "call_id": "cli-map-013",
+      "seq": 13,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-013-leave",
+      "call_id": "cli-map-013",
+      "seq": 13,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 600,
+        "read_count": 44,
+        "traced_bit_count": 221,
+        "remaining_bits_before": 600,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 5
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-013.json",
+          "size": 4618,
+          "sha256": "a38a4c191faca9bd7baf948e886f2624c39b18297ca2ad4702919f1b67b1c680",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-013-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "0fa33f0d359469c96816252ed837f25889402e4e83efd3e2ef7996700f0d9bc7",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-014-enter",
+      "call_id": "cli-map-014",
+      "seq": 14,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-014-leave",
+      "call_id": "cli-map-014",
+      "seq": 14,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 600,
+        "read_count": 44,
+        "traced_bit_count": 221,
+        "remaining_bits_before": 600,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 5
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-014.json",
+          "size": 4618,
+          "sha256": "a38a4c191faca9bd7baf948e886f2624c39b18297ca2ad4702919f1b67b1c680",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-014-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "0fa33f0d359469c96816252ed837f25889402e4e83efd3e2ef7996700f0d9bc7",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-015-enter",
+      "call_id": "cli-map-015",
+      "seq": 15,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-015-leave",
+      "call_id": "cli-map-015",
+      "seq": 15,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 600,
+        "read_count": 44,
+        "traced_bit_count": 221,
+        "remaining_bits_before": 600,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 5
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-015.json",
+          "size": 4618,
+          "sha256": "a38a4c191faca9bd7baf948e886f2624c39b18297ca2ad4702919f1b67b1c680",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-015-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "0fa33f0d359469c96816252ed837f25889402e4e83efd3e2ef7996700f0d9bc7",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-016-enter",
+      "call_id": "cli-map-016",
+      "seq": 16,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-016-leave",
+      "call_id": "cli-map-016",
+      "seq": 16,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 600,
+        "read_count": 44,
+        "traced_bit_count": 221,
+        "remaining_bits_before": 600,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 5
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-016.json",
+          "size": 4618,
+          "sha256": "a38a4c191faca9bd7baf948e886f2624c39b18297ca2ad4702919f1b67b1c680",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-016-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "0fa33f0d359469c96816252ed837f25889402e4e83efd3e2ef7996700f0d9bc7",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-017-enter",
+      "call_id": "cli-map-017",
+      "seq": 17,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-017-leave",
+      "call_id": "cli-map-017",
+      "seq": 17,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 600,
+        "read_count": 44,
+        "traced_bit_count": 221,
+        "remaining_bits_before": 600,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 5
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-017.json",
+          "size": 4618,
+          "sha256": "a38a4c191faca9bd7baf948e886f2624c39b18297ca2ad4702919f1b67b1c680",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-017-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "0fa33f0d359469c96816252ed837f25889402e4e83efd3e2ef7996700f0d9bc7",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-018-enter",
+      "call_id": "cli-map-018",
+      "seq": 18,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-018-leave",
+      "call_id": "cli-map-018",
+      "seq": 18,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 600,
+        "read_count": 44,
+        "traced_bit_count": 221,
+        "remaining_bits_before": 600,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 5
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-018.json",
+          "size": 4618,
+          "sha256": "a38a4c191faca9bd7baf948e886f2624c39b18297ca2ad4702919f1b67b1c680",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-018-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "0fa33f0d359469c96816252ed837f25889402e4e83efd3e2ef7996700f0d9bc7",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-019-enter",
+      "call_id": "cli-map-019",
+      "seq": 19,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-019-leave",
+      "call_id": "cli-map-019",
+      "seq": 19,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-019.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-019-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-020-enter",
+      "call_id": "cli-map-020",
+      "seq": 20,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-020-leave",
+      "call_id": "cli-map-020",
+      "seq": 20,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-020.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-020-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-021-enter",
+      "call_id": "cli-map-021",
+      "seq": 21,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-021-leave",
+      "call_id": "cli-map-021",
+      "seq": 21,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-021.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-021-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-022-enter",
+      "call_id": "cli-map-022",
+      "seq": 22,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-022-leave",
+      "call_id": "cli-map-022",
+      "seq": 22,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-022.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-022-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-023-enter",
+      "call_id": "cli-map-023",
+      "seq": 23,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-023-leave",
+      "call_id": "cli-map-023",
+      "seq": 23,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-023.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-023-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-024-enter",
+      "call_id": "cli-map-024",
+      "seq": 24,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-024-leave",
+      "call_id": "cli-map-024",
+      "seq": 24,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-024.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-024-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-025-enter",
+      "call_id": "cli-map-025",
+      "seq": 25,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-025-leave",
+      "call_id": "cli-map-025",
+      "seq": 25,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-025.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-025-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-026-enter",
+      "call_id": "cli-map-026",
+      "seq": 26,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-026-leave",
+      "call_id": "cli-map-026",
+      "seq": 26,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-026.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-026-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-027-enter",
+      "call_id": "cli-map-027",
+      "seq": 27,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-027-leave",
+      "call_id": "cli-map-027",
+      "seq": 27,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-027.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-027-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-028-enter",
+      "call_id": "cli-map-028",
+      "seq": 28,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-028-leave",
+      "call_id": "cli-map-028",
+      "seq": 28,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 607,
+        "read_count": 50,
+        "traced_bit_count": 245,
+        "remaining_bits_before": 607,
+        "remaining_bits_after": 0,
+        "standalone_size": 77,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-028.json",
+          "size": 4421,
+          "sha256": "f12452dde292362c8f3a07805e88b6a191098198d803c311935d9947f0df95ef",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-028-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 77,
+          "size": 77,
+          "sha256": "f9f3cb92ab1c6d391f07015bc242a27b1fc88c91bd6900d89869755b2f4fab6f",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-029-enter",
+      "call_id": "cli-map-029",
+      "seq": 29,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-029-leave",
+      "call_id": "cli-map-029",
+      "seq": 29,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 607,
+        "read_count": 50,
+        "traced_bit_count": 245,
+        "remaining_bits_before": 607,
+        "remaining_bits_after": 0,
+        "standalone_size": 77,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-029.json",
+          "size": 4421,
+          "sha256": "f12452dde292362c8f3a07805e88b6a191098198d803c311935d9947f0df95ef",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-029-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 77,
+          "size": 77,
+          "sha256": "f9f3cb92ab1c6d391f07015bc242a27b1fc88c91bd6900d89869755b2f4fab6f",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-030-enter",
+      "call_id": "cli-map-030",
+      "seq": 30,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-030-leave",
+      "call_id": "cli-map-030",
+      "seq": 30,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 607,
+        "read_count": 50,
+        "traced_bit_count": 245,
+        "remaining_bits_before": 607,
+        "remaining_bits_after": 0,
+        "standalone_size": 77,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-030.json",
+          "size": 4421,
+          "sha256": "f12452dde292362c8f3a07805e88b6a191098198d803c311935d9947f0df95ef",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-030-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 77,
+          "size": 77,
+          "sha256": "f9f3cb92ab1c6d391f07015bc242a27b1fc88c91bd6900d89869755b2f4fab6f",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-031-enter",
+      "call_id": "cli-map-031",
+      "seq": 31,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-031-leave",
+      "call_id": "cli-map-031",
+      "seq": 31,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 607,
+        "read_count": 50,
+        "traced_bit_count": 245,
+        "remaining_bits_before": 607,
+        "remaining_bits_after": 0,
+        "standalone_size": 77,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-031.json",
+          "size": 4421,
+          "sha256": "f12452dde292362c8f3a07805e88b6a191098198d803c311935d9947f0df95ef",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-031-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 77,
+          "size": 77,
+          "sha256": "f9f3cb92ab1c6d391f07015bc242a27b1fc88c91bd6900d89869755b2f4fab6f",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-032-enter",
+      "call_id": "cli-map-032",
+      "seq": 32,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-032-leave",
+      "call_id": "cli-map-032",
+      "seq": 32,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 607,
+        "read_count": 50,
+        "traced_bit_count": 245,
+        "remaining_bits_before": 607,
+        "remaining_bits_after": 0,
+        "standalone_size": 77,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-032.json",
+          "size": 4421,
+          "sha256": "f12452dde292362c8f3a07805e88b6a191098198d803c311935d9947f0df95ef",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-032-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 77,
+          "size": 77,
+          "sha256": "f9f3cb92ab1c6d391f07015bc242a27b1fc88c91bd6900d89869755b2f4fab6f",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-033-enter",
+      "call_id": "cli-map-033",
+      "seq": 33,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-033-leave",
+      "call_id": "cli-map-033",
+      "seq": 33,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 607,
+        "read_count": 50,
+        "traced_bit_count": 245,
+        "remaining_bits_before": 607,
+        "remaining_bits_after": 0,
+        "standalone_size": 77,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-033.json",
+          "size": 4421,
+          "sha256": "f12452dde292362c8f3a07805e88b6a191098198d803c311935d9947f0df95ef",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-033-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 77,
+          "size": 77,
+          "sha256": "f9f3cb92ab1c6d391f07015bc242a27b1fc88c91bd6900d89869755b2f4fab6f",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-034-enter",
+      "call_id": "cli-map-034",
+      "seq": 34,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-034-leave",
+      "call_id": "cli-map-034",
+      "seq": 34,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 607,
+        "read_count": 50,
+        "traced_bit_count": 245,
+        "remaining_bits_before": 607,
+        "remaining_bits_after": 0,
+        "standalone_size": 77,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-034.json",
+          "size": 4421,
+          "sha256": "f12452dde292362c8f3a07805e88b6a191098198d803c311935d9947f0df95ef",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-034-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 77,
+          "size": 77,
+          "sha256": "f9f3cb92ab1c6d391f07015bc242a27b1fc88c91bd6900d89869755b2f4fab6f",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-035-enter",
+      "call_id": "cli-map-035",
+      "seq": 35,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-035-leave",
+      "call_id": "cli-map-035",
+      "seq": 35,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 607,
+        "read_count": 50,
+        "traced_bit_count": 245,
+        "remaining_bits_before": 607,
+        "remaining_bits_after": 0,
+        "standalone_size": 77,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-035.json",
+          "size": 4421,
+          "sha256": "f12452dde292362c8f3a07805e88b6a191098198d803c311935d9947f0df95ef",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-035-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 77,
+          "size": 77,
+          "sha256": "f9f3cb92ab1c6d391f07015bc242a27b1fc88c91bd6900d89869755b2f4fab6f",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-036-enter",
+      "call_id": "cli-map-036",
+      "seq": 36,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-036-leave",
+      "call_id": "cli-map-036",
+      "seq": 36,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 607,
+        "read_count": 50,
+        "traced_bit_count": 245,
+        "remaining_bits_before": 607,
+        "remaining_bits_after": 0,
+        "standalone_size": 77,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-036.json",
+          "size": 4421,
+          "sha256": "f12452dde292362c8f3a07805e88b6a191098198d803c311935d9947f0df95ef",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-036-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 77,
+          "size": 77,
+          "sha256": "f9f3cb92ab1c6d391f07015bc242a27b1fc88c91bd6900d89869755b2f4fab6f",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-037-enter",
+      "call_id": "cli-map-037",
+      "seq": 37,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-037-leave",
+      "call_id": "cli-map-037",
+      "seq": 37,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 599,
+        "read_count": 48,
+        "traced_bit_count": 237,
+        "remaining_bits_before": 599,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-037.json",
+          "size": 4421,
+          "sha256": "9961010dedc68812071919d76ffc4e57bdcf2d761653195cb000e237b5ab5010",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-037-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "8e6bbfbb5986c80277d8ae6e3be6e4687a5af2fbf4fa2bdcc3a6b7bcecbd72ef",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-038-enter",
+      "call_id": "cli-map-038",
+      "seq": 38,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-038-leave",
+      "call_id": "cli-map-038",
+      "seq": 38,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 599,
+        "read_count": 48,
+        "traced_bit_count": 237,
+        "remaining_bits_before": 599,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-038.json",
+          "size": 4421,
+          "sha256": "9961010dedc68812071919d76ffc4e57bdcf2d761653195cb000e237b5ab5010",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-038-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "8e6bbfbb5986c80277d8ae6e3be6e4687a5af2fbf4fa2bdcc3a6b7bcecbd72ef",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-039-enter",
+      "call_id": "cli-map-039",
+      "seq": 39,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-039-leave",
+      "call_id": "cli-map-039",
+      "seq": 39,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 599,
+        "read_count": 48,
+        "traced_bit_count": 237,
+        "remaining_bits_before": 599,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-039.json",
+          "size": 4421,
+          "sha256": "9961010dedc68812071919d76ffc4e57bdcf2d761653195cb000e237b5ab5010",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-039-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "8e6bbfbb5986c80277d8ae6e3be6e4687a5af2fbf4fa2bdcc3a6b7bcecbd72ef",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-040-enter",
+      "call_id": "cli-map-040",
+      "seq": 40,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-040-leave",
+      "call_id": "cli-map-040",
+      "seq": 40,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 599,
+        "read_count": 48,
+        "traced_bit_count": 237,
+        "remaining_bits_before": 599,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-040.json",
+          "size": 4421,
+          "sha256": "9961010dedc68812071919d76ffc4e57bdcf2d761653195cb000e237b5ab5010",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-040-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "8e6bbfbb5986c80277d8ae6e3be6e4687a5af2fbf4fa2bdcc3a6b7bcecbd72ef",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-041-enter",
+      "call_id": "cli-map-041",
+      "seq": 41,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-041-leave",
+      "call_id": "cli-map-041",
+      "seq": 41,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 599,
+        "read_count": 48,
+        "traced_bit_count": 237,
+        "remaining_bits_before": 599,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-041.json",
+          "size": 4421,
+          "sha256": "9961010dedc68812071919d76ffc4e57bdcf2d761653195cb000e237b5ab5010",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-041-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "8e6bbfbb5986c80277d8ae6e3be6e4687a5af2fbf4fa2bdcc3a6b7bcecbd72ef",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-042-enter",
+      "call_id": "cli-map-042",
+      "seq": 42,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-042-leave",
+      "call_id": "cli-map-042",
+      "seq": 42,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 599,
+        "read_count": 48,
+        "traced_bit_count": 237,
+        "remaining_bits_before": 599,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-042.json",
+          "size": 4421,
+          "sha256": "9961010dedc68812071919d76ffc4e57bdcf2d761653195cb000e237b5ab5010",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-042-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "8e6bbfbb5986c80277d8ae6e3be6e4687a5af2fbf4fa2bdcc3a6b7bcecbd72ef",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-043-enter",
+      "call_id": "cli-map-043",
+      "seq": 43,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-043-leave",
+      "call_id": "cli-map-043",
+      "seq": 43,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 599,
+        "read_count": 48,
+        "traced_bit_count": 237,
+        "remaining_bits_before": 599,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-043.json",
+          "size": 4421,
+          "sha256": "9961010dedc68812071919d76ffc4e57bdcf2d761653195cb000e237b5ab5010",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-043-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "8e6bbfbb5986c80277d8ae6e3be6e4687a5af2fbf4fa2bdcc3a6b7bcecbd72ef",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-044-enter",
+      "call_id": "cli-map-044",
+      "seq": 44,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-044-leave",
+      "call_id": "cli-map-044",
+      "seq": 44,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 599,
+        "read_count": 48,
+        "traced_bit_count": 237,
+        "remaining_bits_before": 599,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-044.json",
+          "size": 4421,
+          "sha256": "9961010dedc68812071919d76ffc4e57bdcf2d761653195cb000e237b5ab5010",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-044-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "8e6bbfbb5986c80277d8ae6e3be6e4687a5af2fbf4fa2bdcc3a6b7bcecbd72ef",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-045-enter",
+      "call_id": "cli-map-045",
+      "seq": 45,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-045-leave",
+      "call_id": "cli-map-045",
+      "seq": 45,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "reader-window",
+        "bit_count": 599,
+        "read_count": 48,
+        "traced_bit_count": 237,
+        "remaining_bits_before": 599,
+        "remaining_bits_after": 0,
+        "standalone_size": 76,
+        "standalone_padding_bits": 6
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-045.json",
+          "size": 4421,
+          "sha256": "9961010dedc68812071919d76ffc4e57bdcf2d761653195cb000e237b5ab5010",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-045-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 76,
+          "size": 76,
+          "sha256": "8e6bbfbb5986c80277d8ae6e3be6e4687a5af2fbf4fa2bdcc3a6b7bcecbd72ef",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-046-enter",
+      "call_id": "cli-map-046",
+      "seq": 46,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-046-leave",
+      "call_id": "cli-map-046",
+      "seq": 46,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-046.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-046-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-047-enter",
+      "call_id": "cli-map-047",
+      "seq": 47,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-047-leave",
+      "call_id": "cli-map-047",
+      "seq": 47,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-047.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-047-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-048-enter",
+      "call_id": "cli-map-048",
+      "seq": 48,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-048-leave",
+      "call_id": "cli-map-048",
+      "seq": 48,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-048.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-048-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-049-enter",
+      "call_id": "cli-map-049",
+      "seq": 49,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-049-leave",
+      "call_id": "cli-map-049",
+      "seq": 49,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-049.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-049-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    },
+    {
+      "event_id": "cli-map-050-enter",
+      "call_id": "cli-map-050",
+      "seq": 50,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "enter",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-map-050-leave",
+      "call_id": "cli-map-050",
+      "seq": 50,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliMapBitstream",
+      "symbol": "compo::CliMap::FromBitReader",
+      "phase": "leave",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1a160",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_map_from_bitreader"
+      },
+      "reader_window": {
+        "native_layout": "msdelta-win26100-bitreader-read-v1",
+        "trace_source": "BitReader::Read",
+        "bit_count": 1,
+        "read_count": 1,
+        "traced_bit_count": 1,
+        "remaining_bits_before": 1,
+        "remaining_bits_after": 0,
+        "standalone_size": 1,
+        "standalone_padding_bits": 4
+      },
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-map-050.json",
+          "size": 4141,
+          "sha256": "4cd430bf52c12ec0676da198d17b381fff61f829221b17a8def98eaa8de8fb3f",
+          "note": "",
+          "type": "CliMapBitstreamRecord"
+        }
+      ],
+      "blobs": [
+        {
+          "slot": "reader-bitstream",
+          "path": "blobs/cli-map-050-reader-bitstream.bin",
+          "ptr": "standalone",
+          "requested_size": 1,
+          "size": 1,
+          "sha256": "e52d9c508c502347344d8c07ad91cbd6068afc75ff6292f062a09ca381c89e71",
+          "note": "standalone BitReader stream copied from the native reader window"
+        }
+      ]
+    }
+  ]
+}

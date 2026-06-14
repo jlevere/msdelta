@@ -353,8 +353,8 @@ Outputs: `CliMapModel { strings, user_strings, blob, guid, tables[64] }`.
 
 No-op conditions: `present == 0` yields empty rifts for all maps.
 
-Done when: parser round-trip tests cover empty maps, non-empty heap maps, and
-at least one table map.
+Done when: parser tests cover empty maps, non-empty heap maps, and at least
+one table map against native `CliMap::FromBitReader` reader-window fixtures.
 
 Current state: `src/pe/cli_map.rs` contains the semantic `CliMapModel` and
 `read_cli_map_bitstream` / `write_cli_map_bitstream` helpers. The parser reads
@@ -364,9 +364,22 @@ shared-format rift adapter in `src/lzx/rift.rs`: signed entry count followed by
 source-delta and offset-delta numbers. Unit tests cover absent maps, populated
 all-empty maps, non-empty heap/blob/GUID/table maps, malformed `IntFormat`
 headers, oversized counts, and feeding table maps into `CliCodedTokenMap`.
-This is still not native-validated; keep managed apply rejected until
-`CliMetadataBitstream`, CLI rift production, and a native `CliMap::FromBitReader`
-object oracle are in place.
+
+Current evidence: the Win26100 stage fixture captures 50
+`compo::CliMap::FromBitReader` calls from six managed PE deltas. Each fixture
+record has a normalized native object plus a standalone reader-window blob. The
+fixture includes 23 empty maps and 27 populated maps with string/blob/table
+rifts. The Rust parser consumes those native blobs and matches the normalized
+native `CliMapModel`; the Rust writer re-encodes a decode-equivalent map.
+
+Known encoder gap: populated maps are not bit-for-bit identical to native
+output yet. Native chooses more compact shared `IntFormat` records than the
+current `IntFormat::from_values` writer. Treat this as an encoder
+canonicalization task; it does not block using the parser output as the managed
+apply model.
+
+Keep managed apply rejected until `CliMetadataBitstream`, `CliMapBitstream`,
+CLI rift production, and transform-context wiring are all connected.
 
 ### CliCodedTokenMap
 

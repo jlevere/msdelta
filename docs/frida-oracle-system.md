@@ -475,8 +475,8 @@ The managed corpus wrapper now starts that internal-hook lane by selecting the
 Win26100 `msdelta.dll` symbol map with `Get-FileHash`, waiting for both export
 and stage Frida agents, and capturing normalized `CliMetadataBitstream` objects
 plus replay-checked standalone reader bitstreams from
-`compo::CliMetadata::InternalFromBitReader`. Next hooks should be
-`CliMap::FromBitReader`/`compo::Cli4Map::InternalFromBitReader` and the CLI
+`compo::CliMetadata::InternalFromBitReader` and `compo::CliMap::FromBitReader`.
+Next hooks should be `compo::Cli4Map::InternalFromBitReader` and the CLI
 compression-rift builders, so the first real managed rift oracle exists before
 any IL or metadata rewriting work begins.
 

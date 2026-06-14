@@ -44,7 +44,7 @@ CliMetadataFromPe	cli	parser	0x2,0x4,0x8	-	CliMetadata::Init	partial	reject	unit
 Cli4MetadataFromPe	cli	parser	0x10,0x20,0x40,0x80	-	Cli4Metadata::Init	missing	reject	needs_fixture	Build source CLI4 metadata model from CLR metadata root
 CliMetadataBitstream	cli	parser	0x2,0x4,0x8	0x8000	CliMetadata::FromBitReader / compo::CliMetadata::InternalFromBitReader	partial	reject	curated	Native reader-window fixture validates parser; wire parsed target metadata into managed transform context after CliMap parity
 Cli4MetadataBitstream	cli	parser	0x10,0x20,0x40,0x80	0x400000	PortableExecutableInfoCli4::FromBitReader and CliMetadata::FromBitReader	missing	reject	needs_fixture	Parse CLI4 target metadata record from preprocess bitstream
-CliMapBitstream	cli	parser	pe,cli	-	CliMap::FromBitReader	partial	reject	unit	Validate shared-format heap/table maps with native CliMap::FromBitReader object oracle
+CliMapBitstream	cli	parser	pe,cli	-	CliMap::FromBitReader	partial	reject	curated	Native reader-window fixture validates parser; populated-map writer is decode-equivalent but not native bit-identical until IntFormat canonicalization
 CliCodedTokenMap	cli	algebra	pe,cli	-	CliMap::MapCoded and CliMap::MapCodedExact	partial	reject	unit	Wire to CliMapBitstream table maps and confirm sentinel/exact-miss behavior with native oracle
 TransformContextManaged	cli	pipeline	pe,cli	-	TransformBase::SetCliMetadata SetCli4Metadata SetCliMap	missing	reject	needs_fixture	Attach source/target metadata and CliMap to every transform before execution
 MarkNonExeCliMethods	cli	source_transform	pe,cli	0x2	MarkNonExe::RunCli and MarkNonExe::RunCli4	missing	reject	needs_fixture	Mark method bodies from MethodDef rows in the hint map

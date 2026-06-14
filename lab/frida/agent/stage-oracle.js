@@ -28,6 +28,7 @@ const READY_FILE =
 
 const hooked = new Set();
 const reportedModules = new Set();
+const activeReaderTracesByThread = new Map();
 let readyReported = false;
 let disabled = false;
 let sequence = 0;
@@ -122,6 +123,14 @@ function readU64Number(address, label) {
 
 function readU64BigInt(address) {
   return BigInt(address.readU64().toString(10));
+}
+
+function readS64Number(address, label) {
+  const value = Number.parseInt(address.readS64().toString(10), 10);
+  if (!Number.isSafeInteger(value)) {
+    throw new Error(`${label} is outside JavaScript's safe integer range`);
+  }
+  return value;
 }
 
 function pointerNumber(value, label) {
@@ -280,6 +289,59 @@ function buildStandaloneBitstreamFromReadPlan(before, readPlan) {
   };
 }
 
+function buildStandaloneBitstreamFromReadTrace(before, readTrace) {
+  if (!readTrace || !Array.isArray(readTrace.reads) || readTrace.reads.length === 0) {
+    throw new Error("reader trace has no native reads");
+  }
+
+  const bitCount = readTrace.reads.reduce((total, read) => total + read.width, 0);
+  const totalBits = 3 + bitCount;
+  const paddingBits = (8 - (totalBits % 8)) & 7;
+  const out = new Uint8Array((totalBits + paddingBits) / 8);
+  const replay = cloneReaderState(before);
+  let outBit = 3;
+
+  for (const read of readTrace.reads) {
+    const replayed = replayNativeRead(replay, read.width);
+    if (read.value === null || read.value === undefined) {
+      throw new Error(`reader trace read ${read.index} has no return value`);
+    }
+    if (replayed !== read.value) {
+      throw new Error(
+        `reader trace read ${read.index} value mismatch: native=${read.value.toString()} replay=${replayed.toString()} width=${read.width}`
+      );
+    }
+    for (let i = 0; i < read.width; i += 1) {
+      setBit(out, outBit, Number((read.value >> BigInt(i)) & 1n));
+      outBit += 1;
+    }
+  }
+
+  return {
+    standalone: finishStandaloneBitstream(out, bitCount),
+    replay,
+  };
+}
+
+function buildStandaloneBitstreamFromWindowBits(before, bitCount) {
+  const totalBits = 3 + bitCount;
+  const paddingBits = (8 - (totalBits % 8)) & 7;
+  const out = new Uint8Array((totalBits + paddingBits) / 8);
+  const replay = cloneReaderState(before);
+  let outBit = 3;
+
+  for (let i = 0; i < bitCount; i += 1) {
+    const value = replayNativeRead(replay, 1);
+    setBit(out, outBit, Number(value & 1n));
+    outBit += 1;
+  }
+
+  return {
+    standalone: finishStandaloneBitstream(out, bitCount),
+    replay,
+  };
+}
+
 function cliMetadataReadPlan(record) {
   const widths = [1];
   if (!record.present) {
@@ -357,6 +419,58 @@ function buildReaderWindow(before, after, layout, readPlan) {
       native_layout: layout.name,
       bit_count: bitCount,
       read_count: readPlan.length,
+      remaining_bits_before: before.remaining_bits,
+      remaining_bits_after: after.remaining_bits,
+      standalone_size: standalone.size,
+      standalone_padding_bits: standalone.padding_bits,
+    },
+    bytes: standalone.bytes,
+    size: standalone.size,
+  };
+}
+
+function buildReaderWindowFromTrace(before, after, layout, readTrace) {
+  if (!before || !after) {
+    return null;
+  }
+  if (before.native_layout !== after.native_layout) {
+    throw new Error("reader layout changed during call");
+  }
+  if (readTrace.error) {
+    throw new Error(readTrace.error);
+  }
+
+  const bitCount = before.remaining_bits - after.remaining_bits;
+  if (bitCount === 0) {
+    throw new Error("reader did not consume any bits");
+  }
+  if (bitCount < 0) {
+    throw new Error("reader remaining bits increased during call");
+  }
+  if (bitCount > layout.max_window_bits) {
+    throw new Error(`reader window is larger than max_window_bits: ${bitCount}`);
+  }
+
+  const tracedBits = readTrace.reads.reduce((total, read) => total + read.width, 0);
+  if (tracedBits > bitCount) {
+    throw new Error(`reader trace bits ${tracedBits} exceed native consumption ${bitCount}`);
+  }
+
+  const completeTrace = tracedBits === bitCount;
+  const { standalone, replay } = completeTrace
+    ? buildStandaloneBitstreamFromReadTrace(before, readTrace)
+    : buildStandaloneBitstreamFromWindowBits(before, bitCount);
+  if (!replayMatchesSnapshot(replay, after)) {
+    throw new Error("replayed reader window state does not match native exit state");
+  }
+
+  return {
+    metadata: {
+      native_layout: layout.name,
+      trace_source: completeTrace ? "BitReader::Read" : "reader-window",
+      bit_count: bitCount,
+      read_count: readTrace.reads.length,
+      traced_bit_count: tracedBits,
       remaining_bits_before: before.remaining_bits,
       remaining_bits_after: after.remaining_bits,
       standalone_size: standalone.size,
@@ -448,9 +562,74 @@ function readCliMetadataRecord(thisPtr, layout) {
   };
 }
 
+function readRiftTableRecord(tablePtr, layout, label) {
+  const initialized = tablePtr.add(layout.initialized_offset).readU8() !== 0;
+  if (!initialized) {
+    throw new Error(`${label} RiftTable is not initialized`);
+  }
+
+  const count = readU64Number(tablePtr.add(layout.count_offset), `${label} RiftTable count`);
+  const capacity = readU64Number(tablePtr.add(layout.capacity_offset), `${label} RiftTable capacity`);
+  const entriesPtr = tablePtr.add(layout.entries_offset).readPointer();
+  const sorted = tablePtr.add(layout.sorted_offset).readU8() !== 0;
+  if (count > layout.max_entries) {
+    throw new Error(`${label} RiftTable count ${count} exceeds max_entries ${layout.max_entries}`);
+  }
+  if (count > capacity) {
+    throw new Error(`${label} RiftTable count ${count} exceeds capacity ${capacity}`);
+  }
+  if (count > 0 && entriesPtr.isNull()) {
+    throw new Error(`${label} RiftTable has entries but a null entries pointer`);
+  }
+
+  const entries = [];
+  for (let i = 0; i < count; i += 1) {
+    const entryPtr = entriesPtr.add(i * layout.entry_size);
+    entries.push({
+      source: readS64Number(entryPtr.add(layout.entry_source_offset), `${label} RiftTable entry ${i} source`),
+      target: readS64Number(entryPtr.add(layout.entry_target_offset), `${label} RiftTable entry ${i} target`),
+    });
+  }
+
+  return {
+    entries,
+    sorted,
+  };
+}
+
+function readCliMapRecord(thisPtr, layout) {
+  const riftLayout = layout.rift_table_layout;
+  const tables = [];
+  for (let tableId = 0; tableId < layout.table_count; tableId += 1) {
+    tables.push(
+      readRiftTableRecord(
+        thisPtr.add(layout.tables_offset + tableId * layout.table_stride),
+        riftLayout,
+        `tables[${tableId}]`
+      )
+    );
+  }
+
+  return {
+    type: "CliMapBitstreamRecord",
+    native_layout: layout.name,
+    strings: readRiftTableRecord(thisPtr.add(layout.strings_offset), riftLayout, "strings"),
+    user_strings: readRiftTableRecord(thisPtr.add(layout.user_strings_offset), riftLayout, "user_strings"),
+    blob: readRiftTableRecord(thisPtr.add(layout.blob_offset), riftLayout, "blob"),
+    guid: readRiftTableRecord(thisPtr.add(layout.guid_offset), riftLayout, "guid"),
+    tables,
+  };
+}
+
 function normalizeObject(fn, thisPtr) {
   if (fn.capture === "cli_metadata_internal_from_bitreader") {
     return readCliMetadataRecord(thisPtr, fn.object_layout);
+  }
+  if (fn.capture === "cli_map_from_bitreader") {
+    return readCliMapRecord(thisPtr, fn.object_layout);
+  }
+  if (fn.capture === "reader_bitstream_only") {
+    return null;
   }
   throw new Error(`unsupported stage capture adapter: ${fn.capture}`);
 }
@@ -528,7 +707,13 @@ function allStageHooksInstalled() {
   if (!SYMBOL_MAP || !Array.isArray(SYMBOL_MAP.functions)) {
     return false;
   }
-  return SYMBOL_MAP.functions.every(fn => hooked.has(`${SYMBOL_MAP.module}:${fn.name}:${fn.rva}`));
+  if (!SYMBOL_MAP.functions.every(fn => hooked.has(`${SYMBOL_MAP.module}:${fn.name}:${fn.rva}`))) {
+    return false;
+  }
+  if (SYMBOL_MAP.reader_read) {
+    return hooked.has(`${SYMBOL_MAP.module}:${SYMBOL_MAP.reader_read.name}:${SYMBOL_MAP.reader_read.rva}`);
+  }
+  return true;
 }
 
 function maybeReportReady() {
@@ -576,6 +761,120 @@ function validateMap() {
   return true;
 }
 
+function threadTraceStack(threadId) {
+  const key = String(threadId);
+  let stack = activeReaderTracesByThread.get(key);
+  if (!stack) {
+    stack = [];
+    activeReaderTracesByThread.set(key, stack);
+  }
+  return stack;
+}
+
+function pushReaderTrace(threadId, trace) {
+  threadTraceStack(threadId).push(trace);
+}
+
+function popReaderTrace(threadId, trace) {
+  const stack = threadTraceStack(threadId);
+  const popped = stack.pop();
+  if (stack.length === 0) {
+    activeReaderTracesByThread.delete(String(threadId));
+  }
+  if (popped !== trace) {
+    trace.error = "reader trace stack mismatch";
+  }
+}
+
+function currentReaderTrace(threadId, readerPtr) {
+  const stack = activeReaderTracesByThread.get(String(threadId));
+  if (!stack || stack.length === 0) {
+    return null;
+  }
+  const trace = stack[stack.length - 1];
+  if (trace.reader_ptr !== readerPtr.toString()) {
+    return null;
+  }
+  return trace;
+}
+
+function installReaderReadHook(moduleInfo) {
+  if (!SYMBOL_MAP.reader_read) {
+    return;
+  }
+
+  const fn = SYMBOL_MAP.reader_read;
+  const key = `${SYMBOL_MAP.module}:${fn.name}:${fn.rva}`;
+  if (hooked.has(key)) {
+    return;
+  }
+  if (!SUPPORTED_ARCH || fn.abi !== "ms-x64-thiscall") {
+    log("error", "reader hook skipped: unsupported ABI or process architecture", {
+      arch: Process.arch,
+      pointer_size: POINTER_SIZE,
+      symbol: fn.name,
+      abi: fn.abi,
+    });
+    return;
+  }
+
+  let rva;
+  try {
+    rva = parseRva(fn.rva);
+  } catch (error) {
+    log("error", "reader hook skipped: invalid RVA", {
+      symbol: fn.name,
+      rva: fn.rva,
+      error: String(error),
+    });
+    return;
+  }
+
+  const address = moduleInfo.base.add(rva);
+  Interceptor.attach(address, {
+    onEnter(args) {
+      this.trace = null;
+      this.index = null;
+      const threadId = Process.getCurrentThreadId();
+      const readerPtr = args[0];
+      const trace = currentReaderTrace(threadId, readerPtr);
+      if (!trace) {
+        return;
+      }
+
+      const width = args[1].toInt32();
+      const index = trace.reads.length;
+      if (width < 0 || width > 32) {
+        trace.error = `reader trace saw unsupported read width ${width}`;
+        return;
+      }
+      trace.reads.push({
+        index,
+        width,
+        value: null,
+      });
+      this.trace = trace;
+      this.index = index;
+    },
+    onLeave(retval) {
+      if (!this.trace || this.index === null) {
+        return;
+      }
+      this.trace.reads[this.index].value = BigInt(retval.toString()) & 0xffffffffn;
+    },
+  });
+
+  hooked.add(key);
+  reportModule(moduleInfo);
+  log("info", "hooked reader function", {
+    module: moduleInfo.name,
+    sha256: SYMBOL_MAP.sha256,
+    symbol: fn.name,
+    rva: fn.rva,
+    address: address.toString(),
+  });
+}
+
 function installStageHook(moduleInfo, fn) {
   const key = `${SYMBOL_MAP.module}:${fn.name}:${fn.rva}`;
   if (hooked.has(key)) {
@@ -621,7 +920,17 @@ function installStageHook(moduleInfo, fn) {
       this.callId = nextEventId(fn.name);
       this.thisPtr = args[0];
       this.readerPtr = args[1];
+      this.traceThreadId = Process.getCurrentThreadId();
+      this.readerTrace = null;
       this.readerBefore = captureReaderSnapshot(this.readerPtr, fn.reader_layout);
+      if (fn.reader_layout && SYMBOL_MAP.reader_read) {
+        this.readerTrace = {
+          reader_ptr: this.readerPtr.toString(),
+          reads: [],
+          error: null,
+        };
+        pushReaderTrace(this.traceThreadId, this.readerTrace);
+      }
       sendEvent(
         beginEvent(fn, moduleInfo, "enter", this.callId, {
           inputs: {
@@ -640,9 +949,14 @@ function installStageHook(moduleInfo, fn) {
       };
       let objectValue = null;
       let readerWindow = null;
+      if (this.readerTrace) {
+        popReaderTrace(this.traceThreadId, this.readerTrace);
+      }
       try {
         objectValue = normalizeObject(this.fn, this.thisPtr);
-        fields.objects = { normalized: "pending" };
+        if (objectValue) {
+          fields.objects = { normalized: "pending" };
+        }
       } catch (error) {
         fields.error = {
           type: "object_normalization_failed",
@@ -658,12 +972,21 @@ function installStageHook(moduleInfo, fn) {
           };
         } else {
           try {
-            readerWindow = buildReaderWindow(
-              this.readerBefore.value,
-              readerAfter.value,
-              this.fn.reader_layout,
-              readPlanForObject(this.fn, objectValue)
-            );
+            if (this.readerTrace && this.readerTrace.reads.length > 0) {
+              readerWindow = buildReaderWindowFromTrace(
+                this.readerBefore.value,
+                readerAfter.value,
+                this.fn.reader_layout,
+                this.readerTrace
+              );
+            } else {
+              readerWindow = buildReaderWindow(
+                this.readerBefore.value,
+                readerAfter.value,
+                this.fn.reader_layout,
+                readPlanForObject(this.fn, objectValue)
+              );
+            }
             if (readerWindow) {
               fields.reader_window = readerWindow.metadata;
               fields.blobs = { reader_bitstream: "pending" };
@@ -711,6 +1034,7 @@ function installAvailableStageHooks() {
   if (!moduleInfo) {
     return;
   }
+  installReaderReadHook(moduleInfo);
   for (const fn of SYMBOL_MAP.functions) {
     installStageHook(moduleInfo, fn);
   }

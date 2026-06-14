@@ -1,0 +1,296 @@
+{
+  "type": "CliMapBitstreamRecord",
+  "native_layout": "msdelta-win26100-compo-cli-map-v1",
+  "strings": {
+    "entries": [],
+    "sorted": true
+  },
+  "user_strings": {
+    "entries": [],
+    "sorted": true
+  },
+  "blob": {
+    "entries": [
+      {
+        "source": 0,
+        "target": 0
+      },
+      {
+        "source": 101,
+        "target": 127
+      }
+    ],
+    "sorted": true
+  },
+  "guid": {
+    "entries": [],
+    "sorted": true
+  },
+  "tables": [
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [
+        {
+          "source": 0,
+          "target": 0
+        },
+        {
+          "source": 8,
+          "target": 9
+        }
+      ],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    },
+    {
+      "entries": [],
+      "sorted": true
+    }
+  ]
+}

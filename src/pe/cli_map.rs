@@ -162,7 +162,7 @@ pub(crate) struct CliCodedTokenMap {
     table_maps: [Option<CliRidMap>; 64],
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CliMapModel {
     pub(crate) strings: RiftTable,
     pub(crate) user_strings: RiftTable,
@@ -511,6 +511,8 @@ mod tests {
     use super::*;
     use crate::lzx::rift::{IntFormat, RiftEntry, RiftTable};
     use crate::pe::cli_schema::CODED_INDEXES;
+    use serde::Deserialize;
+    use std::path::Path;
 
     const TYPE_DEF: u8 = 0x02;
     const TYPE_REF: u8 = 0x01;
@@ -618,6 +620,89 @@ mod tests {
                 "rift table entry count exceeds available input"
             ))
         ));
+    }
+
+    #[test]
+    fn cli_map_bitstream_matches_win26100_stage_fixture_objects() {
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/atoms/FridaStageCapture/cli-map-win26100");
+        let object_dir = fixture.join("objects");
+        let blob_dir = fixture.join("blobs");
+        if !object_dir.exists() {
+            return;
+        }
+
+        let mut paths = std::fs::read_dir(&object_dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect::<Vec<_>>();
+        paths.sort();
+        assert_eq!(paths.len(), 50);
+
+        let mut empty = 0usize;
+        let mut non_empty = 0usize;
+        for path in paths {
+            let text = std::fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+            let native: NativeCliMapRecord = serde_json::from_str(&text)
+                .unwrap_or_else(|error| panic!("parse {}: {error}", path.display()));
+            assert_eq!(native.record_type, "CliMapBitstreamRecord");
+            assert_eq!(native.native_layout, "msdelta-win26100-compo-cli-map-v1");
+
+            let expected = native_to_cli_map_model(&native, &path);
+            if expected.is_empty() {
+                empty += 1;
+            } else {
+                non_empty += 1;
+            }
+
+            let stem = path
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .unwrap_or_else(|| {
+                    panic!("fixture object path has no UTF-8 stem: {}", path.display())
+                });
+            let blob_path = blob_dir.join(format!("{stem}-reader-bitstream.bin"));
+            let bytes = std::fs::read(&blob_path)
+                .unwrap_or_else(|error| panic!("read {}: {error}", blob_path.display()));
+            let mut reader = BitReader::new(&bytes).unwrap();
+            let parsed = read_cli_map_bitstream(&mut reader).unwrap_or_else(|error| {
+                panic!(
+                    "parse native reader bitstream for {}: {error}",
+                    blob_path.display()
+                )
+            });
+            assert_eq!(reader.remaining(), 0, "{} left unread bits", path.display());
+            assert_eq!(parsed, expected, "{}", path.display());
+
+            let mut writer = BitWriter::new();
+            write_cli_map_bitstream(&mut writer, &expected);
+            let encoded = writer.finish();
+            let mut encoded_reader = BitReader::new(&encoded).unwrap();
+            let reparsed = read_cli_map_bitstream(&mut encoded_reader).unwrap_or_else(|error| {
+                panic!(
+                    "parse Rust writer bitstream for {}: {error}",
+                    blob_path.display()
+                )
+            });
+            assert_eq!(
+                reparsed,
+                expected,
+                "writer output should decode back to the native map model {}",
+                blob_path.display()
+            );
+            if expected.is_empty() {
+                assert_eq!(
+                    encoded,
+                    bytes,
+                    "empty map writer should reproduce native absent-map bitstream {}",
+                    blob_path.display()
+                );
+            }
+        }
+
+        assert!(empty > 0, "stage fixture should include empty maps");
+        assert!(non_empty > 0, "stage fixture should include non-empty maps");
     }
 
     #[test]
@@ -889,5 +974,74 @@ mod tests {
             .map(|entry| (entry.source, entry.target))
             .collect::<Vec<_>>();
         assert_eq!(actual, expected);
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct NativeCliMapRecord {
+        #[serde(rename = "type")]
+        record_type: String,
+        native_layout: String,
+        strings: NativeRiftTable,
+        user_strings: NativeRiftTable,
+        blob: NativeRiftTable,
+        guid: NativeRiftTable,
+        tables: Vec<NativeRiftTable>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct NativeRiftTable {
+        entries: Vec<NativeRiftEntry>,
+        sorted: bool,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct NativeRiftEntry {
+        source: i64,
+        target: i64,
+    }
+
+    fn native_to_cli_map_model(native: &NativeCliMapRecord, path: &Path) -> CliMapModel {
+        assert_eq!(
+            native.tables.len(),
+            CLI_TABLE_MAP_COUNT,
+            "{} should have {CLI_TABLE_MAP_COUNT} CLI table maps",
+            path.display()
+        );
+        let mut tables = std::array::from_fn(|index| native_rift(&native.tables[index], path));
+        for (index, table) in tables.iter_mut().enumerate() {
+            table.entries.sort_by_key(|entry| entry.source);
+            assert_eq!(
+                table.entries,
+                native_rift(&native.tables[index], path).entries,
+                "{} table {index} should already be sorted by source",
+                path.display()
+            );
+        }
+
+        CliMapModel {
+            strings: native_rift(&native.strings, path),
+            user_strings: native_rift(&native.user_strings, path),
+            blob: native_rift(&native.blob, path),
+            guid: native_rift(&native.guid, path),
+            tables,
+        }
+    }
+
+    fn native_rift(native: &NativeRiftTable, path: &Path) -> RiftTable {
+        assert!(
+            native.sorted,
+            "{} native rift table should be sorted",
+            path.display()
+        );
+        RiftTable {
+            entries: native
+                .entries
+                .iter()
+                .map(|entry| RiftEntry {
+                    source: entry.source,
+                    target: entry.target,
+                })
+                .collect(),
+        }
     }
 }

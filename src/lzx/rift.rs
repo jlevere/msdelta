@@ -14,14 +14,14 @@ const INT_FORMAT_SYMBOLS: usize = 252;
 const INT_FORMAT_HALF: usize = 126;
 
 /// A rift table entry: maps source position to target position.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RiftEntry {
     pub source: i64,
     pub target: i64,
 }
 
 /// Parsed rift table.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RiftTable {
     pub entries: Vec<RiftEntry>,
 }
