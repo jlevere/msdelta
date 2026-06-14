@@ -5,8 +5,24 @@ use crate::pe::cli::map::CliMapModel;
 use crate::pe::cli::metadata::{
     CliMetadataBitstreamRecord, CliMetadataBitstreamStream, CliMetadataModel, CliStream,
 };
+use crate::pe::cli::schema::{column_width, table_schema, HeapIndexWidths};
 
 const CLI_MAP_SOURCE_SENTINEL: i64 = u32::MAX as i64;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CliTableWidthRiftLayout<'a> {
+    pub(crate) table_id: u8,
+    pub(crate) source_table_file_offset: i64,
+    pub(crate) target_table_file_offset: i64,
+    pub(crate) source_row_count: u32,
+    pub(crate) source_row_size: u32,
+    pub(crate) target_row_size: u32,
+    pub(crate) source_row_counts: &'a [u32; 64],
+    pub(crate) target_row_counts: &'a [u32; 64],
+    pub(crate) source_heap_widths: HeapIndexWidths,
+    pub(crate) target_heap_widths: HeapIndexWidths,
+    pub(crate) source_widening_fill_offset: i64,
+}
 
 pub(crate) fn build_cli_heap_rift(
     source_heap_file_offset: usize,
@@ -61,10 +77,47 @@ pub(crate) fn build_cli_table_rift(
     sorted_rift(entries)
 }
 
+/// Build only the table-rift entries caused by metadata column width changes.
+///
+/// Widened target columns need a source-side fill offset for the inserted bytes.
+/// The full native path derives that from the transformed source buffer, so the
+/// caller must supply it instead of inferring it from metadata bounds.
+pub(crate) fn build_cli_table_width_hole_rift(
+    layout: CliTableWidthRiftLayout<'_>,
+    table_map: &RiftTable,
+) -> RiftTable {
+    let mut entries = Vec::new();
+    append_cli_table_width_hole_entries(&mut entries, layout, table_map);
+    sorted_rift(entries)
+}
+
 pub(crate) fn build_cli_compression_rift(
     source_metadata: &CliMetadataModel,
     target_metadata: &CliMetadataBitstreamRecord,
     cli_map: &CliMapModel,
+) -> RiftTable {
+    build_cli_compression_rift_impl(source_metadata, target_metadata, cli_map, None)
+}
+
+pub(crate) fn build_cli_compression_rift_with_source_fill_offset(
+    source_metadata: &CliMetadataModel,
+    target_metadata: &CliMetadataBitstreamRecord,
+    cli_map: &CliMapModel,
+    source_widening_fill_offset: i64,
+) -> RiftTable {
+    build_cli_compression_rift_impl(
+        source_metadata,
+        target_metadata,
+        cli_map,
+        Some(source_widening_fill_offset),
+    )
+}
+
+fn build_cli_compression_rift_impl(
+    source_metadata: &CliMetadataModel,
+    target_metadata: &CliMetadataBitstreamRecord,
+    cli_map: &CliMapModel,
+    source_widening_fill_offset: Option<i64>,
 ) -> RiftTable {
     if target_metadata.is_empty() {
         return empty_rift();
@@ -99,6 +152,25 @@ pub(crate) fn build_cli_compression_rift(
             target_metadata.row_sizes[table_id],
             &cli_map.tables[table_id],
         );
+        if let Some(source_widening_fill_offset) = source_widening_fill_offset {
+            append_cli_table_width_hole_entries(
+                &mut entries,
+                CliTableWidthRiftLayout {
+                    table_id: table_id as u8,
+                    source_table_file_offset: source_table_file_offset as i64,
+                    target_table_file_offset: target_table_file_offset as i64,
+                    source_row_count: source_metadata.row_counts[table_id],
+                    source_row_size: source_metadata.row_sizes[table_id],
+                    target_row_size: target_metadata.row_sizes[table_id],
+                    source_row_counts: &source_metadata.row_counts,
+                    target_row_counts: &target_metadata.row_counts,
+                    source_heap_widths: source_metadata.heap_widths,
+                    target_heap_widths: target_metadata.heap_widths,
+                    source_widening_fill_offset,
+                },
+                &cli_map.tables[table_id],
+            );
+        }
     }
     sorted_rift(entries)
 }
@@ -237,6 +309,144 @@ fn append_cli_table_rift_entries(
     }
 }
 
+fn append_cli_table_width_hole_entries(
+    entries: &mut Vec<RiftEntry>,
+    layout: CliTableWidthRiftLayout<'_>,
+    table_map: &RiftTable,
+) {
+    if layout.source_row_count == 0 || layout.source_row_size == 0 || layout.target_row_size == 0 {
+        return;
+    }
+
+    let Some(schema) = table_schema(layout.table_id) else {
+        return;
+    };
+
+    let mut source_column_offset = 0i64;
+    let mut target_column_offset = 0i64;
+    for (column_index, column) in schema.columns.iter().enumerate() {
+        let source_width = column_width(
+            column.kind,
+            layout.source_row_counts,
+            layout.source_heap_widths,
+        );
+        let target_width = column_width(
+            column.kind,
+            layout.target_row_counts,
+            layout.target_heap_widths,
+        );
+        let has_following_column = column_index + 1 < schema.columns.len();
+
+        match (source_width, target_width) {
+            (2, 4) => append_cli_table_widened_column_entries(
+                entries,
+                layout,
+                table_map,
+                source_column_offset,
+                target_column_offset,
+                has_following_column,
+            ),
+            (4, 2) if has_following_column => append_cli_table_narrowed_column_entries(
+                entries,
+                layout,
+                table_map,
+                source_column_offset,
+                target_column_offset,
+            ),
+            _ => {}
+        }
+
+        source_column_offset = source_column_offset.wrapping_add(i64::from(source_width));
+        target_column_offset = target_column_offset.wrapping_add(i64::from(target_width));
+    }
+}
+
+fn append_cli_table_widened_column_entries(
+    entries: &mut Vec<RiftEntry>,
+    layout: CliTableWidthRiftLayout<'_>,
+    table_map: &RiftTable,
+    source_column_offset: i64,
+    target_column_offset: i64,
+    has_following_column: bool,
+) {
+    for source_rid in 1..=layout.source_row_count {
+        let source_rid = i64::from(source_rid);
+        let target_rid = map_cli_table_rid(table_map, source_rid);
+        let source_column_file_offset = table_row_file_offset(
+            layout.source_table_file_offset,
+            i64::from(layout.source_row_size),
+            source_rid,
+        )
+        .wrapping_add(source_column_offset);
+        let target_column_file_offset = table_row_file_offset(
+            layout.target_table_file_offset,
+            i64::from(layout.target_row_size),
+            target_rid,
+        )
+        .wrapping_add(target_column_offset);
+
+        entries.push(RiftEntry {
+            source: target_column_file_offset.wrapping_add(2),
+            target: layout.source_widening_fill_offset,
+        });
+        if has_following_column {
+            entries.push(RiftEntry {
+                source: target_column_file_offset.wrapping_add(4),
+                target: source_column_file_offset.wrapping_add(2),
+            });
+        }
+    }
+}
+
+fn append_cli_table_narrowed_column_entries(
+    entries: &mut Vec<RiftEntry>,
+    layout: CliTableWidthRiftLayout<'_>,
+    table_map: &RiftTable,
+    source_column_offset: i64,
+    target_column_offset: i64,
+) {
+    for source_rid in 1..=layout.source_row_count {
+        let source_rid = i64::from(source_rid);
+        let target_rid = map_cli_table_rid(table_map, source_rid);
+        let source_column_file_offset = table_row_file_offset(
+            layout.source_table_file_offset,
+            i64::from(layout.source_row_size),
+            source_rid,
+        )
+        .wrapping_add(source_column_offset);
+        let target_column_file_offset = table_row_file_offset(
+            layout.target_table_file_offset,
+            i64::from(layout.target_row_size),
+            target_rid,
+        )
+        .wrapping_add(target_column_offset);
+
+        entries.push(RiftEntry {
+            source: target_column_file_offset.wrapping_add(2),
+            target: source_column_file_offset.wrapping_add(4),
+        });
+    }
+}
+
+fn map_cli_table_rid(table_map: &RiftTable, source_rid: i64) -> i64 {
+    if table_map.entries.is_empty() {
+        return source_rid;
+    }
+
+    let entry = match table_map
+        .entries
+        .binary_search_by_key(&source_rid, |entry| entry.source)
+    {
+        Ok(index) => table_map.entries[index],
+        Err(0) => *table_map
+            .entries
+            .last()
+            .expect("non-empty table map should have a last entry"),
+        Err(index) => table_map.entries[index - 1],
+    };
+    source_rid.wrapping_add(entry.target.wrapping_sub(entry.source))
+}
+
 fn table_row_file_offset(table_file_offset: i64, row_size: i64, rid: i64) -> i64 {
     if rid <= 0 {
         table_file_offset.wrapping_add(rid)
@@ -263,7 +473,7 @@ mod tests {
         parse_cli_metadata_from_pe, CliMetadataBitstreamStream, CliMetadataBitstreamStreams,
         CliStreamSet,
     };
-    use crate::pe::cli::schema::{CliSchemaFlavor, HeapIndexWidths};
+    use crate::pe::cli::schema::{row_size, CliSchemaFlavor, HeapIndexWidths};
     use std::path::PathBuf;
 
     const MANAGED_NATIVE_CASES: &[&str] = &[
@@ -301,6 +511,14 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/tests/fixtures/atoms/ManagedNativeCorpus"
         ))
+    }
+
+    const fn narrow_heap_widths() -> HeapIndexWidths {
+        HeapIndexWidths {
+            strings: 2,
+            guid: 2,
+            blob: 2,
+        }
     }
 
     #[test]
@@ -368,6 +586,140 @@ mod tests {
     }
 
     #[test]
+    fn table_width_hole_rift_adds_widened_nonterminal_column_entries() {
+        let heap_widths = narrow_heap_widths();
+        let mut source_row_counts = [0; 64];
+        let mut target_row_counts = [0; 64];
+        source_row_counts[0x02] = 3;
+        target_row_counts[0x02] = 4;
+        target_row_counts[0x04] = 1 << 16;
+        let source_row_size = row_size(0x02, &source_row_counts, heap_widths).unwrap() as u32;
+        let target_row_size = row_size(0x02, &target_row_counts, heap_widths).unwrap() as u32;
+
+        let table = build_cli_table_width_hole_rift(
+            CliTableWidthRiftLayout {
+                table_id: 0x02,
+                source_table_file_offset: 0x1000,
+                target_table_file_offset: 0x3000,
+                source_row_count: source_row_counts[0x02],
+                source_row_size,
+                target_row_size,
+                source_row_counts: &source_row_counts,
+                target_row_counts: &target_row_counts,
+                source_heap_widths: heap_widths,
+                target_heap_widths: heap_widths,
+                source_widening_fill_offset: 0x9000,
+            },
+            &rift(&[(0, 0), (2, 3)]),
+        );
+
+        assert_eq!(
+            pairs(&table),
+            vec![
+                (0x300c, 0x9000),
+                (0x300e, 0x100c),
+                (0x302c, 0x9000),
+                (0x302e, 0x101a),
+                (0x303c, 0x9000),
+                (0x303e, 0x1028),
+            ]
+        );
+    }
+
+    #[test]
+    fn table_width_hole_rift_adds_narrowed_nonterminal_column_entries() {
+        let heap_widths = narrow_heap_widths();
+        let mut source_row_counts = [0; 64];
+        let mut target_row_counts = [0; 64];
+        source_row_counts[0x02] = 2;
+        source_row_counts[0x04] = 1 << 16;
+        target_row_counts[0x02] = 4;
+        let source_row_size = row_size(0x02, &source_row_counts, heap_widths).unwrap() as u32;
+        let target_row_size = row_size(0x02, &target_row_counts, heap_widths).unwrap() as u32;
+
+        let table = build_cli_table_width_hole_rift(
+            CliTableWidthRiftLayout {
+                table_id: 0x02,
+                source_table_file_offset: 0x1000,
+                target_table_file_offset: 0x3000,
+                source_row_count: source_row_counts[0x02],
+                source_row_size,
+                target_row_size,
+                source_row_counts: &source_row_counts,
+                target_row_counts: &target_row_counts,
+                source_heap_widths: heap_widths,
+                target_heap_widths: heap_widths,
+                source_widening_fill_offset: 0x9000,
+            },
+            &rift(&[(0, 0), (2, 4)]),
+        );
+
+        assert_eq!(pairs(&table), vec![(0x300c, 0x100e), (0x3036, 0x101e)]);
+    }
+
+    #[test]
+    fn table_width_hole_rift_uses_fill_without_resume_for_terminal_widening() {
+        let heap_widths = narrow_heap_widths();
+        let mut source_row_counts = [0; 64];
+        let mut target_row_counts = [0; 64];
+        source_row_counts[0x02] = 2;
+        target_row_counts[0x02] = 2;
+        target_row_counts[0x06] = 1 << 16;
+        let source_row_size = row_size(0x02, &source_row_counts, heap_widths).unwrap() as u32;
+        let target_row_size = row_size(0x02, &target_row_counts, heap_widths).unwrap() as u32;
+
+        let table = build_cli_table_width_hole_rift(
+            CliTableWidthRiftLayout {
+                table_id: 0x02,
+                source_table_file_offset: 0x1000,
+                target_table_file_offset: 0x3000,
+                source_row_count: source_row_counts[0x02],
+                source_row_size,
+                target_row_size,
+                source_row_counts: &source_row_counts,
+                target_row_counts: &target_row_counts,
+                source_heap_widths: heap_widths,
+                target_heap_widths: heap_widths,
+                source_widening_fill_offset: 0x9000,
+            },
+            &rift(&[]),
+        );
+
+        assert_eq!(pairs(&table), vec![(0x300e, 0x9000), (0x301e, 0x9000)]);
+    }
+
+    #[test]
+    fn table_width_hole_rift_skips_terminal_narrowing() {
+        let heap_widths = narrow_heap_widths();
+        let mut source_row_counts = [0; 64];
+        let mut target_row_counts = [0; 64];
+        source_row_counts[0x02] = 2;
+        source_row_counts[0x06] = 1 << 16;
+        target_row_counts[0x02] = 2;
+        let source_row_size = row_size(0x02, &source_row_counts, heap_widths).unwrap() as u32;
+        let target_row_size = row_size(0x02, &target_row_counts, heap_widths).unwrap() as u32;
+
+        let table = build_cli_table_width_hole_rift(
+            CliTableWidthRiftLayout {
+                table_id: 0x02,
+                source_table_file_offset: 0x1000,
+                target_table_file_offset: 0x3000,
+                source_row_count: source_row_counts[0x02],
+                source_row_size,
+                target_row_size,
+                source_row_counts: &source_row_counts,
+                target_row_counts: &target_row_counts,
+                source_heap_widths: heap_widths,
+                target_heap_widths: heap_widths,
+                source_widening_fill_offset: 0x9000,
+            },
+            &rift(&[]),
+        );
+
+        assert!(table.entries.is_empty());
+    }
+
+    #[test]
     fn heap_compression_rift_composes_strings_user_strings_and_blob_streams() {
         let source_metadata = source_metadata_model();
         let target_metadata = target_metadata_record();
@@ -429,6 +781,48 @@ mod tests {
                 (0x6520, 0x5410),
                 (0x6600, 0x5500),
                 (0x6618, 0x550a),
+            ]
+        );
+    }
+
+    #[test]
+    fn cli_compression_rift_with_source_fill_offset_composes_width_holes() {
+        let heap_widths = narrow_heap_widths();
+        let mut source_metadata = source_metadata_model();
+        source_metadata.heap_widths = heap_widths;
+        source_metadata.valid_table_mask = 1 << 0x02;
+        source_metadata.row_counts[0x02] = 2;
+        source_metadata.row_sizes[0x02] =
+            row_size(0x02, &source_metadata.row_counts, heap_widths).unwrap() as u32;
+        source_metadata.table_file_offsets[0x02] = Some(0x5500);
+
+        let mut target_metadata = target_metadata_record();
+        target_metadata.streams.strings.size = 0;
+        target_metadata.streams.user_strings.size = 0;
+        target_metadata.streams.blob.size = 0;
+        target_metadata.heap_widths = heap_widths;
+        target_metadata.valid_table_mask = (1 << 0x02) | (1 << 0x04);
+        target_metadata.row_counts[0x02] = 2;
+        target_metadata.row_counts[0x04] = 1 << 16;
+        target_metadata.row_sizes[0x02] =
+            row_size(0x02, &target_metadata.row_counts, heap_widths).unwrap() as u32;
+        target_metadata.table_file_offsets[0x02] = Some(0x6600);
+
+        let table = build_cli_compression_rift_with_source_fill_offset(
+            &source_metadata,
+            &target_metadata,
+            &CliMapModel::default(),
+            0x9900,
+        );
+
+        assert_eq!(
+            pairs(&table),
+            vec![
+                (0x6600, 0x5500),
+                (0x660c, 0x9900),
+                (0x660e, 0x550c),
+                (0x661c, 0x9900),
+                (0x661e, 0x551a),
             ]
         );
     }

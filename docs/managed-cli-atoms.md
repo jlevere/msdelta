@@ -660,8 +660,18 @@ index widening, 4-byte to 2-byte narrowing, and empty table maps.
 Current state: `src/pe/cli/rift.rs` generates table row-start rifts for
 metadata tables and treats `#GUID` as a fixed-width table stream. It handles
 empty maps, explicit RID map entries, source-sentinel termination, sorted output,
-and managed native corpus construction. It does not yet model native
-column-width hole entries for widened or narrowed metadata rows.
+and managed native corpus construction. It also exposes a typed width-hole rift
+producer for metadata tables whose schema-derived source and target column
+widths differ between 2 and 4 bytes. That producer covers widened non-terminal
+columns, narrowed non-terminal columns, terminal-column widening, terminal
+narrowing, and table-map RID placement.
+
+The width-hole producer deliberately takes the source-side fill offset as an
+explicit input. The native graph derives that value from the transformed source
+buffer, not from metadata bounds. A source-fill-aware `CliCompressionRift`
+builder composes these entries when that offset is supplied, but apply still
+needs to derive and pass the native-equivalent source-buffer fact before using
+the result.
 
 ### CliCompressionRift
 
@@ -682,9 +692,10 @@ summed into the final PE-copy rift.
 
 Current state: classic CLI compression-rift construction composes heap,
 `#GUID`, and metadata table row-start rifts into one sorted target-to-source
-rift. This is still not wired into apply and is not marked native-parity until a
-`CompressionRiftTableCli::FromCliMap` fixture compares the complete sorted
-native rift.
+rift. A source-fill-aware variant also composes typed metadata width-hole
+entries. This is still not wired into apply and is not marked native-parity
+until a `CompressionRiftTableCli::FromCliMap` fixture compares the complete
+sorted native rift.
 
 ### FinalPeCopyRiftManaged
 
@@ -751,8 +762,8 @@ These atoms are useful building blocks today, but not all are release gates:
 | `TransformContextManaged` | unit validation plus managed native corpus construction | native fixture proving actual transform slot attachment |
 | `CliBlobCompressedInteger` | synthetic boundary tests plus Win26100 successful 1-byte `GetBlobContent` fixtures | native 2-byte, 4-byte, malformed, and non-canonical `GetNumber` behavior |
 | `CliHeapRift` | pure unit tests plus managed native corpus construction | native `AddHeapMap` or `FromCliMap` rift-output parity before final rift use |
-| `CliTableRift` | pure row-start unit tests plus managed native corpus construction | native column-width hole parity for widened/narrowed metadata rows |
-| `CliCompressionRift` | heap/GUID/table composition tests plus managed native corpus construction | native `FromCliMap` sorted output parity before final rift use |
+| `CliTableRift` | pure row-start and typed width-hole unit tests plus managed native corpus construction | native `AddTableMap` output parity, including source-fill offset cases |
+| `CliCompressionRift` | heap/GUID/table and source-fill-aware width-hole composition tests plus managed native corpus construction | derive the source-fill offset in apply and compare native `FromCliMap` sorted output before final rift use |
 
 Treat these as the base for the next phase. Do not re-implement them as part of
 larger atoms; improve their fixture coverage when a downstream atom exposes a
