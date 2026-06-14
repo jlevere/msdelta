@@ -18,6 +18,51 @@ pub struct PeInfo {
     pub data_directories: Vec<(u32, u32)>,
 }
 
+/// One PE optional-header data-directory entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PeDataDirectory {
+    pub rva: u32,
+    pub size: u32,
+}
+
+impl PeDataDirectory {
+    /// MSDelta transform helpers treat either zero component as absent for
+    /// directory-to-directory rift generation.
+    pub fn is_empty(self) -> bool {
+        self.rva == 0 || self.size == 0
+    }
+}
+
+/// Named PE optional-header data-directory slots.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(usize)]
+pub enum DataDirectoryKind {
+    Export = 0,
+    Import = 1,
+    Resource = 2,
+    Exception = 3,
+    Certificate = 4,
+    BaseRelocation = 5,
+    Debug = 6,
+    Architecture = 7,
+    GlobalPointer = 8,
+    Tls = 9,
+    LoadConfig = 10,
+    BoundImport = 11,
+    ImportAddressTable = 12,
+    DelayImport = 13,
+    ClrRuntimeHeader = 14,
+    Reserved = 15,
+}
+
+impl DataDirectoryKind {
+    pub const COUNT: usize = 16;
+
+    pub const fn index(self) -> usize {
+        self as usize
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SectionInfo {
     pub name: String,
@@ -234,6 +279,12 @@ impl PeInfo {
         self.section_containing_file_offset(a)
             .is_some_and(|section| section.contains_file_offset(b))
     }
+
+    pub fn data_directory(&self, kind: DataDirectoryKind) -> Option<PeDataDirectory> {
+        self.data_directories
+            .get(kind.index())
+            .map(|&(rva, size)| PeDataDirectory { rva, size })
+    }
 }
 
 #[cfg(test)]
@@ -274,6 +325,18 @@ mod tests {
             is_64bit: true,
             sections,
             data_directories: vec![],
+        }
+    }
+
+    fn pe_with_directories(data_directories: Vec<(u32, u32)>) -> PeInfo {
+        PeInfo {
+            image_base: 0x140000000,
+            size_of_image: 0x9000,
+            timestamp: 0,
+            checksum: 0,
+            is_64bit: true,
+            sections: vec![],
+            data_directories,
         }
     }
 
@@ -337,5 +400,55 @@ mod tests {
         assert_eq!(text.clipped_raw_range(0x1000), Some(0x400..0x600));
         assert_eq!(text.clipped_raw_range(0x500), Some(0x400..0x500));
         assert_eq!(text.clipped_raw_range(0x300), None);
+    }
+
+    #[test]
+    fn data_directory_kind_indexes_match_pe_order() {
+        assert_eq!(DataDirectoryKind::Export.index(), 0);
+        assert_eq!(DataDirectoryKind::Import.index(), 1);
+        assert_eq!(DataDirectoryKind::Resource.index(), 2);
+        assert_eq!(DataDirectoryKind::Exception.index(), 3);
+        assert_eq!(DataDirectoryKind::BaseRelocation.index(), 5);
+        assert_eq!(DataDirectoryKind::ClrRuntimeHeader.index(), 14);
+        assert_eq!(DataDirectoryKind::Reserved.index(), 15);
+        assert_eq!(DataDirectoryKind::COUNT, 16);
+    }
+
+    #[test]
+    fn pe_data_directory_lookup_uses_typed_kind() {
+        let mut directories = vec![(0, 0); DataDirectoryKind::COUNT];
+        directories[DataDirectoryKind::Import.index()] = (0x1200, 0x28);
+        directories[DataDirectoryKind::ClrRuntimeHeader.index()] = (0x2400, 0x48);
+        let pe = pe_with_directories(directories);
+
+        assert_eq!(
+            pe.data_directory(DataDirectoryKind::Import),
+            Some(PeDataDirectory {
+                rva: 0x1200,
+                size: 0x28
+            })
+        );
+        assert_eq!(
+            pe.data_directory(DataDirectoryKind::ClrRuntimeHeader),
+            Some(PeDataDirectory {
+                rva: 0x2400,
+                size: 0x48
+            })
+        );
+        assert_eq!(
+            pe.data_directory(DataDirectoryKind::Resource),
+            Some(PeDataDirectory { rva: 0, size: 0 })
+        );
+        assert!(pe
+            .data_directory(DataDirectoryKind::Resource)
+            .unwrap()
+            .is_empty());
+
+        let truncated = pe_with_directories(vec![(0x1100, 0x10)]);
+        assert_eq!(
+            truncated.data_directory(DataDirectoryKind::Import),
+            None,
+            "missing optional-header directory slots remain absent"
+        );
     }
 }

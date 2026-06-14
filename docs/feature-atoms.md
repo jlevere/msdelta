@@ -425,6 +425,25 @@ and WinSxS base extraction:
 Keep source RVA, target RVA, source file offset, and target file offset explicit
 when composing this atom with rifts or transform markers.
 
+## PE Data Directories
+
+`PeDataDirectories` is the named optional-header data-directory atom. It owns
+the mapping from PE directory ordinals to explicit transform concepts such as
+imports, resources, exception/pdata, base relocations, and the CLR runtime
+header.
+
+- Directory-specific code must request a `DataDirectoryKind`; raw numeric
+  indexes are reserved for code that intentionally walks the complete PE table.
+- Missing optional-header slots return `None`; present zero-valued slots return
+  a `PeDataDirectory` whose `is_empty()` helper treats either zero component as
+  absent for directory-to-directory rift generation.
+- The directory value is still an RVA/size pair. Callers must map RVAs through
+  `PeLogicalSections` helpers and bounds-check the concrete buffer before
+  reading or rewriting bytes.
+- Managed PE detection and CLR metadata parsing should use
+  `DataDirectoryKind::ClrRuntimeHeader` rather than hard-coded COM descriptor
+  ordinals.
+
 ## Near-Term Milestones
 
 1. Keep `RiftTable::reverse` debug/release parity in the release suite; the

@@ -5,7 +5,7 @@
 //! "inferred relocations" which scans for 32-bit pointers within
 //! the PE's image range and rebases them using the rift table.
 
-use super::parse::PeInfo;
+use super::parse::{DataDirectoryKind, PeInfo};
 use crate::Result;
 
 /// MSDelta file type flags.
@@ -135,9 +135,11 @@ pub(crate) fn build_transformed_source(
             transform_disasm_x64(buf, pe, rift);
         }
         if flags & 0x400 != 0 {
-            if let Some((pdata_rva, pdata_size)) = pe.data_dir(crate::pe::structs::dir::EXCEPTION) {
-                if let Some(pdata_fo) = rva_to_file_off(pe, pdata_rva as i64) {
-                    remap_pdata_rvas(buf, pdata_fo as u32, pdata_size, rift);
+            if let Some(pdata) = pe.data_directory(DataDirectoryKind::Exception) {
+                if pdata.rva != 0 {
+                    if let Some(pdata_fo) = rva_to_file_off(pe, pdata.rva as i64) {
+                        remap_pdata_rvas(buf, pdata_fo as u32, pdata.size, rift);
+                    }
                 }
             }
         }
@@ -205,15 +207,16 @@ fn set_header_timestamp(buf: &mut [u8], ts: u32) {
 /// the `.idata` section writable (Characteristics |= MEM_WRITE|MEM_READ). (The
 /// bound-import *directory* clear is omitted; none of our fixtures carry one.)
 fn unbind_pe(buf: &mut [u8], pe: &PeInfo) {
-    use crate::pe::structs::{self, dir, ImageImportDescriptor, ImageSectionHeader};
+    use crate::pe::structs::{self, ImageImportDescriptor, ImageSectionHeader};
 
     let ptr = if pe.is_64bit { 8usize } else { 4 };
 
     // Unbind each bound import descriptor (non-zero TimeDateStamp): clear the
     // stamp + forwarder chain and copy the ILT (OriginalFirstThunk) over the IAT
     // (FirstThunk), restoring the unbound thunk array.
-    if let Some((imp_rva, _)) = pe.data_dir(dir::IMPORT) {
-        if let Some(desc0) = rva_to_file_off(pe, imp_rva as i64) {
+    if let Some(imports) = pe.data_directory(DataDirectoryKind::Import) {
+        if imports.rva != 0 {
+            if let Some(desc0) = rva_to_file_off(pe, imports.rva as i64) {
             for di in 0..MAX_IMPORT_DESCRIPTORS {
                 let dfo = desc0 + di * size_of::<ImageImportDescriptor>();
                 let Some(d) = structs::read::<ImageImportDescriptor>(buf, dfo) else {
@@ -256,6 +259,7 @@ fn unbind_pe(buf: &mut [u8], pe: &PeInfo) {
                     k += 1;
                 }
             }
+            }
         }
     }
 
@@ -289,16 +293,17 @@ fn transform_source_imports(
     marker: &mut [u8],
     target_base: u64,
 ) {
-    use crate::pe::structs::{self, dir, ImageImportDescriptor};
+    use crate::pe::structs::{self, ImageImportDescriptor};
     use std::mem::offset_of;
 
     let ptr = if pe.is_64bit { 8usize } else { 4 };
     let ordinal_flag: u64 = if pe.is_64bit { 1 << 63 } else { 1 << 31 };
     let image_base = pe.image_base as i64;
-    let Some((imp_rva, _)) = pe.data_dir(dir::IMPORT) else {
-        return;
+    let imports = match pe.data_directory(DataDirectoryKind::Import) {
+        Some(value) if value.rva != 0 => value,
+        _ => return,
     };
-    let Some(desc0) = rva_to_file_off(pe, imp_rva as i64) else {
+    let Some(desc0) = rva_to_file_off(pe, imports.rva as i64) else {
         return;
     };
 
@@ -393,13 +398,14 @@ fn transform_source_imports(
 /// arrays through the rift, marking the bytes. comctl32's export table lives in
 /// `.text`, so these are the residual `.text` RVAs after calls/jmps.
 fn transform_source_exports(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marker: &mut [u8]) {
-    use crate::pe::structs::{self, dir, ImageExportDirectory};
+    use crate::pe::structs::{self, ImageExportDirectory};
     use std::mem::offset_of;
 
-    let Some((exp_rva, _)) = pe.data_dir(dir::EXPORT) else {
-        return;
+    let exports = match pe.data_directory(DataDirectoryKind::Export) {
+        Some(value) if value.rva != 0 => value,
+        _ => return,
     };
-    let Some(dfo) = rva_to_file_off(pe, exp_rva as i64) else {
+    let Some(dfo) = rva_to_file_off(pe, exports.rva as i64) else {
         return;
     };
     let Some(ed) = structs::read::<ImageExportDirectory>(buf, dfo) else {
@@ -443,15 +449,16 @@ fn transform_source_exports(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marke
 /// returns `rva + rift.map(rva)`. `IMAGE_RESOURCE_DATA_ENTRY.OffsetToData` is
 /// treated as dirbase-relative here, matching genuine `GetEntryData`.
 fn transform_source_resources(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marker: &mut [u8]) {
-    let Some((rsrc_rva, rsrc_size)) = pe.data_dir(crate::pe::structs::dir::RESOURCE) else {
+    let resources = match pe.data_directory(DataDirectoryKind::Resource) {
+        Some(value) if value.rva != 0 => value,
+        _ => return,
+    };
+    let Some(base_fo) = rva_to_file_off(pe, resources.rva as i64) else {
         return;
     };
-    let Some(base_fo) = rva_to_file_off(pe, rsrc_rva as i64) else {
-        return;
-    };
-    let dirbase = rsrc_rva as i64;
+    let dirbase = resources.rva as i64;
     let base_map = map_rva(rift, dirbase);
-    let end = (base_fo + rsrc_size as usize).min(buf.len());
+    let end = (base_fo + resources.size as usize).min(buf.len());
 
     use crate::pe::structs::{self, ImageResourceDirectoryEntry as ResEntry};
     use std::mem::offset_of;
@@ -555,13 +562,14 @@ fn transform_source_relocs(
     target_base: u64,
 ) {
     let image_base = pe.image_base as i64;
-    let Some((reloc_rva, reloc_size)) = pe.data_dir(crate::pe::structs::dir::BASERELOC) else {
+    let relocs = match pe.data_directory(DataDirectoryKind::BaseRelocation) {
+        Some(value) if value.rva != 0 => value,
+        _ => return,
+    };
+    let Some(base) = rva_to_file_off(pe, relocs.rva as i64) else {
         return;
     };
-    let Some(base) = rva_to_file_off(pe, reloc_rva as i64) else {
-        return;
-    };
-    let blocks_end = (base + reloc_size as usize).min(buf.len());
+    let blocks_end = (base + relocs.size as usize).min(buf.len());
 
     // Collected entries for the block rebuild: (mapped location RVA, type, extra).
     let mut entries: Vec<(u32, u16, u16)> = Vec::new();
@@ -629,7 +637,7 @@ fn transform_source_relocs(
         bo += blk;
     }
 
-    rebuild_reloc_blocks(buf, pe, reloc_rva, reloc_size, base, &mut entries);
+    rebuild_reloc_blocks(buf, pe, relocs.rva, relocs.size, base, &mut entries);
 }
 
 /// Regenerate the base-relocation directory in place from the collected,
@@ -1317,17 +1325,17 @@ pub(crate) fn transform_disasm_x64(output: &mut [u8], pe: &PeInfo, rift: &RiftTa
     if rift.entries.is_empty() {
         return 0;
     }
-    use crate::pe::structs::{self, dir, RuntimeFunction};
-    let Some((pdata_rva, pdata_size)) = pe.data_dir(dir::EXCEPTION) else {
+    use crate::pe::structs::{self, RuntimeFunction};
+    let Some(pdata) = pe.data_directory(DataDirectoryKind::Exception) else {
         return 0;
     };
-    if (pdata_size as usize) < size_of::<RuntimeFunction>() {
+    if pdata.rva == 0 || (pdata.size as usize) < size_of::<RuntimeFunction>() {
         return 0;
     }
-    let Some(pdata_off) = rva_to_file_off(pe, pdata_rva as i64) else {
+    let Some(pdata_off) = rva_to_file_off(pe, pdata.rva as i64) else {
         return 0;
     };
-    let n_funcs = pdata_size as usize / size_of::<RuntimeFunction>();
+    let n_funcs = pdata.size as usize / size_of::<RuntimeFunction>();
     let mut changed = 0u32;
     for i in 0..n_funcs {
         let ent = pdata_off + i * size_of::<RuntimeFunction>();

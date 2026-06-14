@@ -310,6 +310,7 @@ pub fn apply_into(reference: &[u8], delta: &[u8], output: &mut [u8]) -> Result<u
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pe::parse::DataDirectoryKind;
     use std::path::PathBuf;
 
     const FIXTURES_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
@@ -1250,16 +1251,11 @@ mod tests {
         let truth = std::fs::read(dir.join("comctl32x86_new.dll")).unwrap();
         let dump = |label: &str, img: &[u8]| {
             let pe = crate::pe::parse::PeInfo::parse_lenient(img).unwrap();
-            let (rrva, rsize) = pe.data_directories[5];
-            let fo = pe
-                .sections
-                .iter()
-                .find(|s| {
-                    rrva >= s.virtual_address
-                        && rrva < s.virtual_address + s.virtual_size.max(s.raw_size)
-                })
-                .map(|s| (s.raw_offset + (rrva - s.virtual_address)) as usize)
+            let reloc = pe
+                .data_directory(DataDirectoryKind::BaseRelocation)
                 .unwrap();
+            let (rrva, rsize) = (reloc.rva, reloc.size);
+            let fo = pe.rva_to_file_offset(rrva).unwrap();
             eprintln!("{label}: reloc rva={rrva:#x} size={rsize:#x} fo={fo:#x}");
             let mut bo = fo;
             let end = fo + rsize as usize;
@@ -1309,27 +1305,16 @@ mod tests {
         );
         dump("mine T(source)", &mine);
         // First divergence in .reloc between mine and truth.
-        let (rrva, rsize) = spe.data_directories[5];
-        let mfo = spe
-            .sections
-            .iter()
-            .find(|s| {
-                rrva >= s.virtual_address
-                    && rrva < s.virtual_address + s.virtual_size.max(s.raw_size)
-            })
-            .map(|s| (s.raw_offset + (rrva - s.virtual_address)) as usize)
+        let reloc = spe
+            .data_directory(DataDirectoryKind::BaseRelocation)
             .unwrap();
+        let (rrva, rsize) = (reloc.rva, reloc.size);
+        let mfo = spe.rva_to_file_offset(rrva).unwrap();
         let tpe = crate::pe::parse::PeInfo::parse_lenient(&truth).unwrap();
-        let (trva, _) = tpe.data_directories[5];
-        let tfo = tpe
-            .sections
-            .iter()
-            .find(|s| {
-                trva >= s.virtual_address
-                    && trva < s.virtual_address + s.virtual_size.max(s.raw_size)
-            })
-            .map(|s| (s.raw_offset + (trva - s.virtual_address)) as usize)
+        let target_reloc = tpe
+            .data_directory(DataDirectoryKind::BaseRelocation)
             .unwrap();
+        let tfo = tpe.rva_to_file_offset(target_reloc.rva).unwrap();
         for k in 0..(rsize as usize) {
             if mine.get(mfo + k) != truth.get(tfo + k) {
                 eprintln!(

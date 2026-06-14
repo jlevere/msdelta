@@ -10,10 +10,9 @@ use crate::pe::cli::tokens::{
     BlobHeapOffset, GuidHeapIndex, MetadataRid, MetadataTableId, StringsHeapOffset,
     UserStringsHeapOffset,
 };
-use crate::pe::parse::PeInfo;
+use crate::pe::parse::{DataDirectoryKind, PeInfo};
 use crate::{Error, Result};
 
-const CLR_DATA_DIRECTORY: usize = 14;
 const COR20_METADATA_RVA_OFFSET: usize = 8;
 const COR20_METADATA_SIZE_OFFSET: usize = 12;
 const METADATA_SIGNATURE: &[u8; 4] = b"BSJB";
@@ -440,17 +439,15 @@ pub(crate) fn parse_cli_metadata_from_pe_info(
     pe: &PeInfo,
     flavor: CliSchemaFlavor,
 ) -> Result<CliMetadataModel> {
-    let (clr_rva, _) = pe
-        .data_directories
-        .get(CLR_DATA_DIRECTORY)
-        .copied()
+    let clr = pe
+        .data_directory(DataDirectoryKind::ClrRuntimeHeader)
         .ok_or(Error::Malformed("PE: missing CLR data directory"))?;
-    if clr_rva == 0 {
+    if clr.rva == 0 {
         return Err(Error::Malformed("PE: missing CLR runtime header"));
     }
 
     let clr_file_offset = pe
-        .rva_to_file_offset(clr_rva)
+        .rva_to_file_offset(clr.rva)
         .ok_or(Error::Malformed("PE: CLR runtime header RVA is unmapped"))?;
     checked_slice(image, clr_file_offset, 0x48)?;
     let metadata_rva = read_u32(image, clr_file_offset + COR20_METADATA_RVA_OFFSET)?;
