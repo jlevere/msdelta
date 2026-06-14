@@ -149,10 +149,6 @@ function normalizeObject(fn, callContext, retval) {
   return captureAdapter(fn).readObject(fn, callContext, retval);
 }
 
-function captureInputs(fn, args) {
-  return captureAdapter(fn).captureInputs(fn, args);
-}
-
 function readPlanForObject(fn, objectValue) {
   if (!objectValue) {
     return null;
@@ -161,11 +157,18 @@ function readPlanForObject(fn, objectValue) {
 }
 
 function captureCallContext(fn, args) {
-  return {
+  const adapter = captureAdapter(fn);
+  const callContext = {
     this_ptr: args[0],
     reader_ptr: fn.reader_layout ? args[1] : null,
-    inputs: captureInputs(fn, args),
+    state: null,
+    inputs: null,
   };
+  if (adapter.captureState) {
+    callContext.state = adapter.captureState(fn, args, callContext);
+  }
+  callContext.inputs = adapter.captureInputs(fn, args, callContext);
+  return callContext;
 }
 
 function writeObject(eventId, slot, objectValue) {

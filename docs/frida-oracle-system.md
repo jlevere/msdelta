@@ -517,9 +517,10 @@ lab/frida/agent/stage/cli-managed.js
 map, wait for the module, attach hooks, track reader calls, write events, and
 fail closed. Files under `agent/stage/` own atom-family behavior. An atom module
 registers one or more capture names in `MSDELTA_STAGE_CAPTURE_ADAPTERS`; each
-adapter provides `captureInputs`, `readObject`, and `readPlan`. Shared mechanics
-such as BitReader replay live in their own module so PE, CLI, DPX, and rift
-atoms can reuse them without copying code.
+adapter provides `captureInputs`, optional pre-call `captureState`,
+`readObject`, and `readPlan`. Shared mechanics such as BitReader replay live in
+their own module so PE, CLI, DPX, and rift atoms can reuse them without copying
+code.
 
 When adding another atom, prefer this checklist:
 
@@ -557,6 +558,7 @@ these internal atoms:
 | `CliMetadataBitstream` | `compo::CliMetadata::InternalFromBitReader` | normalized object plus replay-checked reader window |
 | `CliMapBitstream` | `compo::CliMap::FromBitReader` | normalized object plus replay-checked reader window |
 | `CliCodedTokenMap` | `compo::CliMap::MapCoded` / `MapCodedExact` | call input, return value, and normalized `CliMap` snapshot |
+| `CliBlobCompressedInteger` | `compo::CliMetadata::GetBlobContent` | call input and decoded blob-length result from real metadata blobs |
 
 The lab lane should now optimize for repeatability and smaller atom fixtures:
 
@@ -565,7 +567,8 @@ The lab lane should now optimize for repeatability and smaller atom fixtures:
 2. Add `NativeOracleDiff`, a normalized-object comparator that can replay Rust
    output against promoted native captures without a full apply run.
 3. Add targeted call/object harnesses for evidence gaps such as non-identity
-   `MapCoded` and compressed-integer edge cases.
+   `MapCoded` and compressed-integer 2-byte, 4-byte, reserved, truncated, and
+   non-canonical edge cases.
 4. Add object normalizers for PE info, CLI4 metadata/map, and CLI compression
    rift builders.
 5. Run the same capture set on a second Windows/DLL build and record drift by

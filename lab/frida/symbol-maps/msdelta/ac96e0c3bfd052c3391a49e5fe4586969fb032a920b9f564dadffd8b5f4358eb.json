@@ -79,6 +79,20 @@
       }
     },
     {
+      "atom": "CliBlobCompressedInteger",
+      "name": "compo::CliMetadata::GetBlobContent",
+      "legacy_name": "CliMetadata::GetBlobContent",
+      "rva": "0x1f5cc",
+      "abi": "ms-x64-thiscall",
+      "capture": "cli_blob_get_content_call",
+      "call_layout": {
+        "name": "msdelta-win26100-compo-cli-metadata-get-blob-content-v1",
+        "blob_stream_offset_offset": 52,
+        "blob_stream_size_offset": 56,
+        "max_prefix_bytes": 4
+      }
+    },
+    {
       "atom": "CliMapBitstream",
       "name": "compo::CliMap::FromBitReader",
       "legacy_name": "CliMap::FromBitReader",

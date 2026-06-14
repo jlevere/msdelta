@@ -1,0 +1,1012 @@
+{
+  "schema": 1,
+  "atom": "FridaStageCapture",
+  "case_id": "cli-blob-compressed-integer-win26100",
+  "source_case_id": "managed-corpus-msdelta",
+  "module_sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb",
+  "target_atom": "CliBlobCompressedInteger",
+  "selection": "one representative per encoded-width/decoded-length/encoded-prefix tuple observed in the managed corpus",
+  "events": [
+    {
+      "event_id": "cli-blob-compressed-integer-001-enter",
+      "call_id": "cli-blob-compressed-integer-001",
+      "seq": 1,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 19,
+        "blob_stream": {
+          "offset": 1564,
+          "size": 176,
+          "available_bytes": 157
+        },
+        "encoded_prefix": {
+          "bytes": [
+            2,
+            6,
+            8,
+            2
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 2,
+            "width": 1
+          }
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-001-leave",
+      "call_id": "cli-blob-compressed-integer-001",
+      "seq": 1,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 19,
+        "blob_stream": {
+          "offset": 1564,
+          "size": 176,
+          "available_bytes": 157
+        },
+        "encoded_prefix": {
+          "bytes": [
+            2,
+            6,
+            8,
+            2
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 2,
+            "width": 1
+          }
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-blob-compressed-integer-001.json",
+          "size": 489,
+          "sha256": "4b1db3d674eed84dd2f00c3828a1931e2a671b573c5b335aef149475fc4494c5",
+          "note": "",
+          "type": "CliBlobCompressedIntegerCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-002-enter",
+      "call_id": "cli-blob-compressed-integer-002",
+      "seq": 2,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 10,
+        "blob_stream": {
+          "offset": 1256,
+          "size": 68,
+          "available_bytes": 58
+        },
+        "encoded_prefix": {
+          "bytes": [
+            3,
+            32,
+            0,
+            14
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 3,
+            "width": 1
+          }
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-002-leave",
+      "call_id": "cli-blob-compressed-integer-002",
+      "seq": 2,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 10,
+        "blob_stream": {
+          "offset": 1256,
+          "size": 68,
+          "available_bytes": 58
+        },
+        "encoded_prefix": {
+          "bytes": [
+            3,
+            32,
+            0,
+            14
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 3,
+            "width": 1
+          }
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-blob-compressed-integer-002.json",
+          "size": 489,
+          "sha256": "b7d7ea3859e90e7129151225638b8464cda4931e094239b6ccae3344969ac2ce",
+          "note": "",
+          "type": "CliBlobCompressedIntegerCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-003-enter",
+      "call_id": "cli-blob-compressed-integer-003",
+      "seq": 3,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 22,
+        "blob_stream": {
+          "offset": 1256,
+          "size": 68,
+          "available_bytes": 46
+        },
+        "encoded_prefix": {
+          "bytes": [
+            4,
+            32,
+            1,
+            1
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 4,
+            "width": 1
+          }
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-003-leave",
+      "call_id": "cli-blob-compressed-integer-003",
+      "seq": 3,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 22,
+        "blob_stream": {
+          "offset": 1256,
+          "size": 68,
+          "available_bytes": 46
+        },
+        "encoded_prefix": {
+          "bytes": [
+            4,
+            32,
+            1,
+            1
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 4,
+            "width": 1
+          }
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-blob-compressed-integer-003.json",
+          "size": 488,
+          "sha256": "995d19bf6c1990f2c703c427ce9b6e265ef410869f8095733a83a87c8d02e845",
+          "note": "",
+          "type": "CliBlobCompressedIntegerCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-004-enter",
+      "call_id": "cli-blob-compressed-integer-004",
+      "seq": 4,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 10,
+        "blob_stream": {
+          "offset": 1232,
+          "size": 72,
+          "available_bytes": 62
+        },
+        "encoded_prefix": {
+          "bytes": [
+            5,
+            32,
+            2,
+            8
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 5,
+            "width": 1
+          }
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-004-leave",
+      "call_id": "cli-blob-compressed-integer-004",
+      "seq": 4,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 10,
+        "blob_stream": {
+          "offset": 1232,
+          "size": 72,
+          "available_bytes": 62
+        },
+        "encoded_prefix": {
+          "bytes": [
+            5,
+            32,
+            2,
+            8
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 5,
+            "width": 1
+          }
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-blob-compressed-integer-004.json",
+          "size": 488,
+          "sha256": "8ade2eb435eb39f08732f23368df425034127edff1c02973e843547a1437b928",
+          "note": "",
+          "type": "CliBlobCompressedIntegerCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-005-enter",
+      "call_id": "cli-blob-compressed-integer-005",
+      "seq": 5,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 20,
+        "blob_stream": {
+          "offset": 1428,
+          "size": 116,
+          "available_bytes": 96
+        },
+        "encoded_prefix": {
+          "bytes": [
+            6,
+            32,
+            1,
+            19
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 6,
+            "width": 1
+          }
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-005-leave",
+      "call_id": "cli-blob-compressed-integer-005",
+      "seq": 5,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 20,
+        "blob_stream": {
+          "offset": 1428,
+          "size": 116,
+          "available_bytes": 96
+        },
+        "encoded_prefix": {
+          "bytes": [
+            6,
+            32,
+            1,
+            19
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 6,
+            "width": 1
+          }
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-blob-compressed-integer-005.json",
+          "size": 490,
+          "sha256": "fd4e08e6bec3a075c0dc6c7f27aa843bec98e72075c6c5aac22b9bb5c6f50036",
+          "note": "",
+          "type": "CliBlobCompressedIntegerCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-006-enter",
+      "call_id": "cli-blob-compressed-integer-006",
+      "seq": 6,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 29,
+        "blob_stream": {
+          "offset": 1408,
+          "size": 88,
+          "available_bytes": 59
+        },
+        "encoded_prefix": {
+          "bytes": [
+            7,
+            16,
+            1,
+            1
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 7,
+            "width": 1
+          }
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-006-leave",
+      "call_id": "cli-blob-compressed-integer-006",
+      "seq": 6,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 29,
+        "blob_stream": {
+          "offset": 1408,
+          "size": 88,
+          "available_bytes": 59
+        },
+        "encoded_prefix": {
+          "bytes": [
+            7,
+            16,
+            1,
+            1
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 7,
+            "width": 1
+          }
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-blob-compressed-integer-006.json",
+          "size": 488,
+          "sha256": "31df8604d16530f540663c1f3ecfd896979c1bf5509d107ccccbda899ca8af7e",
+          "note": "",
+          "type": "CliBlobCompressedIntegerCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-007-enter",
+      "call_id": "cli-blob-compressed-integer-007",
+      "seq": 7,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 1,
+        "blob_stream": {
+          "offset": 1256,
+          "size": 68,
+          "available_bytes": 67
+        },
+        "encoded_prefix": {
+          "bytes": [
+            8,
+            183,
+            122,
+            92
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 8,
+            "width": 1
+          }
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-007-leave",
+      "call_id": "cli-blob-compressed-integer-007",
+      "seq": 7,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 1,
+        "blob_stream": {
+          "offset": 1256,
+          "size": 68,
+          "available_bytes": 67
+        },
+        "encoded_prefix": {
+          "bytes": [
+            8,
+            183,
+            122,
+            92
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 8,
+            "width": 1
+          }
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-blob-compressed-integer-007.json",
+          "size": 491,
+          "sha256": "3a929f518d43ee04d009f61ca58969efba782ec4552e56dd32dab9fac2170bc3",
+          "note": "",
+          "type": "CliBlobCompressedIntegerCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-008-enter",
+      "call_id": "cli-blob-compressed-integer-008",
+      "seq": 8,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 37,
+        "blob_stream": {
+          "offset": 1428,
+          "size": 116,
+          "available_bytes": 79
+        },
+        "encoded_prefix": {
+          "bytes": [
+            9,
+            0,
+            2,
+            14
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 9,
+            "width": 1
+          }
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-008-leave",
+      "call_id": "cli-blob-compressed-integer-008",
+      "seq": 8,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 37,
+        "blob_stream": {
+          "offset": 1428,
+          "size": 116,
+          "available_bytes": 79
+        },
+        "encoded_prefix": {
+          "bytes": [
+            9,
+            0,
+            2,
+            14
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 9,
+            "width": 1
+          }
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-blob-compressed-integer-008.json",
+          "size": 489,
+          "sha256": "4702d28e01199c03003d5299252cf80875e2119d0d82fffdab9c7209a04bab2a",
+          "note": "",
+          "type": "CliBlobCompressedIntegerCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-009-enter",
+      "call_id": "cli-blob-compressed-integer-009",
+      "seq": 9,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 44,
+        "blob_stream": {
+          "offset": 1564,
+          "size": 176,
+          "available_bytes": 132
+        },
+        "encoded_prefix": {
+          "bytes": [
+            25,
+            1,
+            0,
+            255
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 25,
+            "width": 1
+          }
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-009-leave",
+      "call_id": "cli-blob-compressed-integer-009",
+      "seq": 9,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 44,
+        "blob_stream": {
+          "offset": 1564,
+          "size": 176,
+          "available_bytes": 132
+        },
+        "encoded_prefix": {
+          "bytes": [
+            25,
+            1,
+            0,
+            255
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 25,
+            "width": 1
+          }
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-blob-compressed-integer-009.json",
+          "size": 494,
+          "sha256": "83e1ba861c41cbff46498a647b8de6c7d7e45244ec748b47ea193642b46350b1",
+          "note": "",
+          "type": "CliBlobCompressedIntegerCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-010-enter",
+      "call_id": "cli-blob-compressed-integer-010",
+      "seq": 10,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 36,
+        "blob_stream": {
+          "offset": 1256,
+          "size": 68,
+          "available_bytes": 32
+        },
+        "encoded_prefix": {
+          "bytes": [
+            30,
+            1,
+            0,
+            1
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 30,
+            "width": 1
+          }
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-010-leave",
+      "call_id": "cli-blob-compressed-integer-010",
+      "seq": 10,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 36,
+        "blob_stream": {
+          "offset": 1256,
+          "size": 68,
+          "available_bytes": 32
+        },
+        "encoded_prefix": {
+          "bytes": [
+            30,
+            1,
+            0,
+            1
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 30,
+            "width": 1
+          }
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-blob-compressed-integer-010.json",
+          "size": 490,
+          "sha256": "8af8569d97fecde040a8a73f1a8e3fc140a93ce673a0efba8807c65e9e201147",
+          "note": "",
+          "type": "CliBlobCompressedIntegerCallRecord"
+        }
+      ],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-011-enter",
+      "call_id": "cli-blob-compressed-integer-011",
+      "seq": 11,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 101,
+        "blob_stream": {
+          "offset": 1564,
+          "size": 176,
+          "available_bytes": 75
+        },
+        "encoded_prefix": {
+          "bytes": [
+            32,
+            1,
+            0,
+            13
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 32,
+            "width": 1
+          }
+        }
+      },
+      "phase": "enter",
+      "objects": [],
+      "blobs": []
+    },
+    {
+      "event_id": "cli-blob-compressed-integer-011-leave",
+      "call_id": "cli-blob-compressed-integer-011",
+      "seq": 11,
+      "atom": "FridaStageCapture",
+      "target_atom": "CliBlobCompressedInteger",
+      "symbol": "compo::CliMetadata::GetBlobContent",
+      "module": {
+        "name": "msdelta.dll",
+        "sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+      },
+      "function": {
+        "rva": "0x1f5cc",
+        "abi": "ms-x64-thiscall",
+        "capture": "cli_blob_get_content_call"
+      },
+      "inputs": {
+        "blob_offset": 101,
+        "blob_stream": {
+          "offset": 1564,
+          "size": 176,
+          "available_bytes": 75
+        },
+        "encoded_prefix": {
+          "bytes": [
+            32,
+            1,
+            0,
+            13
+          ],
+          "decode": {
+            "status": "ok",
+            "value": 32,
+            "width": 1
+          }
+        }
+      },
+      "phase": "leave",
+      "objects": [
+        {
+          "slot": "normalized",
+          "path": "objects/cli-blob-compressed-integer-011.json",
+          "size": 493,
+          "sha256": "be716719773584c0b2fa55f92b965f3840e72e798b3d92a2d840dac8ed8fa652",
+          "note": "",
+          "type": "CliBlobCompressedIntegerCallRecord"
+        }
+      ],
+      "blobs": []
+    }
+  ]
+}

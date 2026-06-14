@@ -564,9 +564,12 @@ Done when: unit/property tests cover boundary values `0x7f`, `0x80`, `0x3fff`,
 Current state: `src/pe/cli/blob.rs` implements the pure compressed unsigned
 integer reader used by later signature blob transforms. It returns the decoded
 value plus the consumed byte count, rejects truncated encodings, and rejects the
-reserved `111xxxxx` prefix family. It does not yet enforce native behavior for
-non-canonical encodings because that needs a small native `GetNumber` oracle
-case first.
+reserved `111xxxxx` prefix family. The Win26100 Frida stage fixture
+`FridaStageCapture/cli-blob-compressed-integer-win26100` captures
+`compo::CliMetadata::GetBlobContent` on real managed metadata blobs and confirms
+successful 1-byte prefixes observed in the current corpus. It does not yet prove
+2-byte, 4-byte, reserved, truncated, or non-canonical behavior; those still need
+a targeted native `CliBlobTransformer::GetNumber` oracle case.
 
 ### CliBlobTypeTokenRemap
 
@@ -707,7 +710,7 @@ These atoms are useful building blocks today, but not all are release gates:
 | `CliMetadataBitstream` | Win26100 reader-window fixtures | CLI4 equivalent and transform-context wiring |
 | `CliMapBitstream` | Win26100 reader-window fixtures | native-like writer canonicalization for encode |
 | `CliCodedTokenMap` | Win26100 call-record fixtures | targeted non-identity `MapCoded` native case |
-| `CliBlobCompressedInteger` | synthetic boundary tests | native non-canonical `GetNumber` behavior |
+| `CliBlobCompressedInteger` | synthetic boundary tests plus Win26100 successful 1-byte `GetBlobContent` fixtures | native 2-byte, 4-byte, malformed, and non-canonical `GetNumber` behavior |
 
 Treat these as the base for the next phase. Do not re-implement them as part of
 larger atoms; improve their fixture coverage when a downstream atom exposes a
@@ -720,8 +723,8 @@ specific gap.
 2. Add a native `CliMetadata::Init` or equivalent object oracle for metadata
    parsed directly from source PE bytes, including row/heap samples consumed by
    `CliMetadataRowsAndHeaps`.
-3. Add a native `CliBlobTransformer::GetNumber` oracle for malformed and
-   non-canonical compressed integers.
+3. Add a native `CliBlobTransformer::GetNumber` oracle for 2-byte, 4-byte,
+   malformed, and non-canonical compressed integers.
 4. Add a CLI4 metadata bitstream fixture or explicitly record the native symbol
    and layout gap blocking it.
 

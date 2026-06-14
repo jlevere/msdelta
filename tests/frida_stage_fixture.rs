@@ -1,4 +1,5 @@
 use sha2::{Digest, Sha256};
+use serde_json::Value;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -14,6 +15,10 @@ const CLI_MAP_FIXTURE_DIR: &str = concat!(
 const CLI_CODED_TOKEN_MAP_FIXTURE_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/tests/fixtures/atoms/FridaStageCapture/cli-coded-token-map-win26100"
+);
+const CLI_BLOB_COMPRESSED_INTEGER_FIXTURE_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/atoms/FridaStageCapture/cli-blob-compressed-integer-win26100"
 );
 
 #[test]
@@ -540,6 +545,205 @@ fn cli_coded_token_map_stage_objects_are_hashed_and_diverse() {
     assert_eq!(exact_miss, read_usize(&case, "exact_miss_count"));
     assert_eq!(large_s64, read_usize(&case, "large_s64_value_count"));
     assert_eq!(non_empty_maps, read_usize(&case, "non_empty_map_count"));
+}
+
+#[test]
+fn cli_blob_compressed_integer_stage_fixture_is_curated_from_live_lab_capture() {
+    let fixture = Path::new(CLI_BLOB_COMPRESSED_INTEGER_FIXTURE_DIR);
+    let case = fs::read_to_string(fixture.join("case.toml")).expect("read case.toml");
+    let capture = fs::read_to_string(fixture.join("capture.json")).expect("read capture.json");
+
+    for required in [
+        "atom = \"FridaStageCapture\"",
+        "case = \"cli-blob-compressed-integer-win26100\"",
+        "source_case = \"managed-corpus-msdelta\"",
+        "module = \"msdelta.dll\"",
+        "module_sha256 = \"ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb\"",
+        "symbol = \"compo::CliMetadata::GetBlobContent\"",
+        "legacy_symbol = \"CliMetadata::GetBlobContent\"",
+        "rva = \"0x1f5cc\"",
+        "abi = \"ms-x64-thiscall\"",
+        "capture_adapter = \"cli_blob_get_content_call\"",
+        "call_layout = \"msdelta-win26100-compo-cli-metadata-get-blob-content-v1\"",
+        "target_atom = \"CliBlobCompressedInteger\"",
+        "transport = \"frida-inject\"",
+        "coverage_note = \"current managed corpus covers successful one-byte compressed integer prefixes only\"",
+        "normalization_error_count = 0",
+    ] {
+        assert!(case.contains(required), "case.toml missing {required}");
+    }
+
+    assert_eq!(read_usize(&case, "export_event_count"), 36);
+    assert_eq!(read_usize(&case, "source_stage_event_count"), 2182);
+    assert_eq!(read_usize(&case, "stage_event_count"), 22);
+    assert_eq!(read_usize(&case, "stage_leave_object_count"), 11);
+    assert_eq!(read_usize(&case, "stage_leave_blob_count"), 0);
+    assert_eq!(read_usize(&case, "distinct_object_hash_count"), 11);
+    assert_eq!(read_usize(&case, "native_success_count"), 11);
+    assert_eq!(read_usize(&case, "native_failure_count"), 0);
+    assert_eq!(read_usize(&case, "one_byte_width_count"), 11);
+    assert_eq!(read_usize(&case, "two_byte_width_count"), 0);
+    assert_eq!(read_usize(&case, "four_byte_width_count"), 0);
+    assert_eq!(read_usize(&case, "distinct_decoded_length_count"), 11);
+
+    for volatile in [
+        "file_sink_path",
+        ".claude",
+        "lab/frida/out",
+        "this_ptr",
+        "reader_ptr",
+        "metadata_ptr",
+        "out_length_ptr",
+        "encoded_ptr",
+        "content_ptr",
+        "timestamp_ms",
+        "thread_id",
+        "\"retval\"",
+    ] {
+        assert!(
+            !capture.contains(volatile),
+            "curated stage fixture should not retain volatile field {volatile}"
+        );
+    }
+
+    assert!(capture.contains("\"target_atom\": \"CliBlobCompressedInteger\""));
+    assert!(capture.contains("\"symbol\": \"compo::CliMetadata::GetBlobContent\""));
+    assert!(capture.contains("\"capture\": \"cli_blob_get_content_call\""));
+    assert!(capture.contains("\"blob_stream\""));
+    assert!(capture.contains("\"encoded_prefix\""));
+    assert_eq!(capture.matches("\"phase\": \"enter\"").count(), 11);
+    assert_eq!(capture.matches("\"phase\": \"leave\"").count(), 11);
+    assert_eq!(
+        capture
+            .matches("\"type\": \"CliBlobCompressedIntegerCallRecord\"")
+            .count(),
+        11
+    );
+    assert_eq!(capture.matches("\"width\": 1").count(), 22);
+    assert!(
+        !capture.contains("\"width\": 2") && !capture.contains("\"width\": 4"),
+        "current fixture should not pretend to cover multi-byte prefixes"
+    );
+    assert!(
+        !capture.contains("\"error\""),
+        "curated call fixture should not contain capture errors"
+    );
+}
+
+#[test]
+fn cli_blob_compressed_integer_stage_objects_are_hashed_and_semantic() {
+    let fixture = Path::new(CLI_BLOB_COMPRESSED_INTEGER_FIXTURE_DIR);
+    let case = fs::read_to_string(fixture.join("case.toml")).expect("read case.toml");
+    let capture = fs::read_to_string(fixture.join("capture.json")).expect("read capture.json");
+    let object_dir = fixture.join("objects");
+
+    let mut objects = fs::read_dir(&object_dir)
+        .expect("read objects dir")
+        .map(|entry| entry.expect("read object entry").path())
+        .collect::<Vec<_>>();
+    objects.sort();
+    assert_eq!(objects.len(), read_usize(&case, "stage_leave_object_count"));
+
+    let mut distinct_hashes = BTreeSet::new();
+    let mut decoded_lengths = BTreeSet::new();
+    let mut one_byte_widths = 0usize;
+    let mut successes = 0usize;
+    for object_path in objects {
+        let text = fs::read_to_string(&object_path)
+            .unwrap_or_else(|error| panic!("read {}: {error}", object_path.display()));
+        let hash = sha256_file(&object_path);
+        distinct_hashes.insert(hash.clone());
+        assert!(
+            capture.contains(&hash),
+            "capture should reference hash for {}",
+            object_path.display()
+        );
+        for required in [
+            "\"type\": \"CliBlobCompressedIntegerCallRecord\"",
+            "\"native_layout\": \"msdelta-win26100-compo-cli-metadata-get-blob-content-v1\"",
+            "\"blob_offset\"",
+            "\"blob_stream\"",
+            "\"available_bytes\"",
+            "\"encoded_prefix\"",
+            "\"status\": \"ok\"",
+            "\"result\"",
+            "\"success\": true",
+            "\"decoded_length\"",
+            "\"encoded_width\"",
+        ] {
+            assert!(
+                text.contains(required),
+                "{} missing {required}",
+                object_path.display()
+            );
+        }
+        for volatile in [
+            "this_ptr",
+            "reader_ptr",
+            "metadata_ptr",
+            "out_length_ptr",
+            "encoded_ptr",
+            "content_ptr",
+            "\"retval\"",
+            "\"error\"",
+        ] {
+            assert!(
+                !text.contains(volatile),
+                "{} should not contain volatile field {volatile}",
+                object_path.display()
+            );
+        }
+
+        let value: Value = serde_json::from_str(&text)
+            .unwrap_or_else(|error| panic!("parse {}: {error}", object_path.display()));
+        assert_eq!(
+            value["type"].as_str(),
+            Some("CliBlobCompressedIntegerCallRecord")
+        );
+        assert_eq!(
+            value["native_layout"].as_str(),
+            Some("msdelta-win26100-compo-cli-metadata-get-blob-content-v1")
+        );
+        assert_eq!(value["result"]["success"].as_bool(), Some(true));
+        successes += 1;
+
+        let decoded_length = value["result"]["decoded_length"]
+            .as_u64()
+            .expect("decoded length should be numeric");
+        let encoded_width = value["result"]["encoded_width"]
+            .as_u64()
+            .expect("encoded width should be numeric");
+        let prefix_decode = &value["encoded_prefix"]["decode"];
+        assert_eq!(prefix_decode["status"].as_str(), Some("ok"));
+        assert_eq!(prefix_decode["value"].as_u64(), Some(decoded_length));
+        assert_eq!(prefix_decode["width"].as_u64(), Some(encoded_width));
+        if encoded_width == 1 {
+            one_byte_widths += 1;
+        }
+        decoded_lengths.insert(decoded_length);
+    }
+
+    assert_eq!(
+        distinct_hashes.len(),
+        read_usize(&case, "distinct_object_hash_count")
+    );
+    assert_eq!(successes, read_usize(&case, "native_success_count"));
+    assert_eq!(one_byte_widths, read_usize(&case, "one_byte_width_count"));
+    assert_eq!(
+        decoded_lengths.len(),
+        read_usize(&case, "distinct_decoded_length_count")
+    );
+
+    let first = fs::read_to_string(fixture.join("objects/cli-blob-compressed-integer-001.json"))
+        .expect("read first object");
+    for required in [
+        "\"blob_offset\": 19",
+        "\"value\": 2",
+        "\"decoded_length\": 2",
+        "\"encoded_width\": 1",
+    ] {
+        assert!(first.contains(required), "first object missing {required}");
+    }
 }
 
 fn read_usize(case: &str, key: &str) -> usize {

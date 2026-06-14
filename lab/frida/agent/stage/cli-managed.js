@@ -45,6 +45,54 @@ function nativePointerU32(value, label) {
   return parsed;
 }
 
+function pointerDistance(start, end, label) {
+  const distance = BigInt(end.toString()) - BigInt(start.toString());
+  if (distance < 0n || distance > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error(`${label} pointer distance is outside JavaScript's safe integer range`);
+  }
+  return Number(distance);
+}
+
+function readPrefixBytes(address, length) {
+  if (length === 0) {
+    return [];
+  }
+  const bytes = address.readByteArray(length);
+  return Array.from(new Uint8Array(bytes));
+}
+
+function decodeCompressedIntegerPrefix(bytes) {
+  if (bytes.length === 0) {
+    return { status: "truncated", value: null, width: null };
+  }
+
+  const first = bytes[0];
+  if ((first & 0x80) === 0) {
+    return { status: "ok", value: first, width: 1 };
+  }
+  if ((first & 0xc0) === 0x80) {
+    if (bytes.length < 2) {
+      return { status: "truncated", value: null, width: 2 };
+    }
+    return {
+      status: "ok",
+      value: ((first & 0x3f) << 8) | bytes[1],
+      width: 2,
+    };
+  }
+  if ((first & 0xe0) === 0xc0) {
+    if (bytes.length < 4) {
+      return { status: "truncated", value: null, width: 4 };
+    }
+    return {
+      status: "ok",
+      value: ((first & 0x1f) << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3],
+      width: 4,
+    };
+  }
+  return { status: "reserved", value: null, width: null };
+}
+
 function cliMetadataReadPlan(record) {
   const widths = [1];
   if (!record.present) {
@@ -186,6 +234,92 @@ function readCliMapRecord(thisPtr, layout) {
   };
 }
 
+function captureCliBlobGetContentState(fn, args) {
+  const layout = fn.call_layout || {};
+  const thisPtr = args[0];
+  const metadataPtr = args[1];
+  const blobOffset = nativePointerU32(args[2], "blob offset");
+  const outLengthPtr = args[3];
+  const blobStreamOffset = thisPtr.add(layout.blob_stream_offset_offset).readU32();
+  const blobStreamSize = thisPtr.add(layout.blob_stream_size_offset).readU32();
+  const availableBytes = blobOffset <= blobStreamSize ? blobStreamSize - blobOffset : 0;
+  const prefixLength = metadataPtr.isNull()
+    ? 0
+    : Math.min(layout.max_prefix_bytes || 4, availableBytes);
+  const encodedPtr = metadataPtr.isNull()
+    ? ptr(0)
+    : metadataPtr.add(blobStreamOffset + blobOffset);
+  let prefixBytes = [];
+  let prefixError = null;
+  try {
+    prefixBytes = readPrefixBytes(encodedPtr, prefixLength);
+  } catch (error) {
+    prefixError = String(error && error.stack ? error.stack : error);
+  }
+
+  return {
+    metadata_ptr: metadataPtr,
+    out_length_ptr: outLengthPtr,
+    blob_offset: blobOffset,
+    blob_stream_offset: blobStreamOffset,
+    blob_stream_size: blobStreamSize,
+    available_bytes: availableBytes,
+    encoded_ptr: encodedPtr,
+    prefix_bytes: prefixBytes,
+    prefix_error: prefixError,
+  };
+}
+
+function captureCliBlobGetContentInputs(_fn, _args, callContext) {
+  const state = callContext.state;
+  return {
+    this_ptr: callContext.this_ptr.toString(),
+    metadata_ptr: state.metadata_ptr.toString(),
+    blob_offset: state.blob_offset,
+    out_length_ptr: state.out_length_ptr.toString(),
+    blob_stream: {
+      offset: state.blob_stream_offset,
+      size: state.blob_stream_size,
+      available_bytes: state.available_bytes,
+    },
+    encoded_ptr: state.encoded_ptr.toString(),
+    encoded_prefix: {
+      bytes: state.prefix_bytes,
+      decode: state.prefix_error ? null : decodeCompressedIntegerPrefix(state.prefix_bytes),
+      error: state.prefix_error,
+    },
+  };
+}
+
+function readCliBlobGetContentCallRecord(fn, callContext, retval) {
+  const state = callContext.state;
+  const success = !retval.isNull();
+  const decodedLength = success && !state.out_length_ptr.isNull() ? state.out_length_ptr.readU32() : null;
+  const encodedWidth = success ? pointerDistance(state.encoded_ptr, retval, "blob content") : null;
+
+  return {
+    type: "CliBlobCompressedIntegerCallRecord",
+    native_layout: fn.call_layout ? fn.call_layout.name : "msdelta-cli-blob-get-content-call-v1",
+    blob_offset: state.blob_offset,
+    blob_stream: {
+      offset: state.blob_stream_offset,
+      size: state.blob_stream_size,
+      available_bytes: state.available_bytes,
+    },
+    encoded_prefix: {
+      bytes: state.prefix_bytes,
+      decode: state.prefix_error ? null : decodeCompressedIntegerPrefix(state.prefix_bytes),
+      error: state.prefix_error,
+    },
+    result: {
+      success,
+      content_ptr: retval.toString(),
+      decoded_length: decodedLength,
+      encoded_width: encodedWidth,
+    },
+  };
+}
+
 function readCliCodedTokenMapCallRecord(fn, callContext, retval) {
   const exact = fn.call_layout && fn.call_layout.exact === true;
   return {
@@ -229,6 +363,13 @@ registerStageCaptureAdapter("cli_map_from_bitreader", {
 registerStageCaptureAdapter("cli_map_coded_token_call", {
   captureInputs: captureCliCodedTokenInputs,
   readObject: readCliCodedTokenMapCallRecord,
+  readPlan: () => null,
+});
+
+registerStageCaptureAdapter("cli_blob_get_content_call", {
+  captureState: captureCliBlobGetContentState,
+  captureInputs: captureCliBlobGetContentInputs,
+  readObject: readCliBlobGetContentCallRecord,
   readPlan: () => null,
 });
 
