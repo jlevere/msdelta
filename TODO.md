@@ -9,6 +9,26 @@ UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 > by the native DLL) and the Phase 1-3 re-rail plan supersede the tactical
 > milestone list. This file tracks status; that section sets direction.
 
+## Current status (2026-06-15)
+
+**Decode (primary use case) — hardened.** Native PE: 651/659 genuine deltas
+byte-exact (98.8%); matrix 25/26. An architecture-diverse subset is committed and
+**gated in CI** (`tests/pe_decode.rs` + `tests/fixtures/pe-decode/`), so the
+transform pipeline can no longer regress unnoticed (the broad bulk/matrix/pa31
+corpora stay local). The 8-case decode long tail is operand/relocation relayout
+edges (e.g. `.text` absolute-pointer remaps off by a per-region delta, `.reloc`
+block rebuild) -- they return a clean `HashMismatch` (apply() verifies the
+SHA-256 target hash), never silent corruption. Driving these to 0 is deep
+per-DLL transform RE (the next focused campaign).
+
+**Encode (native PE) — reconstructs, not yet byte-exact.** All 659 genuine
+targets round-trip through our decoder (0 broken), ~1.34x genuine size, byte-exact
+header. Body byte-exact needs genuine's exact preprocess rift + LZX parse (see
+the `encode_oracle` / `encode_byte_diff` probes in `src/pa30/mod.rs`).
+
+Sections below are the older transform-coverage audit; decode rows are largely
+superseded by the byte-exact status above.
+
 ## Win32 API coverage
 
 ### msdelta.dll exports (16 functions)
