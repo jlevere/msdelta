@@ -220,3 +220,80 @@ fn sha256_hex(bytes: &[u8]) -> String {
     let hash = Sha256::digest(bytes);
     hash.iter().map(|byte| format!("{byte:02x}")).collect()
 }
+
+/// Managed encode gate: for each genuine classic-CLI managed fixture, run OUR
+/// create(Auto) on (source, target) and require the result to (a) reconstruct
+/// the target and (b) carry the genuine file_type + flags (measured against the
+/// genuine managed delta). Byte-exactness vs genuine is reported, not asserted
+/// (the same deep preprocess-rift / LZX-parse gap as native encode). Run with
+/// `--nocapture` for the per-case byte-exact / size detail.
+#[test]
+fn managed_native_corpus_encode_reconstructs() {
+    let (mut byte_exact, mut ft_flags_match) = (0u32, 0u32);
+    let mut rows = Vec::new();
+    let mut failures = Vec::new();
+    for (case_id, _) in CASES {
+        let dir = Path::new(FIXTURE_ROOT).join(case_id);
+        let source = fs::read(dir.join("source.dll")).expect("source.dll");
+        let target = fs::read(dir.join("target.dll")).expect("target.dll");
+        let genuine = fs::read(dir.join("delta.pa30")).expect("delta.pa30");
+
+        let ours = match pa30::CreateOptions::new()
+            .file_type(pa30::FileType::Auto)
+            .execute(&source, &target)
+        {
+            Ok(d) => d,
+            Err(e) => {
+                failures.push(format!("{case_id}: create error: {e}"));
+                continue;
+            }
+        };
+
+        let hdr = |d: &[u8]| {
+            pa30::parse(d)
+                .ok()
+                .map(|p| (p.header.file_type, p.header.flags))
+        };
+        let (g_ft, g_fl) = hdr(&genuine).unwrap_or((-1, 0));
+        let (o_ft, o_fl) = hdr(&ours).unwrap_or((-2, 0));
+        let be = ours == genuine;
+        let rec = matches!(pa30::apply(&source, &ours), Ok(b) if b == target);
+        if be {
+            byte_exact += 1;
+        }
+        if (o_ft, o_fl) == (g_ft, g_fl) {
+            ft_flags_match += 1;
+        }
+        if !rec {
+            failures.push(format!(
+                "{case_id}: our delta does not reconstruct the target"
+            ));
+        }
+        rows.push(format!(
+            "{case_id}: recon={rec} byte_exact={be} genuine[ft={g_ft} fl={g_fl:#x} {}B] ours[ft={o_ft} fl={o_fl:#x} {}B]",
+            genuine.len(),
+            ours.len()
+        ));
+    }
+    eprintln!("\n=== MANAGED ENCODE ({} cases) ===", CASES.len());
+    for r in &rows {
+        eprintln!("  {r}");
+    }
+    eprintln!(
+        "reconstruct={}/{}  same-ft+flags={ft_flags_match}/{}  byte-exact-vs-genuine={byte_exact}/{}",
+        CASES.len() - failures.len(),
+        CASES.len(),
+        CASES.len(),
+        CASES.len(),
+    );
+    assert!(
+        failures.is_empty(),
+        "managed encode regressed:\n{}",
+        failures.join("\n")
+    );
+    assert_eq!(
+        ft_flags_match as usize,
+        CASES.len(),
+        "managed encode must pick the genuine file_type + flags for every case"
+    );
+}
