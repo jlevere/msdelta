@@ -5,7 +5,7 @@ use crate::Result;
 
 use super::header::{FormatVersion, PA30_MAGIC, PA31_MAGIC};
 use super::preprocess::build_pe_preprocess;
-use super::signature::{get_signature, HASH_ALG_NONE};
+use super::signature::{get_signature, HASH_ALG_NONE, HASH_ALG_SHA256};
 
 /// Encode `target` as a PA30 delta against `reference`.
 ///
@@ -176,8 +176,17 @@ impl CreateOptions {
                 }
             };
 
-        let target_hash = if self.hash_alg != HASH_ALG_NONE {
-            get_signature(target, self.hash_alg)?.hash
+        // Genuine PE deltas carry a SHA-256 target hash (hash_alg 0x800C); RAW
+        // deltas use whatever the caller configured. Matching this is the first
+        // step toward byte-exact PE parity (without it the header diverges at the
+        // hash_alg field) and lets apply verify integrity like genuine.
+        let effective_hash_alg = if file_type_val != 1 {
+            HASH_ALG_SHA256
+        } else {
+            self.hash_alg
+        };
+        let target_hash = if effective_hash_alg != HASH_ALG_NONE {
+            get_signature(target, effective_hash_alg)?.hash
         } else {
             Vec::new()
         };
@@ -195,7 +204,7 @@ impl CreateOptions {
             header_writer.write_i64(file_type_val);
             header_writer.write_i64(flags);
             header_writer.write_i64(target.len() as i64);
-            header_writer.write_i64(self.hash_alg as i64);
+            header_writer.write_i64(effective_hash_alg as i64);
             header_writer.write_buffer(&target_hash);
             // PA31 extra fields
             header_writer.write_i64(0); // field1
@@ -209,7 +218,7 @@ impl CreateOptions {
             outer_writer.write_i64(file_type_val);
             outer_writer.write_i64(flags);
             outer_writer.write_i64(target.len() as i64);
-            outer_writer.write_i64(self.hash_alg as i64);
+            outer_writer.write_i64(effective_hash_alg as i64);
             outer_writer.write_buffer(&target_hash);
         }
 
