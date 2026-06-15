@@ -20,11 +20,35 @@ fn hash3(data: &[u8], pos: usize) -> usize {
     (h.wrapping_mul(0x9E3779B1)) >> 16
 }
 
+/// Extra (verbatim/aligned) bits an offset class costs beyond its main symbol --
+/// the part that differs between classes. SOURCE_COPY and LRU are free;
+/// signed-delta costs 14/16/18; RAW costs its slot's verbatim + aligned bits.
+/// Used to pick the cheapest encoding, not merely the longest match.
+fn offset_extra_bits(raw_offset: u32) -> u32 {
+    if raw_offset == SOURCE_COPY || (LRU_BASE..LRU_BASE + 3).contains(&raw_offset) {
+        return 0;
+    }
+    if raw_offset < SOURCE_COPY {
+        let sd = raw_offset as i32 - OFFSET_BIAS as i32;
+        return if (-0x2000..0x2000).contains(&sd) {
+            14
+        } else if (-0xA000..0xA000).contains(&sd) {
+            16
+        } else {
+            18
+        };
+    }
+    let (_, extra, needs_aligned) = compute_symbol_info(raw_offset, 1);
+    extra + if needs_aligned { 3 } else { 0 }
+}
+
 /// Find the best match for output index `i` (combined position `ref_len + i`)
 /// without mutating the hash structures. Returns `(length, wire_offset,
-/// distance)`; length 0 means no usable match. The offset class mirrors the
-/// decoder's resolution (cheapest first), and a SOURCE_COPY is capped at the
-/// next rift breakpoint so it stays single-segment.
+/// distance)`; length 0 means no usable match. Candidates are scored by a rough
+/// bit value (`length * 8 - offset_extra_bits`), not pure length, so a slightly
+/// shorter copy in a cheap offset class (SOURCE_COPY/LRU) beats a longer RAW one
+/// -- closer to genuine's parse. A SOURCE_COPY is capped at the next rift
+/// breakpoint so it stays single-segment.
 #[allow(clippy::too_many_arguments)]
 fn best_match_at(
     combined: &[u8],
@@ -43,6 +67,7 @@ fn best_match_at(
     let combined_pos = ref_len + i;
     let rift_offset = ort.offset_at(combined_pos as i64);
     let (mut best_len, mut best_offset, mut best_distance) = (0u32, 0u32, 0i64);
+    let mut best_value = i64::MIN;
 
     // Identity runs can span whole sections; the 263+ length is carried by
     // encode_match's big-number escape. Bound chain work on self-similar inputs.
@@ -62,23 +87,31 @@ fn best_match_at(
                 break;
             }
         }
-        if match_len >= 3 && match_len > best_len {
+        if match_len >= 3 {
             let distance = (combined_pos - cp) as i64;
-            best_len = match_len;
-            best_distance = distance;
             // Offset class, cheapest first (inverse of decode.rs decode_offset).
-            if cp < ref_len && distance == -rift_offset {
-                best_offset = SOURCE_COPY;
+            let raw = if cp < ref_len && distance == -rift_offset {
+                SOURCE_COPY
             } else if lru[0] == distance {
-                best_offset = LRU_BASE;
+                LRU_BASE
             } else if lru[1] == distance {
-                best_offset = LRU_BASE + 1;
+                LRU_BASE + 1
             } else if lru[2] == distance {
-                best_offset = LRU_BASE + 2;
+                LRU_BASE + 2
             } else if let Some(signed) = signed_delta_raw(distance, rift_offset) {
-                best_offset = signed;
+                signed
             } else {
-                best_offset = distance as u32 + RAW_OFFSET_BASE;
+                distance as u32 + RAW_OFFSET_BASE
+            };
+            // Score by rough bit value: bytes covered minus the class's extra
+            // bits. A cheap class (SOURCE_COPY/LRU = 0 extra) can beat a longer
+            // RAW match (~20 extra). Tie-break on length.
+            let value = match_len as i64 * 8 - offset_extra_bits(raw) as i64;
+            if value > best_value || (value == best_value && match_len > best_len) {
+                best_value = value;
+                best_len = match_len;
+                best_offset = raw;
+                best_distance = distance;
             }
         }
         if best_len >= 2048 {
