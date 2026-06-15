@@ -1830,6 +1830,116 @@ mod tests {
         );
     }
 
+    /// Encode oracle: for every bulk fixture whose genuine delta we decode
+    /// byte-exact, reconstruct the genuine target, run OUR `create`, and compare
+    /// our delta to the genuine msdelta delta. This turns "encode = self-
+    /// consistency" into "encode measured against N genuine msdelta deltas" --
+    /// the native ground truth is the captured `forward.delta`, no Windows
+    /// needed. Reports byte-exact-vs-genuine, decodes-back-correct (our delta is
+    /// at least valid), wrong (our delta misreconstructs -- an encoder bug),
+    /// create-failed, and the flag / file-type / size gap that the gap-closing
+    /// work must attack. Ignored; needs the gitignored corpus.
+    /// `cargo test --release --lib encode_oracle -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn encode_oracle() {
+        use digest::Digest;
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures-bulk");
+        let manifest = root.join("manifest.csv");
+        if !manifest.exists() {
+            eprintln!("bulk corpus absent; skipping");
+            return;
+        }
+        let txt = std::fs::read_to_string(&manifest).unwrap();
+        let (mut byte_exact, mut correct, mut wrong, mut failed, mut total) =
+            (0u32, 0u32, 0u32, 0u32, 0u32);
+        let (mut ft_match, mut flag_match) = (0u32, 0u32);
+        let (mut size_ours, mut size_genuine) = (0u64, 0u64);
+        let mut examples: Vec<String> = Vec::new();
+        for line in txt.lines() {
+            let mut it = line.split(',');
+            let (Some(fid), Some(sha)) = (it.next(), it.next()) else {
+                continue;
+            };
+            let d = root.join(fid);
+            let (Ok(base), Ok(genuine)) = (
+                std::fs::read(d.join("base.bin")),
+                std::fs::read(d.join("forward.delta")),
+            ) else {
+                continue;
+            };
+            // Only fixtures we decode byte-exact give a trustworthy genuine target.
+            let Ok(target) = apply_impl(&base, &genuine, false) else {
+                continue;
+            };
+            let mut h = sha2::Sha256::new();
+            h.update(&target);
+            let got: String = h.finalize().iter().map(|b| format!("{b:02x}")).collect();
+            if got != sha {
+                continue;
+            }
+            total += 1;
+            // Engage the PE encoder (Auto), not the RAW default of `create()`.
+            let ours = match crate::pa30::encode::CreateOptions::new()
+                .file_type(crate::pa30::encode::FileType::Auto)
+                .execute(&base, &target)
+            {
+                Ok(d) => d,
+                Err(_) => {
+                    failed += 1;
+                    continue;
+                }
+            };
+            size_ours += ours.len() as u64;
+            size_genuine += genuine.len() as u64;
+            let (g_ft, g_fl) = parse(&genuine)
+                .map(|p| (p.header.file_type, p.header.flags))
+                .unwrap_or((-1, 0));
+            let (o_ft, o_fl) = parse(&ours)
+                .map(|p| (p.header.file_type, p.header.flags))
+                .unwrap_or((-2, 0));
+            if o_ft == g_ft {
+                ft_match += 1;
+            }
+            if o_fl == g_fl {
+                flag_match += 1;
+            }
+            if ours == genuine {
+                byte_exact += 1;
+            } else {
+                let reconstructs =
+                    matches!(apply_impl(&base, &ours, false), Ok(back) if back == target);
+                if reconstructs {
+                    correct += 1;
+                    if examples.len() < 20 {
+                        let arch = fid.split("__").next().unwrap_or("?");
+                        examples.push(format!(
+                            "{arch} genuine[ft={g_ft} fl={g_fl:#x} {}B] ours[ft={o_ft} fl={o_fl:#x} {}B] {fid}",
+                            genuine.len(),
+                            ours.len()
+                        ));
+                    }
+                } else {
+                    wrong += 1;
+                }
+            }
+        }
+        eprintln!("\n=== ENCODE ORACLE ({total} reconstructable fixtures) ===");
+        for e in &examples {
+            eprintln!("  DIFF {e}");
+        }
+        eprintln!(
+            "byte-exact-vs-genuine={byte_exact}  decodes-back-correct={correct}  wrong(encoder bug)={wrong}  create-failed={failed}"
+        );
+        eprintln!("same-file_type={ft_match}/{total}  same-flags={flag_match}/{total}");
+        if total > 0 {
+            eprintln!(
+                "our bytes={size_ours}  genuine bytes={size_genuine}  size ratio={:.2}x",
+                size_ours as f64 / size_genuine.max(1) as f64
+            );
+        }
+    }
+
     /// amd64 ground-truth probe: apply a matrix fixture and dump the final
     /// output-vs-truth byte diffs for one section, with context. Unlike the
     /// tsource_oracle this is NON-circular -- it compares our real apply output
