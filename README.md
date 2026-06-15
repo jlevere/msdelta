@@ -81,7 +81,8 @@ msdelta = { version = "0.1", default-features = false }
 | **BsDiff** codec | yes | yes |
 | **LZMS** codec | yes | yes |
 | **PE transforms** — native x86 / x64 | yes (byte-exact) | reconstructs (not byte-exact) |
-| **PE transforms** — managed (.NET / CLI) | no | no |
+| **PE transforms** — managed classic CLI (.NET) | yes (byte-exact) | reconstructs (not byte-exact) |
+| **PE transforms** — managed CLI4 (.NET) | no (rejected) | no |
 
 ### PE transforms
 
@@ -137,9 +138,14 @@ the encode oracle); the header is byte-exact.
   rift corpora run locally. At scale, a **659-fixture** genuine-delta corpus
   decodes **651 byte-exact (98.8%)** hash-verified against genuine; the remaining
   8 are a documented long-tail (below).
-- **Managed / .NET PE deltas**: detected via the reference's CLR header and
-  **rejected** with `Error::Unsupported` rather than decoded wrong. The CLI
-  metadata/disasm transform family is unimplemented.
+- **Managed / .NET PE deltas (classic CLI)**: **decode is byte-exact** — verified
+  identical to genuine across 14 committed CLI fixtures (CI-gated; user strings,
+  metadata growth, signatures, custom attributes, resources, generics, P/Invoke,
+  amd64 managed, ...) and real `msil` assemblies in the reverse corpus. **Encode
+  reconstructs** the target for all 14 with the genuine file_type + flags, though
+  the body is not yet byte-identical (the native parse/rift gap applies). The
+  newer **CLI4** metadata branch is detected and **rejected** with
+  `Error::Unsupported` (unimplemented) rather than decoded wrong.
 - **Long-tail native edges** (8 of the 659): a few binaries carry operand /
   relocation relayout deltas (e.g. `.text` absolute-pointer and `.reloc` block
   remaps) genuine applies that this crate does not yet reproduce exactly — these
@@ -188,13 +194,15 @@ MSRV: 1.85
 
 ## Known limitations
 
-**Decode** (the primary use case) is complete for RAW and native x86 / x64 PE
-deltas. Not yet supported:
+**Decode** (the primary use case) is complete for RAW, native x86 / x64 PE, and
+managed **classic CLI** (.NET) deltas. Not yet supported:
 
-- **Managed / .NET images**: deltas whose target carries a CLI metadata stream
-  are rejected (`Error::Unsupported`) — the CLI metadata/disasm transform family
-  is unimplemented. ARM / ARM64 instruction and `.pdata` transforms are likewise
-  unimplemented (no fixtures yet).
+- **Managed CLI4 (.NET)**: the newer CLI metadata branch (`file_type` 0x10-0x80)
+  is detected and rejected (`Error::Unsupported`) rather than decoded wrong;
+  validating it needs CLI4 ground truth (not in the local corpus). Classic CLI
+  (`file_type` 2/4/8 + CLR header) decodes byte-exact and encodes (reconstructs).
+  ARM / ARM64 instruction and `.pdata` transforms are likewise unimplemented (no
+  fixtures yet).
 
 **Encode ↔ Windows** compatibility is partial. A cross-check against genuine
 `ApplyDeltaB` (`msdelta.dll` build 26100 for PA30, `UpdateCompression.dll` /
