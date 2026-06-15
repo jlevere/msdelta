@@ -80,7 +80,7 @@ msdelta = { version = "0.1", default-features = false }
 | **PseudoLzx** codec | yes | yes |
 | **BsDiff** codec | yes | yes |
 | **LZMS** codec | yes | yes |
-| **PE transforms** — native x86 / x64 | yes (byte-exact) | partial |
+| **PE transforms** — native x86 / x64 | yes (byte-exact) | reconstructs (not byte-exact) |
 | **PE transforms** — managed (.NET / CLI) | no | no |
 
 ### PE transforms
@@ -104,8 +104,11 @@ stage-oracle capture is planned in
 [`docs/frida-oracle-system.md`](docs/frida-oracle-system.md).
 
 **Decode** of native x86 / x64 PE deltas is complete and byte-exact (see status
-below). Encode emits a structurally valid delta but the byte-rewriting transforms
-are not yet round-trip-validated against Windows.
+below). **Encode** of native PE now reconstructs the target: all 659 genuine
+targets in the corpus round-trip through this crate's decoder (0 broken), at
+~1.34x genuine's size. The output is **not yet byte-exact-identical** to genuine
+(matching genuine's exact preprocess rift and LZX parse is open work, tracked by
+the encode oracle); the header is byte-exact.
 
 | Transform (decode) | Status |
 |--------------------|--------|
@@ -127,21 +130,22 @@ are not yet round-trip-validated against Windows.
   across all bundled DCM/PE manifest fixtures and **377/377** against a full
   Win11 24H2 LCU express PSF (baseless PA31).
 - **Native PE deltas** (x86 / x64, `file_type != 1`): **byte-exact** — verified
-  MD5-identical to genuine `dpx.dll` across **24/24** curated diverse WinSxS
-  version-pair fixtures (DLLs, EXEs, `.mui`, keyboard layouts; i386 + amd64), each
-  cross-checked by dumping genuine's intermediate `T(source)` and composed rift,
-  with a 24-topology corpus locking the rift composition against regression. At
-  scale, a **659-fixture randomly-minted** corpus decodes **598 byte-exact
-  (90.7%)** hash-verified against genuine; the remainder are a documented
-  long-tail (below).
+  identical to genuine across a curated diverse WinSxS matrix (**25/26**: DLLs,
+  EXEs, `.mui`, keyboard layouts; i386 + amd64), each cross-checked by dumping
+  genuine's intermediate `T(source)` and composed rift. An architecture-diverse
+  subset is committed and gated in CI (`tests/pe_decode.rs`); the broader matrix /
+  rift corpora run locally. At scale, a **659-fixture** genuine-delta corpus
+  decodes **651 byte-exact (98.8%)** hash-verified against genuine; the remaining
+  8 are a documented long-tail (below).
 - **Managed / .NET PE deltas**: detected via the reference's CLR header and
   **rejected** with `Error::Unsupported` rather than decoded wrong. The CLI
   metadata/disasm transform family is unimplemented.
-- **Long-tail native edges** (~30 of the 659): a few binaries carry `.rdata`
-  RVA-table structures genuine remaps that this crate does not yet — these surface
-  as a **clean `HashMismatch` error** from `apply()` (which verifies the embedded
-  target hash), never silent corruption. ARM/ARM64 instruction/`.pdata` transforms
-  are likewise unimplemented (no fixtures yet).
+- **Long-tail native edges** (8 of the 659): a few binaries carry operand /
+  relocation relayout deltas (e.g. `.text` absolute-pointer and `.reloc` block
+  remaps) genuine applies that this crate does not yet reproduce exactly — these
+  surface as a **clean `HashMismatch` error** from `apply()` (which verifies the
+  embedded SHA-256 target hash), never silent corruption. ARM/ARM64
+  instruction/`.pdata` transforms are likewise unimplemented (no fixtures yet).
 
 **Encoder ↔ Windows compatibility is partial.** Note that
 `PA31` is **not** an `msdelta.dll` format at all — `msdelta.dll` (build 26100)
@@ -150,8 +154,11 @@ in **`UpdateCompression.dll`** / **`dpx.dll`**, which expose the same
 `ApplyDeltaB` and are the correct oracle for PA31 / SHA-256 deltas. A
 differential cross-check passes for **RAW PseudoLzx** (PA30 against `msdelta.dll`,
 PA31 against `UpdateCompression.dll`) at any size, with the identical-input and
-empty-target edge cases. Still open: the **BsDiff** codec framing, and the
-**byte-rewriting PE transforms** above. See
+empty-target edge cases. For **native PE**, the encoder now reconstructs every
+genuine target (verified by re-decoding our own delta to the genuine bytes across
+all 659 corpus deltas) with a byte-exact header, but the body is not yet
+byte-identical to genuine — the open work is matching genuine's exact preprocess
+rift and LZX parse. See
 [Known limitations](#known-limitations).
 
 ## API surface
@@ -195,9 +202,10 @@ deltas. Not yet supported:
 hashes and identical/empty-target edges. Still open:
 
 - **BsDiff** codec: our LZMS-wrapped container framing does not match genuine.
-- **Byte-rewriting PE transforms on the encode side**: the decoder reproduces
-  them byte-exactly (validated against genuine), but emitting a delta whose
-  transformed source matches genuine's is not yet round-trip-verified.
+- **Byte-exact PE encode**: native PE encode reconstructs every genuine target
+  (round-trip-verified across the 659-delta corpus; byte-exact header), but the
+  delta body is not yet byte-identical to genuine — matching genuine's exact
+  preprocess rift and LZX parse is open.
 - `msdelta.dll` does not implement **PA31** — validate PA31 / SHA-256 against
   `UpdateCompression.dll` / `dpx.dll`. Genuine deltas also stamp a creation
   FILETIME (header bytes 4-11) this crate zeroes (a benign divergence).
@@ -205,8 +213,9 @@ hashes and identical/empty-target edges. Still open:
 In-crate round-trip tests prove self-consistency; Windows is the ground truth.
 
 - **PA19 encoding** not implemented (legacy; `lzxd` is decode-only). Decode works.
-- The LZX encoder does not exploit rift tables during match finding (rift is
-  written for the decoder; compression does not use it).
+- The LZX encoder uses the rift for offset selection (SOURCE_COPY / signed-delta
+  anchoring) with cost-based lazy matching, but does not yet reproduce genuine's
+  exact parse, so encoded deltas run ~1.34x genuine's size.
 
 ## License
 
