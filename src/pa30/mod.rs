@@ -1856,6 +1856,7 @@ mod tests {
         let (mut ft_match, mut flag_match) = (0u32, 0u32);
         let (mut size_ours, mut size_genuine) = (0u64, 0u64);
         let mut examples: Vec<String> = Vec::new();
+        let mut wrong_names: Vec<String> = Vec::new();
         for line in txt.lines() {
             let mut it = line.split(',');
             let (Some(fid), Some(sha)) = (it.next(), it.next()) else {
@@ -1921,10 +1922,19 @@ mod tests {
                     }
                 } else {
                     wrong += 1;
+                    let arch = fid.split("__").next().unwrap_or("?");
+                    wrong_names.push(format!(
+                        "{arch} genuine[ft={g_ft} fl={g_fl:#x} {}B] ours[ft={o_ft} fl={o_fl:#x} {}B] {fid}",
+                        genuine.len(),
+                        ours.len()
+                    ));
                 }
             }
         }
         eprintln!("\n=== ENCODE ORACLE ({total} reconstructable fixtures) ===");
+        for w in &wrong_names {
+            eprintln!("  WRONG {w}");
+        }
         for e in &examples {
             eprintln!("  DIFF {e}");
         }
@@ -1938,6 +1948,97 @@ mod tests {
                 size_ours as f64 / size_genuine.max(1) as f64
             );
         }
+    }
+
+    /// Byte-diff probe for one bulk fixture: reconstruct the genuine target, run
+    /// OUR create(Auto), and pinpoint where decode(ours) first diverges from the
+    /// target (root-causes a `wrong` case) and where OUR delta first diverges
+    /// from the genuine delta (maps the byte-exact gap). `FIX=<fid>`; defaults to
+    /// the first bulk fixture. Ignored.
+    /// `FIX=amd64__..._certadm.dll__112 cargo test --release --lib encode_byte_diff -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn encode_byte_diff() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures-bulk");
+        if !root.join("manifest.csv").exists() {
+            eprintln!("bulk corpus absent; skipping");
+            return;
+        }
+        let fid = std::env::var("FIX").unwrap_or_else(|_| {
+            std::fs::read_to_string(root.join("manifest.csv"))
+                .unwrap()
+                .lines()
+                .next()
+                .unwrap()
+                .split(',')
+                .next()
+                .unwrap()
+                .to_string()
+        });
+        let d = root.join(&fid);
+        let base = std::fs::read(d.join("base.bin")).unwrap();
+        let genuine = std::fs::read(d.join("forward.delta")).unwrap();
+        let target = apply_impl(&base, &genuine, false).expect("decode genuine");
+        let ours = crate::pa30::encode::CreateOptions::new()
+            .file_type(crate::pa30::encode::FileType::Auto)
+            .execute(&base, &target)
+            .expect("our create");
+
+        eprintln!("\n=== BYTE DIFF {fid} ===");
+        eprintln!(
+            "target={}B  genuine_delta={}B  our_delta={}B",
+            target.len(),
+            genuine.len(),
+            ours.len()
+        );
+
+        // Where does decode(ours) diverge from target? (root-cause a `wrong` case)
+        match apply_impl(&base, &ours, false) {
+            Ok(back) if back == target => eprintln!("decode(ours) == target: reconstructs OK"),
+            Ok(back) => {
+                let first = back.iter().zip(&target).position(|(a, b)| a != b);
+                let n = back.iter().zip(&target).filter(|(a, b)| a != b).count();
+                eprintln!(
+                    "decode(ours) WRONG: len ours={} target={}, {n} diff bytes, first @ {first:?}",
+                    back.len(),
+                    target.len()
+                );
+            }
+            Err(e) => eprintln!("decode(ours) ERR: {e}"),
+        }
+
+        // Where does our delta diverge from the genuine delta? (byte-exact gap)
+        let first_delta_diff = ours.iter().zip(&genuine).position(|(a, b)| a != b);
+        eprintln!("our delta vs genuine: first diff @ {first_delta_diff:?} (12-byte PA30 header, then header fields, preprocess, patch)");
+        let lo = first_delta_diff.unwrap_or(12).saturating_sub(4);
+        let hx = |b: &[u8]| {
+            b.iter()
+                .skip(lo)
+                .take(24)
+                .map(|x| format!("{x:02x}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
+        eprintln!("  genuine[{lo}..]: {}", hx(&genuine));
+        eprintln!("  ours   [{lo}..]: {}", hx(&ours));
+
+        let pg = parse(&genuine).unwrap();
+        let po = parse(&ours).unwrap();
+        let hdr = |p: &crate::pa30::header::ParsedDelta| {
+            format!(
+                "fts={:#x} ft={:#x} fl={:#x} tsize={} halg={} hash={}B preprocess={}B patch={}B",
+                p.header.file_type_set,
+                p.header.file_type,
+                p.header.flags,
+                p.header.target_size,
+                p.header.hash_alg_id,
+                p.header.target_hash.len(),
+                p.preprocess.len(),
+                p.patch_data.len(),
+            )
+        };
+        eprintln!("  genuine: {}", hdr(&pg));
+        eprintln!("  ours:    {}", hdr(&po));
     }
 
     /// amd64 ground-truth probe: apply a matrix fixture and dump the final
