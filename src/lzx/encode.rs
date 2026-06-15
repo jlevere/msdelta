@@ -132,7 +132,8 @@ pub(super) fn compress_inner(
                     best_len = match_len;
                     best_distance = distance;
 
-                    // Encode offset (inverse of the decoder's offset logic).
+                    // Encode offset (inverse of the decoder's offset logic,
+                    // decode.rs decode_offset / line 300-307), cheapest class first.
                     if cp < ref_len && distance == -rift_offset {
                         best_offset = SOURCE_COPY;
                     } else if lru[0] == distance {
@@ -141,6 +142,13 @@ pub(super) fn compress_inner(
                         best_offset = LRU_BASE + 1;
                     } else if lru[2] == distance {
                         best_offset = LRU_BASE + 2;
+                    } else if let Some(signed) = signed_delta_raw(distance, rift_offset) {
+                        // Signed-delta (slots 0-2): a distance within +-OFFSET_BIAS
+                        // of the rift anchor encodes as raw_offset = distance +
+                        // OFFSET_BIAS + rift_offset -- far cheaper than RAW. This is
+                        // the class genuine uses heavily and we never emitted (the
+                        // encode oracle's raw_off bloat / 0 signed-delta matches).
+                        best_offset = signed;
                     } else {
                         best_offset = distance as u32 + RAW_OFFSET_BASE;
                     }
@@ -561,6 +569,16 @@ fn write_composite_format_multi(
     Ok(())
 }
 
+/// The signed-delta wire offset (slots 0-2) for a match `distance` at a position
+/// with the given `rift_offset`, or `None` if it falls outside the encodable band.
+/// Inverse of decode.rs `decode_offset` slots 0-2, whose
+/// `distance = raw_offset - OFFSET_BIAS - rift_offset`; so
+/// `raw_offset = distance + OFFSET_BIAS + rift_offset`, valid in [0, SOURCE_COPY).
+fn signed_delta_raw(distance: i64, rift_offset: i64) -> Option<u32> {
+    let raw = distance + OFFSET_BIAS as i64 + rift_offset;
+    (0..SOURCE_COPY as i64).contains(&raw).then_some(raw as u32)
+}
+
 pub(super) fn compute_symbol_info(raw_offset: u32, _length: u32) -> (u32, u32, bool) {
     // Returns (offset_slot, extra_bits_count, needs_aligned_table)
     if raw_offset == SOURCE_COPY {
@@ -603,7 +621,18 @@ pub(super) fn compute_symbol_info(raw_offset: u32, _length: u32) -> (u32, u32, b
         }
         return (7, 0, false); // fallback
     }
-    (0, 0, false)
+    // Signed-delta offset (slots 0-2): verbatim 14/16/18-bit fields, no aligned
+    // table. The slot band must mirror encode_match exactly so the frequency
+    // pass counts the same main symbol that gets written.
+    let signed_dist = raw_offset as i32 - OFFSET_BIAS as i32;
+    let slot = if (-0x2000..0x2000).contains(&signed_dist) {
+        0
+    } else if (-0xA000..0xA000).contains(&signed_dist) {
+        1
+    } else {
+        2
+    };
+    (slot, 0, false)
 }
 
 pub(super) fn compute_length_slot(length: u32) -> u32 {
@@ -740,8 +769,10 @@ pub(super) fn encode_match(
             offset_extra[n_extra] = (raw14 as u64, 14);
             n_extra += 1;
         }
-        // Slot 1: 16-bit range [-0xA000, -0x2001] u [0x2000, 0x5FFF]
-        else if (-0xA000..0x6000).contains(&signed_dist) {
+        // Slot 1: 16-bit range [-0xA000, -0x2001] u [0x2000, 0x9FFF] (the decoder's
+        // slot-1 positive range runs to 0xA000, not 0x6000 -- a latent off-by that
+        // only surfaced once we started emitting signed-delta offsets).
+        else if (-0xA000..0xA000).contains(&signed_dist) {
             offset_slot = 1;
             let raw16 = if signed_dist < -0x2000 {
                 (signed_dist + 0xA000) as u32
