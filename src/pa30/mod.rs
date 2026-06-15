@@ -2414,3 +2414,68 @@ mod tests {
         assert_eq!(result.len(), expected.len());
     }
 }
+
+#[cfg(test)]
+mod managed_bulk_probe {
+    use super::*;
+    use std::collections::BTreeMap;
+    use std::path::PathBuf;
+
+    /// Real managed WinSxS version-pair corpus (notes/pe-fixtures-managed, gitignored):
+    /// at-scale managed decode pass rate + the genuine file_type distribution
+    /// (classic 2/4/8 vs CLI4 0x10/0x20/0x40/0x80). Ignored.
+    #[test]
+    #[ignore]
+    fn managed_bulk_decode() {
+        use digest::Digest;
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("notes/pe-fixtures-managed");
+        let manifest = root.join("manifest.csv");
+        if !manifest.exists() {
+            eprintln!("managed bulk absent; skipping");
+            return;
+        }
+        let txt = std::fs::read_to_string(&manifest).unwrap();
+        let (mut exact, mut mismatch, mut errored, mut total) = (0u32, 0u32, 0u32, 0u32);
+        let mut ft_hist: BTreeMap<i64, u32> = BTreeMap::new();
+        let mut bad: Vec<String> = Vec::new();
+        for line in txt.lines() {
+            let mut it = line.split(',');
+            let (Some(fid), Some(sha)) = (it.next(), it.next()) else {
+                continue;
+            };
+            let d = root.join(fid);
+            let (Ok(base), Ok(delta)) = (
+                std::fs::read(d.join("base.bin")),
+                std::fs::read(d.join("forward.delta")),
+            ) else {
+                continue;
+            };
+            total += 1;
+            let ft = parse(&delta).map(|p| p.header.file_type).unwrap_or(-1);
+            *ft_hist.entry(ft).or_default() += 1;
+            match apply_impl(&base, &delta, false) {
+                Ok(out) => {
+                    let mut h = sha2::Sha256::new();
+                    h.update(&out);
+                    let got: String = h.finalize().iter().map(|b| format!("{b:02x}")).collect();
+                    if got == sha {
+                        exact += 1;
+                    } else {
+                        mismatch += 1;
+                        bad.push(format!("MISMATCH ft={ft} {fid}"));
+                    }
+                }
+                Err(e) => {
+                    errored += 1;
+                    bad.push(format!("ERR ft={ft} {fid}: {e}"));
+                }
+            }
+        }
+        eprintln!("\n=== MANAGED BULK ({total} real WinSxS managed pairs) ===");
+        for b in &bad {
+            eprintln!("  {b}");
+        }
+        eprintln!("file_type histogram (2/4/8=classic, 0x10/0x20/0x40/0x80=CLI4): {ft_hist:?}");
+        eprintln!("byte-exact={exact}  mismatch={mismatch}  errored={errored}  total={total}");
+    }
+}
