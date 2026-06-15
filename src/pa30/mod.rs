@@ -2003,6 +2003,24 @@ mod tests {
                     back.len(),
                     target.len()
                 );
+                // Show each diff byte: offset, decoded-vs-target value, and which
+                // section it lands in (file-offset domain) -- to name the transform.
+                if let Ok(pe) = crate::pe::parse::PeInfo::parse_lenient(&target) {
+                    for (off, (a, b)) in back.iter().zip(&target).enumerate() {
+                        if a != b {
+                            let sec = pe
+                                .sections
+                                .iter()
+                                .find(|s| {
+                                    let lo = s.raw_offset as usize;
+                                    off >= lo && off < lo + s.raw_size as usize
+                                })
+                                .map(|s| s.name.as_str())
+                                .unwrap_or("<header/gap>");
+                            eprintln!("  diff @ {off:#x}: ours={a:#04x} target={b:#04x} in {sec}");
+                        }
+                    }
+                }
             }
             Err(e) => eprintln!("decode(ours) ERR: {e}"),
         }
