@@ -1,9 +1,33 @@
 //! Native AMD64 PE transform atoms.
 
+use super::addr::{map_rva, SrcRva};
+use super::atom::{AtomMeta, SourceCtx, Transform};
 use super::parse::{DataDirectoryKind, PeInfo};
 use crate::lzx::rift::RiftTable;
 use crate::pe::structs::{read_u32, write_u32, RuntimeFunction};
 use std::mem::size_of;
+
+/// `PdataX64` (`g_transformsMap` mask `0x400`): remap the AMD64 `.pdata`
+/// exception directory -- each `RUNTIME_FUNCTION`'s three RVAs and the first
+/// flagged unwind-info handler slot -- from source to target address space.
+pub(crate) struct PdataX64;
+
+impl Transform for PdataX64 {
+    fn meta(&self) -> AtomMeta {
+        AtomMeta {
+            id: "PdataX64",
+            layer: "x64",
+            kind: "source_transform",
+            file_types: "0x8,0x20",
+            flag_mask: 0x400,
+            native_reference: "TransformPdataX64::Run",
+        }
+    }
+
+    fn apply(&self, ctx: &mut SourceCtx<'_>) {
+        transform_pdata_x64(ctx.buf, ctx.pe, ctx.rift);
+    }
+}
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PdataX64Stats {
@@ -99,9 +123,9 @@ fn transform_pdata_x64_range_impl(
             if rva == 0 {
                 continue;
             }
-            let delta = rift.map(i64::from(rva));
-            if delta != 0 {
-                write_u32(image, field_offset, (i64::from(rva) + delta) as u32);
+            let target = map_rva(rift, SrcRva(rva));
+            if target.0 != rva {
+                write_u32(image, field_offset, target.0);
                 stats.runtime_function_fields_remapped += 1;
             }
         }
@@ -154,10 +178,9 @@ fn transform_unwind_info_slot(
     if rva == 0 {
         return;
     }
-    let delta = rift.map(i64::from(rva));
-    if delta != 0 {
-        image[slot_offset..slot_end]
-            .copy_from_slice(&((i64::from(rva) + delta) as u32).to_le_bytes());
+    let target = map_rva(rift, SrcRva(rva));
+    if target.0 != rva {
+        image[slot_offset..slot_end].copy_from_slice(&target.0.to_le_bytes());
         stats.unwind_info_slots_remapped += 1;
     }
 }

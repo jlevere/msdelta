@@ -44,14 +44,8 @@ const RELOC_CHECK: u32 = 0x02020202;
 const MAX_IMPORT_DESCRIPTORS: usize = 4096;
 
 use crate::lzx::rift::RiftTable;
-
-/// `MapRva`: map a source RVA to its target RVA through the (coarse) rift.
-/// Piecewise: `rva + (target-source)` of the bracketing entry; identity when
-/// empty. Mirrors `TransformBase::MapRva` (dpx 0x180041998).
-#[inline]
-fn map_rva(rift: &RiftTable, rva: i64) -> i64 {
-    rva + rift.map(rva)
-}
+// The canonical RVA mapper lives with the typed address domains in `pe::addr`.
+use super::addr::map_rva_i64 as map_rva;
 
 fn first_section_rva(pe: &PeInfo) -> i64 {
     pe.first_section_rva().map(i64::from).unwrap_or(0)
@@ -136,9 +130,9 @@ pub(crate) fn build_transformed_source(
         if flags & 0x200 != 0 {
             transform_disasm_x64(buf, pe, rift);
         }
-        if flags & 0x400 != 0 {
-            crate::pe::x64::transform_pdata_x64(buf, pe, rift);
-        }
+        // Atoms migrated behind the Transform trait run from the registry, in
+        // g_transformsMap order, at their flag slot (PdataX64 = 0x400).
+        crate::pe::atom::run_registered(buf, pe, rift, flags);
         set_header_image_base(buf, target_base);
         return;
     }
