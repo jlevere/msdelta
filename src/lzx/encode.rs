@@ -169,6 +169,20 @@ pub(super) fn compress_inner(
             hash_table[h] = combined_pos as u32;
         }
 
+        // SOURCE_COPY re-anchors at every rift breakpoint on decode (decode.rs
+        // walks segments, source = pos + segment_offset per segment). A copy that
+        // spans a breakpoint reads different source bytes per segment than the
+        // flat match verified here, so cap it at the next breakpoint to keep it
+        // single-segment -- genuine emits per-segment re-anchored SOURCE_COPYs the
+        // same way. (Fixes the amd64 .pdata 3-byte breakage in the encode oracle.)
+        if best_offset == SOURCE_COPY {
+            let (_, next_bp) = ort.segment_at(combined_pos as i64);
+            let cap = next_bp - combined_pos as i64;
+            if cap > 0 && (best_len as i64) > cap {
+                best_len = cap as u32;
+            }
+        }
+
         if best_len >= 2 && match_fits_table(best_offset) {
             symbols.push(MatchSymbol {
                 raw_offset: best_offset,
