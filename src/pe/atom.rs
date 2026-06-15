@@ -11,10 +11,11 @@
 //! and rows-without-code are still only guarded by `tests/feature_atoms_
 //! registry.rs`). Status, apply policy, oracle level, and proof stay
 //! registry-owned until the re-rail plan's Phase 2 derives them from oracle
-//! results. Transforms are migrated out of `transform.rs` one at a time;
-//! `PdataX64` is the first.
+//! results. Every native PE source transform is now registered here; the next
+//! step is folding their bodies into per-atom modules and generating the
+//! registry from code.
 
-use super::parse::PeInfo;
+use super::parse::{PeInfo, PeMachine};
 use crate::lzx::rift::RiftTable;
 
 /// The structural identity of an atom: the registry columns derived from code,
@@ -30,13 +31,24 @@ pub(crate) struct AtomMeta {
     pub native_reference: &'static str,
 }
 
+// msdelta file-type sets shared by atoms of the same layer, so the strings (which
+// the registry test checks against the TSV) live in one place.
+pub(crate) const PE_FILE_TYPES: &str = "0x2,0x4,0x8,0x10,0x20,0x40,0x80";
+pub(crate) const X86_FILE_TYPES: &str = "0x2,0x10";
+pub(crate) const X64_FILE_TYPES: &str = "0x8,0x20";
+
 /// The mutable state a source transform operates over while building T(source).
-/// Fields are added as atoms that need them migrate behind the trait.
 pub(crate) struct SourceCtx<'a> {
     /// The image buffer, transformed in place from source to T(source).
     pub buf: &'a mut [u8],
     pub pe: &'a PeInfo,
     pub rift: &'a RiftTable,
+    /// Per-file-offset copy-provenance marker (bit 0 = owned by an earlier
+    /// transform). The RVA-field transforms claim into it; the i386 instruction
+    /// passes consult it so they never rewrite bytes a literal already supplied.
+    pub marker: &'a mut [u8],
+    /// The TARGET image base, written into fields that store absolute VAs.
+    pub target_base: u64,
 }
 
 /// One PE source transform: `source -> T(source)`, applied in place.
@@ -51,19 +63,64 @@ pub(crate) trait Transform {
 }
 
 /// The registered transforms, kept in `g_transformsMap` order (ascending flag
-/// bit). [`run_registered`] preserves this order, and its call site in
-/// `build_transformed_source` runs *after* the not-yet-migrated inline
-/// transforms -- so atoms must be migrated in suffix order (highest flag bits
-/// first) for the composed order to stay correct. Today only `PdataX64` (the
-/// last bit, `0x400`) is registered, so the rule holds trivially.
-pub(crate) const TRANSFORMS: &[&dyn Transform] = &[&super::x64::PdataX64];
+/// bit), which is the order genuine `PreProcessPEForApply` runs them. The mix
+/// that actually runs is gated per delta by the header flag word and per image
+/// by architecture (see [`applies_to_machine`]): an i386 image runs MarkNonExe,
+/// the RVA-field transforms, then the jmp/call passes; an amd64 image runs the
+/// RVA-field transforms, then DisasmX64 before PdataX64 (the disasm driver reads
+/// the still-source-domain `.pdata` Begin/End RVAs to locate functions).
+pub(crate) const TRANSFORMS: &[&dyn Transform] = &[
+    &super::transform::MarkNonExe,           // 0x2
+    &super::transform::TransformImports,     // 0x4
+    &super::transform::TransformExports,     // 0x8
+    &super::transform::TransformResources,   // 0x10
+    &super::transform::TransformRelocations, // 0x20
+    &super::transform::RelativeJmpsX86,      // 0x80
+    &super::transform::RelativeCallsX86,     // 0x100
+    &super::transform::DisasmX64,            // 0x200
+    &super::x64::PdataX64,                   // 0x400
+];
 
-/// Run every registered transform whose flag bit is set, in registry order,
-/// building T(source) in place.
-pub(crate) fn run_registered(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, flags: u64) {
-    let mut ctx = SourceCtx { buf, pe, rift };
+/// Whether a transform applies to this image's architecture. Derived from the
+/// atom's `layer`: `x86` transforms run only on i386, `x64` only on amd64, and
+/// `pe`-layer (architecture-agnostic) transforms run on any native image. This
+/// keeps an arch-mismatched flag bit in an untrusted delta from running a
+/// transform that would corrupt the image.
+fn applies_to_machine(layer: &str, pe: &PeInfo) -> bool {
+    match layer {
+        // Architecture-agnostic PE-structure transforms run on any native image.
+        "pe" => true,
+        "x86" => matches!(pe.machine, PeMachine::I386),
+        "x64" => matches!(pe.machine, PeMachine::Amd64),
+        "arm" => matches!(pe.machine, PeMachine::ArmNt),
+        "arm64" => matches!(pe.machine, PeMachine::Arm64),
+        // A non-architectural layer must never reach dispatch; rather than run an
+        // atom on the wrong machine, do not run it. `registered_layers_are_
+        // architectural` guards that no such layer is ever registered.
+        _ => false,
+    }
+}
+
+/// Run every registered transform whose flag bit is set and whose architecture
+/// matches, in registry order, building T(source) in place.
+pub(crate) fn run_registered(
+    buf: &mut [u8],
+    pe: &PeInfo,
+    rift: &RiftTable,
+    marker: &mut [u8],
+    target_base: u64,
+    flags: u64,
+) {
+    let mut ctx = SourceCtx {
+        buf,
+        pe,
+        rift,
+        marker,
+        target_base,
+    };
     for transform in TRANSFORMS {
-        if flags & transform.meta().flag_mask != 0 {
+        let meta = transform.meta();
+        if flags & meta.flag_mask != 0 && applies_to_machine(meta.layer, pe) {
             transform.apply(&mut ctx);
         }
     }
@@ -79,6 +136,23 @@ mod tests {
     /// columns. If a registered transform's row drifts -- a renamed flag mask, a
     /// moved layer, a deleted row -- this fails, so the registry cannot silently
     /// disagree with the code that implements that atom.
+    /// Every registered transform's layer must be one `applies_to_machine`
+    /// treats as architectural; otherwise it would hit the `_ => false` arm and
+    /// silently never run. This stops a future non-arch layer from quietly
+    /// disabling an atom.
+    #[test]
+    fn registered_layers_are_architectural() {
+        for transform in TRANSFORMS {
+            let meta = transform.meta();
+            assert!(
+                matches!(meta.layer, "pe" | "x86" | "x64" | "arm" | "arm64"),
+                "{} has non-architectural layer {}; applies_to_machine would never run it",
+                meta.id,
+                meta.layer
+            );
+        }
+    }
+
     #[test]
     fn registered_transforms_match_registry_structural_columns() {
         for transform in TRANSFORMS {

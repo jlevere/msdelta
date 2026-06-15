@@ -5,6 +5,7 @@
 //! "inferred relocations" which scans for 32-bit pointers within
 //! the PE's image range and rebases them using the rift table.
 
+use super::atom::{AtomMeta, SourceCtx, Transform};
 use super::parse::{DataDirectoryKind, PeHeaderLayout, PeInfo, PeMachine, PeOptionalHeaderKind};
 use crate::pe::cli::metadata::CliMetadataModel;
 use crate::pe::cli::method::{cli_method_bodies, CliMethodBody};
@@ -101,64 +102,174 @@ pub(crate) fn build_transformed_source(
     // copies into other sections). The transforms never touch this field, so
     // the write order does not matter.
     set_header_timestamp(buf, target_timestamp);
-    if pe.is_64bit {
-        // amd64 source transforms, in g_transformsMap order: DisasmX64 (0x200)
-        // then PdataX64 (0x400). Running them on the SOURCE (producing T(source))
-        // is the only correct architecture: the LZX copy/literal split was
-        // defined against genuine's T(source), so a copy reads the transformed
-        // byte and a literal already carries the target byte -- a post-decode
-        // remap could not distinguish the two and double-applied the rift on
-        // literal-provided fields (e.g. comctl32 amd64 .pdata UnwindData).
-        // DisasmX64 must precede PdataX64: its driver reads the (still source-
-        // domain) .pdata Begin/End RVAs to locate functions.
-        // g_transformsMap order: Imports (0x4), Exports (0x8), Resources (0x10),
-        // Relocations (0x20), then DisasmX64 (0x200), PdataX64 (0x400). The
-        // marker only gates the i386 instruction passes, so it is unused here.
-        let mut marker = vec![0u8; buf.len()];
-        if flags & 0x4 != 0 {
-            transform_source_imports(buf, pe, rift, &mut marker, target_base);
-        }
-        if flags & 0x8 != 0 {
-            transform_source_exports(buf, pe, rift, &mut marker);
-        }
-        if flags & 0x10 != 0 {
-            transform_source_resources(buf, pe, rift, &mut marker);
-        }
-        if flags & 0x20 != 0 {
-            transform_source_relocs(buf, pe, rift, &mut marker, target_base);
-        }
-        if flags & 0x200 != 0 {
-            transform_disasm_x64(buf, pe, rift);
-        }
-        // Atoms migrated behind the Transform trait run from the registry, in
-        // g_transformsMap order, at their flag slot (PdataX64 = 0x400).
-        crate::pe::atom::run_registered(buf, pe, rift, flags);
-        set_header_image_base(buf, target_base);
-        return;
-    }
+    // Run the registered source transforms in g_transformsMap order, each gated
+    // by its header flag bit and the image architecture (see pe::atom). Running
+    // on the SOURCE (producing T(source)) is the only correct architecture: the
+    // LZX copy/literal split was defined against genuine's T(source), so a copy
+    // reads the transformed byte while a literal already carries the target byte
+    // -- a post-decode remap could not tell them apart and would double-apply
+    // the rift on literal-provided fields (e.g. comctl32 amd64 .pdata
+    // UnwindData). The marker carries copy provenance so a later i386
+    // instruction pass never rewrites bytes an earlier transform owns.
     let mut marker = vec![0u8; buf.len()];
-    if flags & 0x2 != 0 {
-        mark_non_executable(buf, pe, &mut marker);
-    }
-    if flags & 0x4 != 0 {
-        transform_source_imports(buf, pe, rift, &mut marker, target_base);
-    }
-    if flags & 0x8 != 0 {
-        transform_source_exports(buf, pe, rift, &mut marker);
-    }
-    if flags & 0x10 != 0 {
-        transform_source_resources(buf, pe, rift, &mut marker);
-    }
-    if flags & 0x20 != 0 {
-        transform_source_relocs(buf, pe, rift, &mut marker, target_base);
-    }
-    if flags & 0x80 != 0 {
-        transform_source_jmps_i386(buf, pe, rift, &marker);
-    }
-    if flags & 0x100 != 0 {
-        transform_source_calls_i386(buf, pe, rift, &marker);
-    }
+    crate::pe::atom::run_registered(buf, pe, rift, &mut marker, target_base, flags);
+    // SetImageBase: PreProcessPEForApply writes the TARGET image base last.
     set_header_image_base(buf, target_base);
+}
+
+// Transform-atom adapters. Each is a zero-sized type registered in `pe::atom`;
+// its `apply` is the boundary into the implementation function below. (The
+// `meta()` structural columns are checked against `feature-atoms.tsv` by the
+// registry test.) The bodies stay as free functions for now; folding them into
+// the trait method and out into per-atom modules is the next cleanup.
+
+/// `MarkNonExe` (`g_transformsMap` mask `0x2`, i386, runs first): mark every
+/// byte outside executable sections so the instruction passes leave it alone.
+pub(crate) struct MarkNonExe;
+impl Transform for MarkNonExe {
+    fn meta(&self) -> AtomMeta {
+        AtomMeta {
+            id: "MarkNonExe",
+            layer: "x86",
+            kind: "source_transform",
+            file_types: crate::pe::atom::X86_FILE_TYPES,
+            flag_mask: 0x2,
+            native_reference: "MarkNonExe::Run",
+        }
+    }
+    fn apply(&self, ctx: &mut SourceCtx<'_>) {
+        mark_non_executable(ctx.buf, ctx.pe, ctx.marker);
+    }
+}
+
+/// `TransformImports` (mask `0x4`): map the import descriptor and thunk RVAs.
+pub(crate) struct TransformImports;
+impl Transform for TransformImports {
+    fn meta(&self) -> AtomMeta {
+        AtomMeta {
+            id: "TransformImports",
+            layer: "pe",
+            kind: "source_transform",
+            file_types: crate::pe::atom::PE_FILE_TYPES,
+            flag_mask: 0x4,
+            native_reference: "TransformImports::Run",
+        }
+    }
+    fn apply(&self, ctx: &mut SourceCtx<'_>) {
+        transform_source_imports(ctx.buf, ctx.pe, ctx.rift, ctx.marker, ctx.target_base);
+    }
+}
+
+/// `TransformExports` (mask `0x8`): map the export address/name-pointer RVAs.
+pub(crate) struct TransformExports;
+impl Transform for TransformExports {
+    fn meta(&self) -> AtomMeta {
+        AtomMeta {
+            id: "TransformExports",
+            layer: "pe",
+            kind: "source_transform",
+            file_types: crate::pe::atom::PE_FILE_TYPES,
+            flag_mask: 0x8,
+            native_reference: "TransformExports::Run",
+        }
+    }
+    fn apply(&self, ctx: &mut SourceCtx<'_>) {
+        transform_source_exports(ctx.buf, ctx.pe, ctx.rift, ctx.marker);
+    }
+}
+
+/// `TransformResources` (mask `0x10`): recursively remap the resource-dir RVAs.
+pub(crate) struct TransformResources;
+impl Transform for TransformResources {
+    fn meta(&self) -> AtomMeta {
+        AtomMeta {
+            id: "TransformResources",
+            layer: "pe",
+            kind: "source_transform",
+            file_types: crate::pe::atom::PE_FILE_TYPES,
+            flag_mask: 0x10,
+            native_reference: "TransformResources::Run",
+        }
+    }
+    fn apply(&self, ctx: &mut SourceCtx<'_>) {
+        transform_source_resources(ctx.buf, ctx.pe, ctx.rift, ctx.marker);
+    }
+}
+
+/// `TransformRelocations` (mask `0x20`): rebuild the base-relocation blocks and
+/// remap each pointed-to operand.
+pub(crate) struct TransformRelocations;
+impl Transform for TransformRelocations {
+    fn meta(&self) -> AtomMeta {
+        AtomMeta {
+            id: "TransformRelocations",
+            layer: "pe",
+            kind: "source_transform",
+            file_types: crate::pe::atom::PE_FILE_TYPES,
+            flag_mask: 0x20,
+            native_reference: "TransformRelocations::Run",
+        }
+    }
+    fn apply(&self, ctx: &mut SourceCtx<'_>) {
+        transform_source_relocs(ctx.buf, ctx.pe, ctx.rift, ctx.marker, ctx.target_base);
+    }
+}
+
+/// `RelativeJmpsX86` (mask `0x80`, i386): remap `0xE9` jmp displacements over
+/// bytes copied from the (transformed) source.
+pub(crate) struct RelativeJmpsX86;
+impl Transform for RelativeJmpsX86 {
+    fn meta(&self) -> AtomMeta {
+        AtomMeta {
+            id: "RelativeJmpsX86",
+            layer: "x86",
+            kind: "source_transform",
+            file_types: crate::pe::atom::X86_FILE_TYPES,
+            flag_mask: 0x80,
+            native_reference: "RelativeJmpsX86::Run",
+        }
+    }
+    fn apply(&self, ctx: &mut SourceCtx<'_>) {
+        transform_source_jmps_i386(ctx.buf, ctx.pe, ctx.rift, ctx.marker);
+    }
+}
+
+/// `RelativeCallsX86` (mask `0x100`, i386): remap `0xE8` call displacements.
+pub(crate) struct RelativeCallsX86;
+impl Transform for RelativeCallsX86 {
+    fn meta(&self) -> AtomMeta {
+        AtomMeta {
+            id: "RelativeCallsX86",
+            layer: "x86",
+            kind: "source_transform",
+            file_types: crate::pe::atom::X86_FILE_TYPES,
+            flag_mask: 0x100,
+            native_reference: "RelativeCallsX86::Run",
+        }
+    }
+    fn apply(&self, ctx: &mut SourceCtx<'_>) {
+        transform_source_calls_i386(ctx.buf, ctx.pe, ctx.rift, ctx.marker);
+    }
+}
+
+/// `DisasmX64` (mask `0x200`, amd64): remap RIP-relative disp32 / rel32
+/// operands. Runs before `PdataX64`, which reads the source-domain `.pdata`
+/// Begin/End RVAs to locate functions.
+pub(crate) struct DisasmX64;
+impl Transform for DisasmX64 {
+    fn meta(&self) -> AtomMeta {
+        AtomMeta {
+            id: "DisasmX64",
+            layer: "x64",
+            kind: "source_transform",
+            file_types: crate::pe::atom::X64_FILE_TYPES,
+            flag_mask: 0x200,
+            native_reference: "TransformDisasmX64::Run",
+        }
+    }
+    fn apply(&self, ctx: &mut SourceCtx<'_>) {
+        transform_disasm_x64(ctx.buf, ctx.pe, ctx.rift);
+    }
 }
 
 /// Write the TARGET image base into the source header's `ImageBase` field, the
