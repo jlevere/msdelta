@@ -100,43 +100,58 @@ impl CreateOptions {
         };
 
         let (patch_data, file_type_set, file_type_val, flags, preprocess) =
-            if let Some((src_pe, tgt_pe, ft)) = pe_info {
-                let _ = &src_pe;
-                // Do NOT normalize timestamps: diff the raw target so its real
-                // timestamps are carried in the patch (as literals where they
-                // differ from the reference). msdelta's apply then emits the
-                // target timestamps directly. (Our decoder's timestamp fixup is
-                // retained for decoding genuine *normalized* deltas, where it's
-                // needed; on our own un-normalized deltas it is a no-op because
-                // those offsets already hold the target timestamp.)
-
-                // Genuine msdelta uses the *reference* image's section
-                // RVA->file-offset map as the rift (verified byte-exact), carried
-                // in the preprocess (not the patch). The LZX encoder consumes it to
-                // pick rift-relative offsets; long copies that start at a low
-                // position span whole sections.
-                let merged = rift_gen::pe_section_rift(reference);
-
-                // msdelta zeroes the optional-header CheckSum in the copy source;
-                // diffing against the zeroed reference makes the target's real
-                // checksum fall out as literals instead of a copy that resolves to
-                // zero on genuine msdelta.
-                let mut ref_norm = reference.to_vec();
-                transform::zero_pe_checksum(&mut ref_norm);
-
-                let patch_data = crate::lzx::compress_with_rift(&ref_norm, target, &merged)?;
-                let _ = tgt_pe.checksum;
+            if let Some((_src_pe, tgt_pe, ft)) = pe_info {
+                // Genuine encode diffs the target against T(source): the reference
+                // transformed exactly as PreProcessPEForApply does on decode, so the
+                // LZX copy/literal split is defined against the SAME bytes the decoder
+                // later copies from. The old path diffed against a merely
+                // checksum-zeroed reference and never built T(source), so any copy
+                // pointing at a byte the decoder rewrites decoded wrong (the 250
+                // non-reconstructing deltas the encode oracle measured). We mirror the
+                // decode path (build_transformed_source + build_pe_copy_rift) and
+                // round-trip the preprocess so encode and decode share an identical
+                // PePreprocess -- which guarantees the delta reconstructs regardless of
+                // how close the rift/flags are to genuine.
+                //
+                // Architecture-correct transform-selection flags: genuine i386 deltas
+                // carry 0xe1fe, amd64 carry 0xe63e (measured across the bulk corpus;
+                // we hardcoded 0xe63e for both before).
+                let flags: i64 = if tgt_pe.is_64bit { 0xe63e } else { 0xe1fe };
+                // pe_rift slot = the TARGET image's section RVA->file-offset map (the
+                // copy-rift builder consumes it). preprocess_rift is empty for now, so
+                // the transforms remap RVAs by identity and T(source) carries only the
+                // structural header rewrites (target timestamp / image base) -- correct
+                // and symmetric, though not yet a genuine rift. Closing the rift +
+                // match-finder gap to reach byte-exact is the follow-up the encode
+                // oracle tracks.
+                let pe_rift = rift_gen::pe_section_rift(target);
                 let preprocess = build_pe_preprocess(
                     tgt_pe.image_base,
-                    0, // field1 (restores to opt-header+0x70); 0 matches genuine for cmd
+                    0, // field1 (opt-header CheckSum); 0 makes apply emit a zeroed checksum
                     tgt_pe.timestamp,
-                    &merged,
+                    &pe_rift,
                     &RiftTable { entries: vec![] },
                 );
-                // flags=0xe63e: the PE transform-config bitmask genuine msdelta
-                // emits for AMD64 PE deltas; its apply requires it to drive
-                // rift-based decode of the patch.
-                (patch_data, 0xFi64, ft, 0xe63ei64, preprocess)
+                // Round-trip the preprocess so we hold the exact struct the decoder
+                // parses, then build T(source) and the copy rift from it.
+                let pp = super::preprocess::parse_pe_preprocess(&preprocess)?;
+                let mut tsource = reference.to_vec();
+                transform::zero_pe_checksum(&mut tsource);
+                if let Ok(src_pe) = crate::pe::parse::PeInfo::parse_lenient(&tsource) {
+                    transform::build_transformed_source(
+                        &mut tsource,
+                        &src_pe,
+                        &pp.preprocess_rift,
+                        flags as u64,
+                        pp.target_info.image_base,
+                        pp.target_info.time_date_stamp,
+                    );
+                }
+                let empty_cli_rift = RiftTable { entries: vec![] };
+                let copy_rift =
+                    super::build_pe_copy_rift_with_cli_rift(reference, &pp, &empty_cli_rift);
+                let patch_data = crate::lzx::compress_with_rift(&tsource, target, &copy_rift)?;
+                (patch_data, 0xFi64, ft, flags, preprocess)
             } else {
                 match self.codec {
                     Codec::PseudoLzx => {
