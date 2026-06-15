@@ -11,6 +11,102 @@ use super::format::{LRU_BASE, SOURCE_COPY};
 use super::ops::{OFFSET_BIAS, RAW_OFFSET_BASE};
 use super::rift::{OffsetRiftTable, RiftEntry, RiftTable};
 
+fn hash3(data: &[u8], pos: usize) -> usize {
+    if pos + 2 >= data.len() {
+        return 0;
+    }
+    let h =
+        (data[pos] as usize) | ((data[pos + 1] as usize) << 8) | ((data[pos + 2] as usize) << 16);
+    (h.wrapping_mul(0x9E3779B1)) >> 16
+}
+
+/// Find the best match for output index `i` (combined position `ref_len + i`)
+/// without mutating the hash structures. Returns `(length, wire_offset,
+/// distance)`; length 0 means no usable match. The offset class mirrors the
+/// decoder's resolution (cheapest first), and a SOURCE_COPY is capped at the
+/// next rift breakpoint so it stays single-segment.
+#[allow(clippy::too_many_arguments)]
+fn best_match_at(
+    combined: &[u8],
+    i: usize,
+    target_len: usize,
+    ref_len: usize,
+    hash_table: &[u32],
+    hash_chain: &[u32],
+    hash_mask: usize,
+    lru: &[i64; 3],
+    ort: &OffsetRiftTable,
+) -> (u32, u32, i64) {
+    if i + 2 >= target_len {
+        return (0, 0, 0);
+    }
+    let combined_pos = ref_len + i;
+    let rift_offset = ort.offset_at(combined_pos as i64);
+    let (mut best_len, mut best_offset, mut best_distance) = (0u32, 0u32, 0i64);
+
+    // Identity runs can span whole sections; the 263+ length is carried by
+    // encode_match's big-number escape. Bound chain work on self-similar inputs.
+    const MAX_MATCH: u32 = 1 << 26;
+    let h = hash3(combined, combined_pos) & hash_mask;
+    let mut chain_pos = hash_table[h];
+    let mut chain_depth = 0;
+    while chain_pos != u32::MAX && chain_depth < 128 {
+        let cp = chain_pos as usize;
+        let mut match_len = 0u32;
+        while i + (match_len as usize) < target_len
+            && cp + (match_len as usize) < combined.len()
+            && combined[cp + (match_len as usize)] == combined[combined_pos + (match_len as usize)]
+        {
+            match_len += 1;
+            if match_len >= MAX_MATCH {
+                break;
+            }
+        }
+        if match_len >= 3 && match_len > best_len {
+            let distance = (combined_pos - cp) as i64;
+            best_len = match_len;
+            best_distance = distance;
+            // Offset class, cheapest first (inverse of decode.rs decode_offset).
+            if cp < ref_len && distance == -rift_offset {
+                best_offset = SOURCE_COPY;
+            } else if lru[0] == distance {
+                best_offset = LRU_BASE;
+            } else if lru[1] == distance {
+                best_offset = LRU_BASE + 1;
+            } else if lru[2] == distance {
+                best_offset = LRU_BASE + 2;
+            } else if let Some(signed) = signed_delta_raw(distance, rift_offset) {
+                best_offset = signed;
+            } else {
+                best_offset = distance as u32 + RAW_OFFSET_BASE;
+            }
+        }
+        if best_len >= 2048 {
+            break;
+        }
+        chain_pos = hash_chain[cp];
+        chain_depth += 1;
+    }
+
+    // SOURCE_COPY re-anchors at every rift breakpoint on decode (the segment
+    // walk), so a copy spanning a breakpoint reads different source bytes per
+    // segment than this flat match. Cap it at the next breakpoint so it stays
+    // single-segment -- genuine emits per-segment re-anchored SOURCE_COPYs too.
+    if best_offset == SOURCE_COPY {
+        let (_, next_bp) = ort.segment_at(combined_pos as i64);
+        let cap = next_bp - combined_pos as i64;
+        if cap > 0 && (best_len as i64) > cap {
+            best_len = cap as u32;
+        }
+    }
+
+    if best_len >= 2 && match_fits_table(best_offset) {
+        (best_len, best_offset, best_distance)
+    } else {
+        (0, 0, 0)
+    }
+}
+
 fn write_rift(writer: &mut BitWriter, rift: Option<&super::rift::RiftTable>) {
     if let Some(r) = rift {
         r.to_writer(writer);
@@ -60,16 +156,6 @@ pub(super) fn compress_inner(
     let mut hash_table = vec![u32::MAX; hash_size];
     let mut hash_chain = vec![u32::MAX; combined.len()];
 
-    fn hash3(data: &[u8], pos: usize) -> usize {
-        if pos + 2 >= data.len() {
-            return 0;
-        }
-        let h = (data[pos] as usize)
-            | ((data[pos + 1] as usize) << 8)
-            | ((data[pos + 2] as usize) << 16);
-        (h.wrapping_mul(0x9E3779B1)) >> 16
-    }
-
     // Index the reference into the hash chain
     for (i, chain_entry) in hash_chain[..ref_len.saturating_sub(2)]
         .iter_mut()
@@ -93,116 +179,63 @@ pub(super) fn compress_inner(
     while i < target.len() {
         let combined_pos = ref_len + i;
 
-        // Rift offset at this output position -- inverse of the decoder's
-        // ort.offset_at(pos). A SOURCE_COPY decodes to distance == -rift_offset,
-        // so we may only emit SOURCE_COPY when the match distance equals that.
-        let rift_offset = ort.offset_at(combined_pos as i64);
+        let (len0, off0, dist0) = best_match_at(
+            &combined,
+            i,
+            target.len(),
+            ref_len,
+            &hash_table,
+            &hash_chain,
+            hash_mask,
+            &lru,
+            &ort,
+        );
 
-        // Try to find a match
-        let mut best_len = 0u32;
-        let mut best_offset: u32 = 0;
-        let mut best_distance: i64 = 0;
-
+        // Add the current position to the hash chain before any lookahead.
         if i + 2 < target.len() {
             let h = hash3(&combined, combined_pos) & hash_mask;
-            let mut chain_pos = hash_table[h];
-            let mut chain_depth = 0;
-
-            // Allow matches to span whole sections. Genuine msdelta encodes
-            // identity runs as single multi-KB SOURCE_COPY copies that start at a
-            // low position (where offset_at == -ref_len) and run upward; the
-            // 263+ length is carried by encode_match's big-number escape.
-            const MAX_MATCH: u32 = 1 << 26;
-            while chain_pos != u32::MAX && chain_depth < 128 {
-                let cp = chain_pos as usize;
-                let mut match_len = 0u32;
-                while i + (match_len as usize) < target.len()
-                    && cp + (match_len as usize) < combined.len()
-                    && combined[cp + (match_len as usize)]
-                        == combined[combined_pos + (match_len as usize)]
-                {
-                    match_len += 1;
-                    if match_len >= MAX_MATCH {
-                        break;
-                    }
-                }
-
-                if match_len >= 3 && match_len > best_len {
-                    let distance = (combined_pos - cp) as i64;
-                    best_len = match_len;
-                    best_distance = distance;
-
-                    // Encode offset (inverse of the decoder's offset logic,
-                    // decode.rs decode_offset / line 300-307), cheapest class first.
-                    if cp < ref_len && distance == -rift_offset {
-                        best_offset = SOURCE_COPY;
-                    } else if lru[0] == distance {
-                        best_offset = LRU_BASE;
-                    } else if lru[1] == distance {
-                        best_offset = LRU_BASE + 1;
-                    } else if lru[2] == distance {
-                        best_offset = LRU_BASE + 2;
-                    } else if let Some(signed) = signed_delta_raw(distance, rift_offset) {
-                        // Signed-delta (slots 0-2): a distance within +-OFFSET_BIAS
-                        // of the rift anchor encodes as raw_offset = distance +
-                        // OFFSET_BIAS + rift_offset -- far cheaper than RAW. This is
-                        // the class genuine uses heavily and we never emitted (the
-                        // encode oracle's raw_off bloat / 0 signed-delta matches).
-                        best_offset = signed;
-                    } else {
-                        best_offset = distance as u32 + RAW_OFFSET_BASE;
-                    }
-                }
-
-                // A long match is already excellent; stop scanning the chain to
-                // bound worst-case work on highly self-similar inputs.
-                if best_len >= 2048 {
-                    break;
-                }
-
-                chain_pos = hash_chain[cp];
-                chain_depth += 1;
-            }
-
-            // Update hash
             hash_chain[combined_pos] = hash_table[h];
             hash_table[h] = combined_pos as u32;
         }
 
-        // SOURCE_COPY re-anchors at every rift breakpoint on decode (decode.rs
-        // walks segments, source = pos + segment_offset per segment). A copy that
-        // spans a breakpoint reads different source bytes per segment than the
-        // flat match verified here, so cap it at the next breakpoint to keep it
-        // single-segment -- genuine emits per-segment re-anchored SOURCE_COPYs the
-        // same way. (Fixes the amd64 .pdata 3-byte breakage in the encode oracle.)
-        if best_offset == SOURCE_COPY {
-            let (_, next_bp) = ort.segment_at(combined_pos as i64);
-            let cap = next_bp - combined_pos as i64;
-            if cap > 0 && (best_len as i64) > cap {
-                best_len = cap as u32;
-            }
-        }
+        // Lazy matching: if the match one byte ahead is strictly longer, emit a
+        // literal now and defer -- yielding fewer, longer copies, closer to
+        // genuine's parse. Any valid parse round-trips (LRU updates only on
+        // committed matches, unchanged here), so decode-back is preserved; the
+        // encode oracle guards it.
+        let take_match = len0 >= 2 && {
+            let (len1, _, _) = best_match_at(
+                &combined,
+                i + 1,
+                target.len(),
+                ref_len,
+                &hash_table,
+                &hash_chain,
+                hash_mask,
+                &lru,
+                &ort,
+            );
+            len1 <= len0
+        };
 
-        if best_len >= 2 && match_fits_table(best_offset) {
+        if take_match {
             symbols.push(MatchSymbol {
-                raw_offset: best_offset,
-                length: best_len,
+                raw_offset: off0,
+                length: len0,
             });
 
-            // Update LRU with the actual match distance, mirroring the decoder
-            // (which updates LRU from its computed distance for every match type).
-            let distance = best_distance;
-            if lru[0] != distance {
+            // LRU update mirrors the decoder (all match types, committed match).
+            if lru[0] != dist0 {
                 let old_1 = lru[1];
                 lru[1] = lru[0];
-                lru[0] = distance;
-                if old_1 != distance {
+                lru[0] = dist0;
+                if old_1 != dist0 {
                     lru[2] = old_1;
                 }
             }
 
-            // Add intermediate positions to hash
-            for j in 1..best_len as usize {
+            // Add the copied-over positions to the hash chain.
+            for j in 1..len0 as usize {
                 let p = combined_pos + j;
                 if p + 2 < combined.len() {
                     let h2 = hash3(&combined, p) & hash_mask;
@@ -211,7 +244,7 @@ pub(super) fn compress_inner(
                 }
             }
 
-            i += best_len as usize;
+            i += len0 as usize;
         } else {
             symbols.push(MatchSymbol {
                 raw_offset: target[i] as u32,
