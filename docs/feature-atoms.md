@@ -116,6 +116,35 @@ current evidence, not every test that exists.
 | `bulk` | broad corpus evidence exists |
 | `release` | covered by normal release workspace tests |
 
+## Proof
+
+`oracle_level` is a judgement; the `proof` column is the citation that backs
+it. Every row must point at where its evidence lives so a reader can verify the
+status instead of trusting it. The grammar is one of:
+
+| Proof | Meaning |
+|---|---|
+| `oracle:<path>` | proven against a genuine/native artifact (real manifests, genuine PE deltas in `tests/fixtures/`, captured native behavior) |
+| `unit:<path>` | in-tree self-consistency, algebra, or structural tests only |
+| `none` | no evidence yet |
+
+`<path>` is relative to the crate root and may be a test file, a source file
+carrying inline tests, or a fixture directory. `tests/feature_atoms_registry.rs`
+enforces the column rather than tallying it:
+
+- the cited path must exist (no dangling citations);
+- a `supported` or `partial` atom may not cite `none` (no progress without evidence);
+- a `missing` atom must cite `none`;
+- proof kind and `oracle_level` must agree: an `oracle:` proof requires a
+  native-backed level (`curated`/`bulk`/`release`/`manual`) and `none` requires
+  an unproven level (`none`/`needs_fixture`).
+
+This deliberately replaces the older exact status/policy tallies: pinning counts
+tested the map, not the territory. Note that a `unit:` proof at a high
+`oracle_level` is still permitted but is a visible smell -- it marks an atom
+whose level claims native backing the in-tree evidence does not yet provide, and
+is a candidate for either a real oracle fixture or a level correction.
+
 ## Readiness Gates
 
 Track each atom by the strongest thing it can safely do today:
