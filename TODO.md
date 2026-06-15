@@ -3,6 +3,12 @@
 Comprehensive audit against msdelta.dll (Windows Server 2025, build 26100),
 UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 
+> **Governing strategy:** see "Rails: code is the truth, validation is native"
+> in `docs/feature-atoms.md`. The three rules (atoms are code not rows;
+> promotion requires native ground truth; validation is bidirectional and judged
+> by the native DLL) and the Phase 1-3 re-rail plan supersede the tactical
+> milestone list. This file tracks status; that section sets direction.
+
 ## Win32 API coverage
 
 ### msdelta.dll exports (16 functions)

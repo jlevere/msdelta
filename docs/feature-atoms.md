@@ -15,6 +15,73 @@ contract in `docs/managed-cli-atoms.md` because it is a pipeline of metadata,
 map, rift, IL, and blob-signature atoms rather than one transform. Native
 stage-oracle capture with Frida is specified in `docs/frida-oracle-system.md`.
 
+## Rails: code is the truth, validation is native
+
+The registry is a map, not the territory. It drifted toward being a TSV of
+labels validated by self-consistency -- atoms that prove only that we agree with
+ourselves. That is the failure mode this section exists to prevent. Three rules
+govern the project; everything below them is tactics.
+
+1. **An atom is code, not a row.** Every atom is a typed code unit -- a transform
+   behind a shared trait, or a parser with a typed contract -- living in its own
+   module with an explicit input/output boundary and address domain. The TSV row
+   describes that code; it never leads it. An "atom" with no code symbol is a
+   backlog item, not an atom. `src/pe/x64.rs` (`PdataX64`) is the prototype: one
+   atom, one module, one boundary. The god-file (`src/pe/transform.rs`) is the
+   anti-pattern to dissolve.
+
+2. **Promotion requires native ground truth.** Self-consistency tests
+   (`decode(encode(x)) == x`, `our_apply(our_prepare(x)) == x`) may exist as
+   sanity checks but are explicitly *non-promoting*. An atom reaches `supported`
+   only when an oracle test passes: its boundary matches a capture from
+   `msdelta.dll` (Frida stage capture) or a genuine artifact. A `unit:` proof may
+   never sit at `oracle_level >= curated`. Round-tripping through our own code is
+   not validation -- it is a typo check.
+
+3. **Validation is bidirectional and judged by the native DLL, not by us.**
+   - decode: our `apply()` of a *genuine* delta equals the genuine target.
+   - encode: our `create()` output, fed to *native* `ApplyDeltaB`, reconstructs
+     the target. The judge is `msdelta.dll`, never our own decoder.
+   - source transform: our `prepare()` (the PE/CLI normalization genuine apply
+     does in `PreProcessPEForApply`) equals the genuine `T(source)` captured at
+     that boundary (the in-process int3 Frida harness).
+
+### Re-rail plan
+
+Worked top-to-bottom. Each phase has a definition-of-done that is itself an
+oracle, not a count.
+
+- **Phase 1 -- atoms become code.** Define the transform trait (uniform
+  `(source, rift, markers) -> bytes` with a typed address domain) and peel the
+  transforms out of `transform.rs` into per-atom modules behind it, one at a
+  time. Build a code-side registry the TSV is *generated from* (`cargo xtask
+  gen-registry`); CI fails if the committed TSV differs from the generated one.
+  After this the TSV cannot drift from code because it is no longer hand-written.
+  *Done when:* the registry is generated and the existing transforms are trait
+  impls in their own modules.
+
+- **Phase 2 -- native-oracle validation, status derived.** Stand up the three
+  oracles in rule 3 as a runnable suite (decode oracle exists; encode oracle =
+  native `ApplyDeltaB` via the Windows/Frida rig; transform oracle = genuine
+  `T(source)` capture). An xtask runs the suite, maps pass/fail to atom status,
+  and regenerates the status/proof columns; CI fails on drift. Self-consistency
+  tests get a non-promoting marker. *Done when:* no status is hand-typed and no
+  `unit:` proof backs a `curated`+ level.
+
+- **Phase 3 -- burn down the frontier on the new rails.** With code-atoms and a
+  bidirectional oracle in place, work the real backlog: the audit-list
+  over-claims first (give each a native fixture or downgrade it), then the
+  amd64 transform tier (pdata/reloc/disasm), then the managed CLI ladder, then
+  the encoder closing its native-apply gap -- each atom promoted only by its own
+  native oracle.
+
+**Holding the line now (before Phase 1 lands):** no *new* atom may be added at
+`oracle_level >= curated` with a `unit:` proof. The current offenders are tracked
+debt, not precedent: `Pa19Apply`, `LzmsContainer`, `BsdiffFlagPath`, the four
+`RiftTable*`, `CreateRaw`, `CreatePeNative` (all claim a native-backed level on
+in-tree self-consistency evidence). `ReverseDeltaApply` is genuinely oracle-backed
+(`reverse_corpus` decodes real WinSxS reverse deltas) and is the shape to copy.
+
 ## Atom Contract
 
 Every non-trivial atom should be specified before implementation:
