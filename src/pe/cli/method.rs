@@ -1,9 +1,10 @@
 //! CLR method-body enumeration helpers.
 
 use crate::pe::cli::metadata::{CliColumnValue, CliMetadataModel};
+use crate::pe::cli::schema::table;
 use crate::pe::parse::{PeInfo, SectionInfo};
 
-const METHOD_DEF_TABLE_ID: usize = 0x06;
+const METHOD_DEF_TABLE_ID: usize = table::METHOD_DEF as usize;
 const METHOD_HEADER_TINY_FORMAT: u8 = 0x02;
 const METHOD_HEADER_FAT_FORMAT: u8 = 0x03;
 const METHOD_HEADER_MORE_SECTS: u16 = 0x0008;

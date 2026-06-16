@@ -169,10 +169,10 @@ fn apply_classic_cli_source_transforms(
     rva_map: &crate::lzx::rift::RiftTable,
     flags: u64,
 ) {
-    if flags & 0x4000 != 0 {
+    if flags & crate::pe::transform::transform_flags::CLI_DISASM != 0 {
         crate::pe::cli::disasm::transform_cli_disasm_tokens(image, pe, metadata, cli_map);
     }
-    if flags & 0x8000 != 0 {
+    if flags & crate::pe::transform::transform_flags::CLI_METADATA != 0 {
         crate::pe::cli::metadata_transform::transform_cli_metadata_with_rva_map(
             image, metadata, cli_map, rva_map,
         );
@@ -2112,6 +2112,16 @@ mod tests {
             let mut t = base.clone();
             crate::pe::transform::zero_pe_checksum(&mut t);
             let spe = crate::pe::parse::PeInfo::parse_lenient(&t).unwrap();
+            // Parse source CLI metadata BEFORE transforms (mirrors apply_impl).
+            let source_metadata = if crate::pe::transform::is_managed_pe(&t) {
+                crate::pe::cli::metadata::parse_cli_metadata_from_pe(
+                    &t,
+                    crate::pe::cli::schema::CliSchemaFlavor::Classic,
+                )
+                .ok()
+            } else {
+                None
+            };
             crate::pe::transform::build_transformed_source(
                 &mut t,
                 &spe,
@@ -2120,6 +2130,16 @@ mod tests {
                 pp.target_info.image_base,
                 pp.target_info.time_date_stamp,
             );
+            if let Some(md) = &source_metadata {
+                apply_classic_cli_source_transforms(
+                    &mut t,
+                    &spe,
+                    md,
+                    &pp.cli_map,
+                    &pp.preprocess_rift,
+                    parsed.header.flags as u64,
+                );
+            }
             std::fs::write(&path, &t).unwrap();
             eprintln!("wrote our T(source) to {path} ({} bytes)", t.len());
         }
@@ -2290,6 +2310,487 @@ mod tests {
             }
             i += 1;
         }
+    }
+
+    /// Classify the output-vs-truth byte diffs of a managed matrix fixture by
+    /// CLI metadata stream, and (for #Blob diffs) by whether the enclosing blob
+    /// is referenced by a signature column we transform -- pinpoints the managed
+    /// decode-tail gap. `FIX=<dir> cargo test --release --lib cli_diff_classify -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn cli_diff_classify() {
+        use crate::pe::cli::blob::read_compressed_u32;
+        use crate::pe::cli::metadata::{parse_cli_metadata_from_pe, CliStream};
+        use crate::pe::cli::schema::{column_width, table_schema, CliSchemaFlavor};
+        let Ok(fix) = std::env::var("FIX") else {
+            eprintln!("set FIX=<matrix dir>");
+            return;
+        };
+        let fd = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("notes/pe-fixtures-matrix")
+            .join(&fix);
+        if !fd.exists() {
+            eprintln!("fixture absent");
+            return;
+        }
+        let base = std::fs::read(fd.join("base.bin")).unwrap();
+        let delta = std::fs::read(fd.join("forward.delta")).unwrap();
+        let truth = std::fs::read(fd.join("truth.bin")).unwrap();
+        let out = apply_impl(&base, &delta, false).unwrap();
+        let md = parse_cli_metadata_from_pe(&truth, CliSchemaFlavor::Classic)
+            .expect("parse truth metadata");
+
+        let rng =
+            |s: Option<CliStream>| s.map(|x| (x.file_offset, x.file_offset + x.size as usize));
+        let blob = rng(md.streams.blob);
+        let strings = rng(md.streams.strings);
+        let us = rng(md.streams.user_strings);
+        let guid = rng(md.streams.guid);
+        let tab = (
+            md.streams.tables.file_offset,
+            md.streams.tables.file_offset + md.streams.tables.size as usize,
+        );
+        let classify = |i: usize| -> &'static str {
+            for (name, r) in [
+                ("blob", blob),
+                ("strings", strings),
+                ("us", us),
+                ("guid", guid),
+            ] {
+                if let Some((a, b)) = r {
+                    if i >= a && i < b {
+                        return name;
+                    }
+                }
+            }
+            if i >= tab.0 && i < tab.1 {
+                "tables"
+            } else {
+                "other"
+            }
+        };
+        let n = out.len().min(truth.len());
+        let mut per = std::collections::BTreeMap::<&str, usize>::new();
+        let mut blob_diffs = Vec::new();
+        for i in 0..n {
+            if out[i] != truth[i] {
+                let c = classify(i);
+                *per.entry(c).or_default() += 1;
+                if c == "blob" {
+                    blob_diffs.push(i);
+                }
+            }
+        }
+        eprintln!("total diffs by stream: {per:?}");
+        eprintln!(
+            "md_file_off={:#x} md_size={:#x} streams: blob={blob:#x?} strings={strings:#x?} us={us:#x?} guid={guid:#x?} tables={tab:#x?}",
+            md.metadata_file_offset, md.metadata_size
+        );
+        if let Ok(tpe) = crate::pe::parse::PeInfo::parse_lenient(&truth) {
+            for s in &tpe.sections {
+                eprintln!(
+                    "  sec {} fo={:#x}..{:#x} rva={:#x}",
+                    s.name,
+                    s.raw_offset,
+                    s.raw_offset + s.raw_size,
+                    s.virtual_address
+                );
+            }
+        }
+        let mut other = Vec::new();
+        for i in 0..n {
+            if out[i] != truth[i] && classify(i) == "other" {
+                other.push(i);
+            }
+        }
+        eprintln!("first 'other' diff offsets:");
+        for &i in other.iter().take(14) {
+            let w = |b: &[u8]| {
+                (i.saturating_sub(4)..(i + 8).min(b.len()))
+                    .map(|k| format!("{:02x}", b[k]))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
+            eprintln!(
+                "  fo={i:#x}  out[{}] truth[{}]  ctx_out: {}",
+                out[i],
+                truth[i],
+                w(&out)
+            );
+            eprintln!("                              ctx_tru: {}", w(&truth));
+        }
+
+        let Some((blob_start, blob_end)) = blob else {
+            return;
+        };
+        // Walk the #Blob heap of truth: each entry = compressed-len prefix + data.
+        // Record (abs_value_start, abs_value_end, metadata_offset).
+        let mut blobs: Vec<(usize, usize, u32)> = Vec::new();
+        let mut p = blob_start + 1; // entry 0 is the empty blob
+        while p < blob_end {
+            let Ok((len, prefix)) = read_compressed_u32(&truth[p..blob_end]) else {
+                break;
+            };
+            let vs = p + prefix;
+            let ve = (vs + len as usize).min(blob_end);
+            blobs.push((vs, ve, (p - blob_start) as u32));
+            if len == 0 && prefix == 0 {
+                break;
+            }
+            p = ve;
+        }
+        // Target signature-blob offsets referenced by the columns we transform.
+        let is_sig = |t: u8, c: &str| {
+            matches!(
+                (t, c),
+                (0x04, "Signature")
+                    | (0x06, "Signature")
+                    | (0x0a, "Signature")
+                    | (0x11, "Signature")
+                    | (0x17, "Type")
+                    | (0x1b, "Signature")
+            )
+        };
+        let mut sig_offsets = std::collections::BTreeSet::<u32>::new();
+        for t in 0..64u8 {
+            let Some(schema) = table_schema(t) else {
+                continue;
+            };
+            let rc = md.row_counts[t as usize] as usize;
+            let rs = md.row_sizes[t as usize] as usize;
+            let Some(tfo) = md.table_file_offsets[t as usize] else {
+                continue;
+            };
+            if rc == 0 || rs == 0 {
+                continue;
+            }
+            for r in 0..rc {
+                let mut co = 0usize;
+                for col in schema.columns {
+                    let w = column_width(col.kind, &md.row_counts, md.heap_widths) as usize;
+                    if is_sig(t, col.name) {
+                        let off = tfo + r * rs + co;
+                        let v = match w {
+                            2 => u16::from_le_bytes(truth[off..off + 2].try_into().unwrap()) as u32,
+                            4 => u32::from_le_bytes(truth[off..off + 4].try_into().unwrap()),
+                            _ => 0,
+                        };
+                        if v != 0 {
+                            sig_offsets.insert(v);
+                        }
+                    }
+                    co += w;
+                }
+            }
+        }
+        // For each blob diff: enclosing blob + whether it's a signature blob.
+        let mut visited = 0usize;
+        let mut unvisited = 0usize;
+        let mut unvisited_blobs = std::collections::BTreeSet::<u32>::new();
+        for &i in &blob_diffs {
+            match blobs.iter().find(|&&(s, e, _)| i >= s && i < e) {
+                Some(&(_, _, moff)) => {
+                    if sig_offsets.contains(&moff) {
+                        visited += 1;
+                    } else {
+                        unvisited += 1;
+                        unvisited_blobs.insert(moff);
+                    }
+                }
+                None => unvisited += 1,
+            }
+        }
+        eprintln!(
+            "blob diffs: {} in signature blobs (visited), {} in non-signature blobs (NOT visited); distinct unvisited blobs={}",
+            visited,
+            unvisited,
+            unvisited_blobs.len()
+        );
+        eprintln!(
+            "first unvisited blob metadata-offsets: {:?}",
+            unvisited_blobs.iter().take(12).collect::<Vec<_>>()
+        );
+    }
+
+    /// Dump the parsed CLI map table rifts for a managed corpus case.
+    /// `CASE=cli-interface-impl cargo test --release --lib cli_map_dump -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn cli_map_dump() {
+        // FIX=<matrix dir> uses notes/pe-fixtures-matrix/<dir>/forward.delta;
+        // else CASE=<case> uses the curated managed corpus delta.pa30.
+        let delta = if let Ok(fix) = std::env::var("FIX") {
+            let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("notes/pe-fixtures-matrix")
+                .join(&fix)
+                .join("forward.delta");
+            if !d.exists() {
+                eprintln!("matrix fixture absent");
+                return;
+            }
+            std::fs::read(d).unwrap()
+        } else {
+            let case = std::env::var("CASE").unwrap_or_else(|_| "cli-interface-impl".into());
+            let dir = managed_native_corpus_dir().join(&case);
+            if !dir.exists() {
+                eprintln!("case absent");
+                return;
+            }
+            std::fs::read(dir.join("delta.pa30")).unwrap()
+        };
+        let parsed = parse(&delta).unwrap();
+        let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
+        let m = &pp.cli_map;
+        for t in 0u8..64 {
+            let r = &m.tables[t as usize];
+            if !r.entries.is_empty() {
+                let pairs: Vec<_> = r.entries.iter().map(|e| (e.source, e.target)).collect();
+                eprintln!("table {t:#x}: entries={pairs:?}");
+                let samples: Vec<_> = (1..=8).map(|rid| rid as i64 + r.map(rid as i64)).collect();
+                eprintln!("   map(1..=8) -> {samples:?}");
+            }
+        }
+        if !m.user_strings.entries.is_empty() {
+            eprintln!("user_strings entries={:?}", m.user_strings.entries);
+        }
+        eprintln!(
+            "blob entries={:?} strings entries={:?}",
+            m.blob.entries.len(),
+            m.strings.entries.len()
+        );
+    }
+
+    /// Trace copy/literal provenance of a managed corpus apply at given output
+    /// offsets. `CASE=cli-interface-impl OFFS=603,622,633 cargo test --release
+    /// --lib cli_provenance -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn cli_provenance() {
+        use crate::pe::cli::schema::CliSchemaFlavor;
+        let case = std::env::var("CASE").unwrap_or_else(|_| "cli-interface-impl".into());
+        let offs: Vec<usize> = std::env::var("OFFS")
+            .unwrap_or_else(|_| "603,622,633".into())
+            .split(',')
+            .filter_map(|s| s.trim().parse().ok())
+            .collect();
+        let dir = managed_native_corpus_dir().join(&case);
+        if !dir.exists() {
+            eprintln!("case absent");
+            return;
+        }
+        let source = std::fs::read(dir.join("source.dll")).unwrap();
+        let delta = std::fs::read(dir.join("delta.pa30")).unwrap();
+        let target = std::fs::read(dir.join("target.dll")).unwrap();
+        let parsed = parse(&delta).unwrap();
+        let target_size = parsed.header.target_size as usize;
+        let flags = parsed.header.flags as u64;
+        let pp = parse_pe_preprocess(&parsed.preprocess).unwrap();
+
+        let mut r = source.clone();
+        crate::pe::transform::zero_pe_checksum(&mut r);
+        let metadata =
+            parse_cli_metadata_from_pe(&r, CliSchemaFlavor::Classic).expect("source metadata");
+        let src_pe = crate::pe::parse::PeInfo::parse_lenient(&r).unwrap();
+        crate::pe::transform::build_transformed_source(
+            &mut r,
+            &src_pe,
+            &pp.preprocess_rift,
+            flags,
+            pp.target_info.image_base,
+            pp.target_info.time_date_stamp,
+        );
+        // T(source) BEFORE the CLI source transforms, to see what they changed.
+        let pre_cli = r.clone();
+        apply_classic_cli_source_transforms(
+            &mut r,
+            &src_pe,
+            &metadata,
+            &pp.cli_map,
+            &pp.preprocess_rift,
+            flags,
+        );
+        let cli_rift = crate::pe::cli::rift::build_cli_compression_rift_from_transformed_source(
+            &metadata,
+            &pp.target_info.target_metadata,
+            &pp.cli_map,
+            &r,
+        );
+        let caller_rift = build_pe_copy_rift_with_cli_rift(&source, &pp, &cli_rift);
+        let (out, csrc) = crate::lzx::decompress_with_copy_source(
+            &r,
+            &parsed.patch_data,
+            target_size,
+            Some(&caller_rift),
+        )
+        .unwrap();
+
+        for &o in &offs {
+            let cs = csrc.get(o).copied().unwrap_or(-1);
+            eprintln!(
+                "out fo={o:#x}: out={:#04x} truth={:#04x} csrc={cs}",
+                out.get(o).copied().unwrap_or(0),
+                target.get(o).copied().unwrap_or(0),
+            );
+            if cs >= 0 {
+                let s = cs as usize;
+                let w = |b: &[u8], a: usize| {
+                    (a.saturating_sub(4)..(a + 6).min(b.len()))
+                        .map(|k| format!("{:02x}", b[k]))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                };
+                eprintln!(
+                    "   COPY from T(src) fo={s:#x}: post_cli={:#04x} pre_cli={:#04x}",
+                    r.get(s).copied().unwrap_or(0),
+                    pre_cli.get(s).copied().unwrap_or(0)
+                );
+                eprintln!("     T(src) post-cli ctx: {}", w(&r, s));
+                eprintln!("     T(src) pre-cli  ctx: {}", w(&pre_cli, s));
+            } else {
+                eprintln!("   LITERAL");
+            }
+        }
+    }
+
+    /// Which table column(s) reference a given #Blob offset, in a matrix fixture's
+    /// SOURCE metadata. `FIX=<dir> BLOBOFF=0x5ca cargo test --release --lib
+    /// find_blob_ref -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn find_blob_ref() {
+        use crate::pe::cli::metadata::parse_cli_metadata_from_pe;
+        use crate::pe::cli::schema::{
+            column_width, table_schema, CliSchemaFlavor, ColumnKind, HeapKind,
+        };
+        let Ok(fix) = std::env::var("FIX") else {
+            return;
+        };
+        let target: u32 = std::env::var("BLOBOFF")
+            .ok()
+            .and_then(|s| u32::from_str_radix(s.trim_start_matches("0x"), 16).ok())
+            .unwrap_or(0);
+        let base = std::fs::read(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("notes/pe-fixtures-matrix")
+                .join(&fix)
+                .join("base.bin"),
+        )
+        .unwrap();
+        let md = parse_cli_metadata_from_pe(&base, CliSchemaFlavor::Classic).unwrap();
+        for t in 0..64u8 {
+            let Some(schema) = table_schema(t) else {
+                continue;
+            };
+            let rc = md.row_counts[t as usize] as usize;
+            let rs = md.row_sizes[t as usize] as usize;
+            let Some(tfo) = md.table_file_offsets[t as usize] else {
+                continue;
+            };
+            if rc == 0 || rs == 0 {
+                continue;
+            }
+            for r in 0..rc {
+                let mut co = 0usize;
+                for col in schema.columns {
+                    let w = column_width(col.kind, &md.row_counts, md.heap_widths) as usize;
+                    if matches!(col.kind, ColumnKind::Heap(HeapKind::Blob)) {
+                        let off = tfo + r * rs + co;
+                        let v = match w {
+                            2 => u16::from_le_bytes(base[off..off + 2].try_into().unwrap()) as u32,
+                            4 => u32::from_le_bytes(base[off..off + 4].try_into().unwrap()),
+                            _ => 0,
+                        };
+                        if v == target {
+                            eprintln!(
+                                "blob {target:#x} <- table {t:#04x} col {:?} row {}",
+                                col.name,
+                                r + 1
+                            );
+                        }
+                    }
+                    co += w;
+                }
+            }
+        }
+    }
+
+    /// Decide parse-vs-walker for the managed tail with ground truth: derive the
+    /// TRUE TypeDef rift by matching source/target rows by (Namespace, Name), and
+    /// check it against our delta-parsed `cli_map.tables[2]`. If they match, the
+    /// bitstream parse is correct and the over-remap is a WALKER bug; if not, the
+    /// parse is wrong. `FIX=<matrix dir> cargo test --release --lib
+    /// cli_true_rift_check -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn cli_true_rift_check() {
+        use crate::pe::cli::metadata::{
+            parse_cli_metadata_from_pe, CliColumnValue, CliMetadataModel,
+        };
+        use crate::pe::cli::schema::{CliSchemaFlavor, HeapKind};
+        use crate::pe::cli::tokens::StringsHeapOffset;
+        let Ok(fix) = std::env::var("FIX") else {
+            return;
+        };
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("notes/pe-fixtures-matrix")
+            .join(&fix);
+        if !dir.exists() {
+            eprintln!("fixture absent");
+            return;
+        }
+        let base = std::fs::read(dir.join("base.bin")).unwrap();
+        let truth = std::fs::read(dir.join("truth.bin")).unwrap();
+        let delta = std::fs::read(dir.join("forward.delta")).unwrap();
+        let pp = parse_pe_preprocess(&parse(&delta).unwrap().preprocess).unwrap();
+        let typedef_rift = &pp.cli_map.tables[0x02];
+
+        let names = |img: &[u8], md: &CliMetadataModel| -> std::collections::HashMap<String, u32> {
+            let mut m = std::collections::HashMap::new();
+            for rid in 1..=md.row_counts[0x02] {
+                let Ok(row) = md.table_row_by_id(img, 0x02, rid) else {
+                    continue;
+                };
+                let s = |col| match row.column(col) {
+                    Ok(CliColumnValue::Heap {
+                        kind: HeapKind::Strings,
+                        offset,
+                    }) => md
+                        .strings(img, StringsHeapOffset::new(offset))
+                        .unwrap_or("")
+                        .to_string(),
+                    _ => String::new(),
+                };
+                m.insert(format!("{}.{}", s("Namespace"), s("Name")), rid);
+            }
+            m
+        };
+        let md_b = parse_cli_metadata_from_pe(&base, CliSchemaFlavor::Classic).unwrap();
+        let md_t = parse_cli_metadata_from_pe(&truth, CliSchemaFlavor::Classic).unwrap();
+        let src = names(&base, &md_b);
+        let tgt = names(&truth, &md_t);
+        let (mut ok, mut bad) = (0u32, 0u32);
+        let mut first = Vec::new();
+        for (name, &src_row) in &src {
+            let Some(&true_tgt) = tgt.get(name) else {
+                continue;
+            };
+            let ours = (src_row as i64 + typedef_rift.map(src_row as i64)) as u32;
+            if ours == true_tgt {
+                ok += 1;
+            } else {
+                bad += 1;
+                if first.len() < 15 {
+                    first.push(format!(
+                        "  row {src_row} '{name}': true->{true_tgt} ours->{ours}"
+                    ));
+                }
+            }
+        }
+        eprintln!("TypeDef rift: parsed matches true mapping for {ok} rows, MISMATCH for {bad}");
+        for f in &first {
+            eprintln!("{f}");
+        }
+        eprintln!("=> MISMATCH>0 => PARSE wrong; 0 => parse right, over-remap is the WALKER");
     }
 
     const DELTA_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/deltas");

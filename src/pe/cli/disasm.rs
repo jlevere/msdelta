@@ -3,7 +3,7 @@
 use crate::pe::cli::map::CliMapModel;
 use crate::pe::cli::metadata::{CliColumnValue, CliMetadataModel};
 use crate::pe::cli::method::cli_method_bodies;
-use crate::pe::cli::schema::{CliSchemaFlavor, HeapKind};
+use crate::pe::cli::schema::{table, CliSchemaFlavor, HeapKind};
 use crate::pe::cli::tokens::StringsHeapOffset;
 use crate::pe::parse::PeInfo;
 use crate::{Error, Result};
@@ -144,7 +144,7 @@ fn map_rid(rift: &crate::lzx::rift::RiftTable, rid: u32) -> u32 {
 }
 
 fn is_constructor_body(image: &[u8], metadata: &CliMetadataModel, method_rid: u32) -> bool {
-    let Ok(row) = metadata.table_row_by_id(image, 0x06, method_rid) else {
+    let Ok(row) = metadata.table_row_by_id(image, table::METHOD_DEF, method_rid) else {
         return false;
     };
     let Ok(CliColumnValue::Heap {
@@ -161,20 +161,36 @@ fn is_constructor_body(image: &[u8], metadata: &CliMetadataModel, method_rid: u3
 }
 
 fn constructor_cli_map(cli_map: &CliMapModel) -> CliMapModel {
-    // Constructors are a narrower native path: MethodDef self-calls remap, but
-    // MemberRef/user-string operands are copied as authored.
+    // KNOWN-INCORRECT HEURISTIC. Genuine's CliDisasm (Ghidra 0x180015920) walks
+    // EVERY method body uniformly and remaps all token operands through the full
+    // CliMap -- there is no constructor special case. We confirmed this against a
+    // lab-dumped genuine T(source): removing this restriction takes the matrix
+    // fixture's IL-token diffs 220 -> 1. It is kept ONLY as a band-aid: dropping
+    // it currently regresses the synthetic cli-interface-impl fixture (a separate
+    // unfinished issue in the per-kind blob walker / CliMap rift), so removing it
+    // in isolation trades one fixture for another. Remove together with the blob
+    // walker fix. See managed-tail-diagnosis.
     let mut constructor_map = CliMapModel::default();
-    constructor_map.tables[0x06] = cli_map.tables[0x06].clone();
+    constructor_map.tables[table::METHOD_DEF as usize] =
+        cli_map.tables[table::METHOD_DEF as usize].clone();
     constructor_map
 }
 
+// IL opcode operand classification, cross-checked byte-for-byte against genuine
+// `DisassemblerCli::oneByteParam` / `twoByteParam` / `paramLength` (extracted via
+// the public `msdelta.pdb` symbol addresses, `.rdata`). Genuine remaps an operand
+// as a metadata token only for its `_Param` token kinds {1,4,8,10,11}.
 fn one_byte_operand(opcode: u8) -> IlOperand {
     match opcode {
         0x0e..=0x13 | 0x1f | 0x2b..=0x37 | 0xde => IlOperand::Fixed(1),
-        0x20 | 0x22 | 0x38..=0x44 | 0xdd => IlOperand::Fixed(4),
+        // 0x29 (calli) carries a StandAloneSig token operand but genuine does NOT
+        // remap it (`_Param` 7 = plain InlineSig, not a token kind) -- so it is a
+        // non-remapped 4-byte operand, unlike call (0x28) / jmp (0x27).
+        0x20 | 0x22 | 0x29 | 0x38..=0x44 | 0xdd => IlOperand::Fixed(4),
         0x21 | 0x23 => IlOperand::Fixed(8),
         0x45 => IlOperand::Switch,
-        0x27..=0x29
+        0x27
+        | 0x28
         | 0x6f..=0x75
         | 0x79
         | 0x7b..=0x81
@@ -192,7 +208,10 @@ fn one_byte_operand(opcode: u8) -> IlOperand {
 fn two_byte_operand(opcode: u8) -> IlOperand {
     match opcode {
         0x09..=0x0e => IlOperand::Fixed(2),
-        0x12 | 0x19 => IlOperand::Fixed(1),
+        // 0xfe12 (unaligned.) takes a 1-byte operand. NB genuine's table treats
+        // 0xfe19 (ECMA "no." prefix) as NO operand, diverging from ECMA-335 -- we
+        // match genuine, not the spec, so the transform reproduces byte-for-byte.
+        0x12 => IlOperand::Fixed(1),
         0x06 | 0x07 | 0x15 | 0x16 | 0x1c => IlOperand::Token,
         _ => IlOperand::None,
     }
@@ -205,6 +224,72 @@ mod tests {
     use crate::pe::cli::metadata::parse_cli_metadata_from_pe;
     use crate::pe::cli::method::cli_method_bodies;
     use std::path::PathBuf;
+
+    /// Lock our IL-opcode operand classification to genuine `DisassemblerCli`.
+    /// These three arrays are extracted verbatim from `msdelta.pdb`'s public
+    /// `?oneByteParam@DisassemblerCli`, `?twoByteParam@...`, `?paramLength@...`
+    /// symbols (their `.rdata` bytes): `*ByteParam[opcode] = _Param`, and
+    /// `paramLength[_Param] = operand byte count`. Genuine remaps an operand as a
+    /// metadata token only for `_Param` token kinds {1,4,8,10,11}; 9 = switch;
+    /// everything else is a fixed-length, non-remapped operand. This is the
+    /// oracle that catches opcode-table drift (it would have caught the `calli`
+    /// 0x29 over-remap that this test now guards against).
+    #[rustfmt::skip]
+    const GENUINE_ONE_BYTE_PARAM: [u8; 256] = [
+        5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 16, 16, 16, 16, 16, 16, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 14,
+        2, 3, 15, 6, 5, 5, 5, 4, 4, 7, 5, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 9, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+        5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 4, 11, 11, 8, 4, 11, 11, 5, 5, 5, 11, 5, 1, 1, 1, 1, 1,
+        1, 11, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 11, 11, 5, 11, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+        5, 5, 5, 11, 11, 11, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+        5, 5, 11, 5, 5, 5, 11, 5, 5, 5, 5, 5, 5, 5, 5, 5, 10, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 0, 13, 5,
+        5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+    ];
+    #[rustfmt::skip]
+    const GENUINE_TWO_BYTE_PARAM: [u8; 256] = [
+        5, 5, 5, 5, 5, 5, 4, 4, 5, 12, 12, 12, 12, 12, 12, 5, 5, 5, 14, 5, 5, 11, 11, 5, 5, 5, 5, 5, 11, 5, 5, 5,
+        5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+        5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+        5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+        5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+        5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+        5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+        5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+    ];
+    #[rustfmt::skip]
+    const GENUINE_PARAM_LENGTH: [u8; 17] = [4, 4, 4, 8, 4, 0, 8, 4, 4, 4, 4, 4, 2, 1, 1, 4, 1];
+
+    fn genuine_operand(param: u8) -> IlOperand {
+        match param {
+            1 | 4 | 8 | 10 | 11 => IlOperand::Token,
+            9 => IlOperand::Switch,
+            p => IlOperand::Fixed(GENUINE_PARAM_LENGTH[p as usize] as usize),
+        }
+    }
+
+    #[test]
+    fn il_operand_classification_matches_genuine_disassembler() {
+        // Our `None` (no operand) is genuine's fixed-zero operand.
+        let normalize = |op: IlOperand| match op {
+            IlOperand::None => IlOperand::Fixed(0),
+            other => other,
+        };
+        for opcode in 0u8..=255 {
+            // 0xfe is the two-byte escape, handled structurally before the table.
+            if opcode != 0xfe {
+                assert_eq!(
+                    normalize(one_byte_operand(opcode)),
+                    genuine_operand(GENUINE_ONE_BYTE_PARAM[opcode as usize]),
+                    "1-byte opcode {opcode:#04x}",
+                );
+            }
+            assert_eq!(
+                normalize(two_byte_operand(opcode)),
+                genuine_operand(GENUINE_TWO_BYTE_PARAM[opcode as usize]),
+                "two-byte opcode 0xfe {opcode:#04x}",
+            );
+        }
+    }
 
     const MANAGED_NATIVE_CASES: &[&str] = &[
         "cli-const-string",
