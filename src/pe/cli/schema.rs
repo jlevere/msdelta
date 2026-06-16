@@ -134,10 +134,9 @@ pub(crate) const fn signature_kind_for_table(table_id: u8) -> Option<SignatureKi
         table::PROPERTY => SignatureKind::PropertySig,
         table::TYPE_SPEC => SignatureKind::TypeSpecSig,
         table::STANDALONE_SIG => SignatureKind::StandAloneSig,
-        table::CONSTANT
-        | table::CUSTOM_ATTRIBUTE
-        | table::FIELD_MARSHAL
-        | table::METHOD_SPEC => SignatureKind::NoTypeRemap,
+        table::CONSTANT | table::CUSTOM_ATTRIBUTE | table::FIELD_MARSHAL | table::METHOD_SPEC => {
+            SignatureKind::NoTypeRemap
+        }
         _ => return None,
     })
 }

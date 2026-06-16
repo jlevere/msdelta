@@ -2340,7 +2340,8 @@ mod tests {
         let md = parse_cli_metadata_from_pe(&truth, CliSchemaFlavor::Classic)
             .expect("parse truth metadata");
 
-        let rng = |s: Option<CliStream>| s.map(|x| (x.file_offset, x.file_offset + x.size as usize));
+        let rng =
+            |s: Option<CliStream>| s.map(|x| (x.file_offset, x.file_offset + x.size as usize));
         let blob = rng(md.streams.blob);
         let strings = rng(md.streams.strings);
         let us = rng(md.streams.user_strings);
@@ -2350,7 +2351,12 @@ mod tests {
             md.streams.tables.file_offset + md.streams.tables.size as usize,
         );
         let classify = |i: usize| -> &'static str {
-            for (name, r) in [("blob", blob), ("strings", strings), ("us", us), ("guid", guid)] {
+            for (name, r) in [
+                ("blob", blob),
+                ("strings", strings),
+                ("us", us),
+                ("guid", guid),
+            ] {
                 if let Some((a, b)) = r {
                     if i >= a && i < b {
                         return name;
@@ -2405,7 +2411,12 @@ mod tests {
                     .collect::<Vec<_>>()
                     .join(" ")
             };
-            eprintln!("  fo={i:#x}  out[{}] truth[{}]  ctx_out: {}", out[i], truth[i], w(&out));
+            eprintln!(
+                "  fo={i:#x}  out[{}] truth[{}]  ctx_out: {}",
+                out[i],
+                truth[i],
+                w(&out)
+            );
             eprintln!("                              ctx_tru: {}", w(&truth));
         }
 
@@ -2442,10 +2453,14 @@ mod tests {
         };
         let mut sig_offsets = std::collections::BTreeSet::<u32>::new();
         for t in 0..64u8 {
-            let Some(schema) = table_schema(t) else { continue };
+            let Some(schema) = table_schema(t) else {
+                continue;
+            };
             let rc = md.row_counts[t as usize] as usize;
             let rs = md.row_sizes[t as usize] as usize;
-            let Some(tfo) = md.table_file_offsets[t as usize] else { continue };
+            let Some(tfo) = md.table_file_offsets[t as usize] else {
+                continue;
+            };
             if rc == 0 || rs == 0 {
                 continue;
             }
@@ -2624,7 +2639,11 @@ mod tests {
                         .collect::<Vec<_>>()
                         .join(" ")
                 };
-                eprintln!("   COPY from T(src) fo={s:#x}: post_cli={:#04x} pre_cli={:#04x}", r.get(s).copied().unwrap_or(0), pre_cli.get(s).copied().unwrap_or(0));
+                eprintln!(
+                    "   COPY from T(src) fo={s:#x}: post_cli={:#04x} pre_cli={:#04x}",
+                    r.get(s).copied().unwrap_or(0),
+                    pre_cli.get(s).copied().unwrap_or(0)
+                );
                 eprintln!("     T(src) post-cli ctx: {}", w(&r, s));
                 eprintln!("     T(src) pre-cli  ctx: {}", w(&pre_cli, s));
             } else {
@@ -2640,8 +2659,12 @@ mod tests {
     #[ignore]
     fn find_blob_ref() {
         use crate::pe::cli::metadata::parse_cli_metadata_from_pe;
-        use crate::pe::cli::schema::{column_width, table_schema, CliSchemaFlavor, ColumnKind, HeapKind};
-        let Ok(fix) = std::env::var("FIX") else { return };
+        use crate::pe::cli::schema::{
+            column_width, table_schema, CliSchemaFlavor, ColumnKind, HeapKind,
+        };
+        let Ok(fix) = std::env::var("FIX") else {
+            return;
+        };
         let target: u32 = std::env::var("BLOBOFF")
             .ok()
             .and_then(|s| u32::from_str_radix(s.trim_start_matches("0x"), 16).ok())
@@ -2655,10 +2678,14 @@ mod tests {
         .unwrap();
         let md = parse_cli_metadata_from_pe(&base, CliSchemaFlavor::Classic).unwrap();
         for t in 0..64u8 {
-            let Some(schema) = table_schema(t) else { continue };
+            let Some(schema) = table_schema(t) else {
+                continue;
+            };
             let rc = md.row_counts[t as usize] as usize;
             let rs = md.row_sizes[t as usize] as usize;
-            let Some(tfo) = md.table_file_offsets[t as usize] else { continue };
+            let Some(tfo) = md.table_file_offsets[t as usize] else {
+                continue;
+            };
             if rc == 0 || rs == 0 {
                 continue;
             }
@@ -2674,7 +2701,11 @@ mod tests {
                             _ => 0,
                         };
                         if v == target {
-                            eprintln!("blob {target:#x} <- table {t:#04x} col {:?} row {}", col.name, r + 1);
+                            eprintln!(
+                                "blob {target:#x} <- table {t:#04x} col {:?} row {}",
+                                col.name,
+                                r + 1
+                            );
                         }
                     }
                     co += w;
@@ -2697,7 +2728,9 @@ mod tests {
         };
         use crate::pe::cli::schema::{CliSchemaFlavor, HeapKind};
         use crate::pe::cli::tokens::StringsHeapOffset;
-        let Ok(fix) = std::env::var("FIX") else { return };
+        let Ok(fix) = std::env::var("FIX") else {
+            return;
+        };
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("notes/pe-fixtures-matrix")
             .join(&fix);
@@ -2714,9 +2747,14 @@ mod tests {
         let names = |img: &[u8], md: &CliMetadataModel| -> std::collections::HashMap<String, u32> {
             let mut m = std::collections::HashMap::new();
             for rid in 1..=md.row_counts[0x02] {
-                let Ok(row) = md.table_row_by_id(img, 0x02, rid) else { continue };
+                let Ok(row) = md.table_row_by_id(img, 0x02, rid) else {
+                    continue;
+                };
                 let s = |col| match row.column(col) {
-                    Ok(CliColumnValue::Heap { kind: HeapKind::Strings, offset }) => md
+                    Ok(CliColumnValue::Heap {
+                        kind: HeapKind::Strings,
+                        offset,
+                    }) => md
                         .strings(img, StringsHeapOffset::new(offset))
                         .unwrap_or("")
                         .to_string(),
@@ -2733,14 +2771,18 @@ mod tests {
         let (mut ok, mut bad) = (0u32, 0u32);
         let mut first = Vec::new();
         for (name, &src_row) in &src {
-            let Some(&true_tgt) = tgt.get(name) else { continue };
+            let Some(&true_tgt) = tgt.get(name) else {
+                continue;
+            };
             let ours = (src_row as i64 + typedef_rift.map(src_row as i64)) as u32;
             if ours == true_tgt {
                 ok += 1;
             } else {
                 bad += 1;
                 if first.len() < 15 {
-                    first.push(format!("  row {src_row} '{name}': true->{true_tgt} ours->{ours}"));
+                    first.push(format!(
+                        "  row {src_row} '{name}': true->{true_tgt} ours->{ours}"
+                    ));
                 }
             }
         }
