@@ -79,6 +79,69 @@ pub(crate) struct MetadataSchema {
 
 pub(crate) const TABLE_SENTINEL: u8 = 0x40;
 
+/// ECMA-335 II.22 metadata table identifiers (the `#~` table index / token table
+/// byte). Named so the rest of the CLI code stops sprinkling bare hex.
+pub(crate) mod table {
+    pub(crate) const TYPE_REF: u8 = 0x01;
+    pub(crate) const TYPE_DEF: u8 = 0x02;
+    pub(crate) const FIELD: u8 = 0x04;
+    pub(crate) const METHOD_DEF: u8 = 0x06;
+    pub(crate) const MEMBER_REF: u8 = 0x0a;
+    pub(crate) const CONSTANT: u8 = 0x0b;
+    pub(crate) const CUSTOM_ATTRIBUTE: u8 = 0x0c;
+    pub(crate) const FIELD_MARSHAL: u8 = 0x0d;
+    pub(crate) const STANDALONE_SIG: u8 = 0x11;
+    pub(crate) const PROPERTY: u8 = 0x17;
+    pub(crate) const TYPE_SPEC: u8 = 0x1b;
+    pub(crate) const METHOD_SPEC: u8 = 0x2b;
+}
+
+/// The grammar of a `#Blob`-heap signature, i.e. how MSDelta walks a blob column
+/// to remap its embedded coded indexes. These `kind` codes are read verbatim
+/// from `msdelta.dll`'s static column-descriptor table (`.rdata`, the `iVar16==4`
+/// blob columns of `RiftTransformCliMetadata::Transform`); they are ground truth,
+/// not inferred. Only `MethodSig`/`MemberRefSig` are confirmed to take the
+/// method/field-signature TypeDefOrRef-remap path in our decoder today; the rest
+/// are recorded for completeness and to make the dispatch honest about what is
+/// and isn't handled. See [[managed-tail-diagnosis]].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SignatureKind {
+    /// kind 1 -- MethodDef.Signature (MethodDefSig).
+    MethodSig,
+    /// kind 2 -- MemberRef.Signature (MethodRefSig: method or field).
+    MemberRefSig,
+    /// kind 3 -- Field.Signature (FieldSig).
+    FieldSig,
+    /// kind 4 -- Property.Type (PropertySig).
+    PropertySig,
+    /// kind 5 -- TypeSpec.Signature (a single Type).
+    TypeSpecSig,
+    /// kind 9 -- StandAloneSig.Signature (LocalVarSig or StandAloneMethodSig).
+    StandAloneSig,
+    /// kind 0/6/7 -- Constant.Value, CustomAttribute.Value, FieldMarshal.NativeType,
+    /// MethodSpec.Instantiation: blob columns that carry no plain TypeDefOrRef
+    /// the signature walker remaps (handled by other genuine kind walks / raw).
+    NoTypeRemap,
+}
+
+/// Map a metadata table id to the kind of its signature/value blob column, from
+/// the genuine column-descriptor table. `None` for tables with no blob column.
+pub(crate) const fn signature_kind_for_table(table_id: u8) -> Option<SignatureKind> {
+    Some(match table_id {
+        table::METHOD_DEF => SignatureKind::MethodSig,
+        table::MEMBER_REF => SignatureKind::MemberRefSig,
+        table::FIELD => SignatureKind::FieldSig,
+        table::PROPERTY => SignatureKind::PropertySig,
+        table::TYPE_SPEC => SignatureKind::TypeSpecSig,
+        table::STANDALONE_SIG => SignatureKind::StandAloneSig,
+        table::CONSTANT
+        | table::CUSTOM_ATTRIBUTE
+        | table::FIELD_MARSHAL
+        | table::METHOD_SPEC => SignatureKind::NoTypeRemap,
+        _ => return None,
+    })
+}
+
 const MODULE_COLUMNS: &[ColumnSchema] = &[
     col("Generation", ColumnKind::U16),
     col("Name", ColumnKind::Heap(HeapKind::Strings)),

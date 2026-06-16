@@ -4,7 +4,10 @@ use crate::lzx::rift::RiftTable;
 use crate::pe::cli::blob::read_compressed_u32;
 use crate::pe::cli::map::CliMapModel;
 use crate::pe::cli::metadata::{CliMetadataModel, CliStream};
-use crate::pe::cli::schema::{column_width, table_schema, CliSchemaFlavor, ColumnKind, HeapKind};
+use crate::pe::cli::schema::{
+    column_width, signature_kind_for_table, table_schema, CliSchemaFlavor, ColumnKind, HeapKind,
+    SignatureKind,
+};
 use crate::pe::cli::signature::{
     transform_field_signature_blob, transform_method_signature_blob,
     transform_property_signature_blob, transform_type_spec_blob,
@@ -74,7 +77,14 @@ pub(crate) fn transform_cli_metadata_with_rva_map(
                     break;
                 };
 
-                if is_signature_blob_column(table_id, column.name) && value != 0 {
+                // A blob-heap column whose table carries a remappable signature
+                // (per the genuine column-descriptor kinds) -- queue it for the
+                // signature walk after the table pass.
+                if value != 0
+                    && matches!(column.kind, ColumnKind::Heap(HeapKind::Blob))
+                    && signature_kind_for_table(table_id)
+                        .is_some_and(|k| k != SignatureKind::NoTypeRemap)
+                {
                     signature_blobs.insert((table_id, value));
                 }
 
@@ -133,17 +143,9 @@ pub(crate) fn transform_cli4_metadata(
     Ok(transform_cli_metadata(image, metadata, cli_map))
 }
 
-fn is_signature_blob_column(table_id: u8, column_name: &str) -> bool {
-    matches!(
-        (table_id, column_name),
-        (0x04, "Signature")
-            | (0x06, "Signature")
-            | (0x0a, "Signature")
-            | (0x11, "Signature")
-            | (0x17, "Type")
-            | (0x1b, "Signature")
-    )
-}
+/// `IMAGE_CEE_CS_CALLCONV_FIELD` -- a MemberRef whose signature starts with this
+/// is a field reference, otherwise a method reference (ECMA-335 II.23.2.3/.4).
+const CALLCONV_FIELD: u8 = 0x06;
 
 fn transform_signature_blob_at_source_offset(
     image: &mut [u8],
@@ -158,19 +160,23 @@ fn transform_signature_blob_at_source_offset(
     let Some(blob) = blob_value_mut(image, stream, blob_offset) else {
         return 0;
     };
-    match table_id {
-        0x04 => transform_field_signature_blob(blob, cli_map),
-        0x06 => transform_method_signature_blob(blob, cli_map),
-        0x0a => transform_member_ref_signature_blob(blob, cli_map),
-        0x11 => transform_method_signature_blob(blob, cli_map),
-        0x17 => transform_property_signature_blob(blob, cli_map),
-        0x1b => transform_type_spec_blob(blob, cli_map),
-        _ => 0,
+    match signature_kind_for_table(table_id) {
+        Some(SignatureKind::FieldSig) => transform_field_signature_blob(blob, cli_map),
+        Some(SignatureKind::MethodSig) => transform_method_signature_blob(blob, cli_map),
+        Some(SignatureKind::MemberRefSig) => transform_member_ref_signature_blob(blob, cli_map),
+        // KNOWN MISMATCH: genuine walks StandAloneSig with its own kind-9 grammar
+        // (LocalVarSig: `0x07 count locals`); we currently reuse the method-sig
+        // walk. Fixing this is part of the per-kind blob walker (see
+        // managed-tail-diagnosis). Left as-is to preserve current decode results.
+        Some(SignatureKind::StandAloneSig) => transform_method_signature_blob(blob, cli_map),
+        Some(SignatureKind::PropertySig) => transform_property_signature_blob(blob, cli_map),
+        Some(SignatureKind::TypeSpecSig) => transform_type_spec_blob(blob, cli_map),
+        Some(SignatureKind::NoTypeRemap) | None => 0,
     }
 }
 
 fn transform_member_ref_signature_blob(blob: &mut [u8], cli_map: &CliMapModel) -> usize {
-    if blob.first().copied() == Some(0x06) {
+    if blob.first().copied() == Some(CALLCONV_FIELD) {
         transform_field_signature_blob(blob, cli_map)
     } else {
         transform_method_signature_blob(blob, cli_map)

@@ -21,6 +21,27 @@ pub const FILE_TYPE_CLI4_AMD64: i64 = 0x20;
 pub const FILE_TYPE_CLI4_ARM: i64 = 0x40;
 pub const FILE_TYPE_CLI4_ARM64: i64 = 0x80;
 
+/// Header transform-selection flag bits: the word genuine PreProcessPEForApply
+/// ANDs against `g_transformsMap`, one bit per transform, in transform-graph
+/// order. Replaces scattered bare hex; values are the genuine bit positions.
+pub(crate) mod transform_flags {
+    pub(crate) const MARK_NON_EXE: u64 = 0x2;
+    pub(crate) const IMPORTS: u64 = 0x4;
+    pub(crate) const EXPORTS: u64 = 0x8;
+    pub(crate) const RESOURCES: u64 = 0x10;
+    pub(crate) const RELOCATIONS: u64 = 0x20;
+    pub(crate) const RELATIVE_JMPS_X86: u64 = 0x80;
+    pub(crate) const RELATIVE_CALLS_X86: u64 = 0x100;
+    pub(crate) const DISASM_X64: u64 = 0x200;
+    pub(crate) const PDATA_X64: u64 = 0x400;
+    /// Runs first: reset bound imports + mark `.idata` writable.
+    pub(crate) const PE_UNBINDER: u64 = 0x2000;
+    /// Classic-CLI managed: remap metadata tokens in IL method bodies.
+    pub(crate) const CLI_DISASM: u64 = 0x4000;
+    /// Classic-CLI managed: remap metadata-table + signature-blob coded indexes.
+    pub(crate) const CLI_METADATA: u64 = 0x8000;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ManagedBranch {
     ClassicCli,
@@ -93,7 +114,7 @@ pub(crate) fn build_transformed_source(
 ) {
     // PeUnbinder (flag bit 13, runs first in PreProcessPEForApply before the
     // transform executor): reset bound imports and mark .idata writable.
-    if flags & 0x2000 != 0 {
+    if flags & transform_flags::PE_UNBINDER != 0 {
         unbind_pe(buf, pe);
     }
     // PreProcessPEForApply writes the TARGET COFF TimeDateStamp into the source
@@ -133,7 +154,7 @@ impl Transform for MarkNonExe {
             layer: "x86",
             kind: "source_transform",
             file_types: crate::pe::atom::X86_FILE_TYPES,
-            flag_mask: 0x2,
+            flag_mask: transform_flags::MARK_NON_EXE,
             native_reference: "MarkNonExe::Run",
         }
     }
@@ -151,7 +172,7 @@ impl Transform for TransformImports {
             layer: "pe",
             kind: "source_transform",
             file_types: crate::pe::atom::PE_FILE_TYPES,
-            flag_mask: 0x4,
+            flag_mask: transform_flags::IMPORTS,
             native_reference: "TransformImports::Run",
         }
     }
@@ -169,7 +190,7 @@ impl Transform for TransformExports {
             layer: "pe",
             kind: "source_transform",
             file_types: crate::pe::atom::PE_FILE_TYPES,
-            flag_mask: 0x8,
+            flag_mask: transform_flags::EXPORTS,
             native_reference: "TransformExports::Run",
         }
     }
@@ -187,7 +208,7 @@ impl Transform for TransformResources {
             layer: "pe",
             kind: "source_transform",
             file_types: crate::pe::atom::PE_FILE_TYPES,
-            flag_mask: 0x10,
+            flag_mask: transform_flags::RESOURCES,
             native_reference: "TransformResources::Run",
         }
     }
@@ -206,7 +227,7 @@ impl Transform for TransformRelocations {
             layer: "pe",
             kind: "source_transform",
             file_types: crate::pe::atom::PE_FILE_TYPES,
-            flag_mask: 0x20,
+            flag_mask: transform_flags::RELOCATIONS,
             native_reference: "TransformRelocations::Run",
         }
     }
@@ -225,7 +246,7 @@ impl Transform for RelativeJmpsX86 {
             layer: "x86",
             kind: "source_transform",
             file_types: crate::pe::atom::X86_FILE_TYPES,
-            flag_mask: 0x80,
+            flag_mask: transform_flags::RELATIVE_JMPS_X86,
             native_reference: "RelativeJmpsX86::Run",
         }
     }
@@ -243,7 +264,7 @@ impl Transform for RelativeCallsX86 {
             layer: "x86",
             kind: "source_transform",
             file_types: crate::pe::atom::X86_FILE_TYPES,
-            flag_mask: 0x100,
+            flag_mask: transform_flags::RELATIVE_CALLS_X86,
             native_reference: "RelativeCallsX86::Run",
         }
     }
@@ -263,7 +284,7 @@ impl Transform for DisasmX64 {
             layer: "x64",
             kind: "source_transform",
             file_types: crate::pe::atom::X64_FILE_TYPES,
-            flag_mask: 0x200,
+            flag_mask: transform_flags::DISASM_X64,
             native_reference: "TransformDisasmX64::Run",
         }
     }

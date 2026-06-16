@@ -19,7 +19,7 @@ impl Transform for PdataX64 {
             layer: "x64",
             kind: "source_transform",
             file_types: super::atom::X64_FILE_TYPES,
-            flag_mask: 0x400,
+            flag_mask: crate::pe::transform::transform_flags::PDATA_X64,
             native_reference: "TransformPdataX64::Run",
         }
     }
