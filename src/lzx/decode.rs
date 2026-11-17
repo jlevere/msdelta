@@ -301,16 +301,15 @@ pub(super) fn decompress_into(
         let copy_len = (match_len as u64).min(end - pos);
 
         let rift_offset = ort.offset_at(pos as i64);
-        let distance: i64;
-        if raw_offset == SOURCE_COPY {
-            distance = -rift_offset;
+        let distance = if raw_offset == SOURCE_COPY {
+            -rift_offset
         } else if raw_offset < SOURCE_COPY {
-            distance = raw_offset as i64 - OFFSET_BIAS as i64 - rift_offset;
+            raw_offset as i64 - OFFSET_BIAS as i64 - rift_offset
         } else if (LRU_BASE..LRU_BASE + 3).contains(&raw_offset) {
-            distance = lru[(raw_offset - LRU_BASE) as usize];
+            lru[(raw_offset - LRU_BASE) as usize]
         } else {
-            distance = (raw_offset - RAW_OFFSET_BASE) as i64;
-        }
+            (raw_offset - RAW_OFFSET_BASE) as i64
+        };
 
         // LRU update runs for ALL match types (decompiled Run's LAB_1800278aa).
         if lru[0] != distance {

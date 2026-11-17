@@ -1207,21 +1207,17 @@ fn disasm_amd64(code: &[u8]) -> DisasmInsn {
     // through the 0F table; their ModRM/immediate forms are length-equivalent
     // to a normal 0F ModRM op for the purposes of this decoder, matching the
     // genuine table which assigns them ModRM kind 2 / no-immediate.)
-    let modrm_kind;
-    let imm_kind;
-    if code[pos] == 0x0f {
+    let (modrm_kind, imm_kind) = if code[pos] == 0x0f {
         pos += 1;
         if pos >= avail {
             stop!(pos);
         }
         let op = code[pos] as usize;
-        modrm_kind = MODRM_0F[op];
-        imm_kind = IMM_0F[op];
+        (MODRM_0F[op], IMM_0F[op])
     } else {
         let op = code[pos] as usize;
-        modrm_kind = MODRM_1B[op];
-        imm_kind = IMM_1B[op];
-    }
+        (MODRM_1B[op], IMM_1B[op])
+    };
     pos += 1; // consume opcode byte
 
     // Unknown opcode (table kind 1): genuine code stops here with the length at
