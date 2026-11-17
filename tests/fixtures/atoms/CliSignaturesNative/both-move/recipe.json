@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "case": "both-move",
+  "intended_definition_insertion": 2,
+  "intended_reference_insertion": "System.Version",
+  "require_observed_native_map_movement": true
+}

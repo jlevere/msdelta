@@ -301,20 +301,17 @@ impl RiftTable {
         let first = &self.entries[0];
         if pos < first.source {
             let last = &self.entries[n - 1];
-            return (last.target - last.source, first.source - 1);
+            return (last.target.wrapping_sub(last.source), first.source - 1);
         }
         // Largest index with entries[idx].source <= pos.
-        let idx = match self.entries.binary_search_by_key(&pos, |e| e.source) {
-            Ok(i) => i,
-            Err(i) => i - 1,
-        };
+        let idx = self.entries.partition_point(|entry| entry.source <= pos) - 1;
         let e = &self.entries[idx];
         let next_break = if idx + 1 < n {
             self.entries[idx + 1].source - 1
         } else {
             i64::MAX
         };
-        (e.target - e.source, next_break)
+        (e.target.wrapping_sub(e.source), next_break)
     }
 
     /// `compo::RiftTable::Multiply(A, B)` -> a new table representing the
@@ -783,19 +780,16 @@ impl RiftTable {
     /// Returns the offset to add to the source position to get the
     /// target position, based on the rift table entries.
     pub fn map(&self, source_pos: i64) -> i64 {
-        if self.entries.is_empty() {
-            return 0;
-        }
-
-        // Binary search for the entry covering this position
-        match self.entries.binary_search_by_key(&source_pos, |e| e.source) {
-            Ok(idx) => self.entries[idx].target - self.entries[idx].source,
-            Err(0) => 0,
-            Err(idx) => {
-                let e = &self.entries[idx - 1];
-                e.target - e.source
-            }
-        }
+        let upper = self
+            .entries
+            .partition_point(|entry| entry.source <= source_pos);
+        // Preserve this helper's existing identity-before-first behavior.
+        // Native GetRift wraps to the final interval instead; changing that
+        // policy for every transform requires a separate compatibility audit.
+        upper.checked_sub(1).map_or(0, |index| {
+            let entry = &self.entries[index];
+            entry.target.wrapping_sub(entry.source)
+        })
     }
 }
 
@@ -1076,6 +1070,80 @@ impl IntFormat {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn get_rift_matches_pinned_native_point_queries() {
+        #[derive(serde::Deserialize)]
+        struct Query {
+            position: String,
+            displacement: String,
+            last_position: String,
+        }
+        #[derive(serde::Deserialize)]
+        struct Case {
+            name: String,
+            entries: Vec<[String; 2]>,
+            queries: Vec<Query>,
+        }
+        #[derive(serde::Deserialize)]
+        struct Capture {
+            schema: u32,
+            dll_sha256: String,
+            lookup_rva: u32,
+            cases: Vec<Case>,
+        }
+        let capture: Capture = serde_json::from_str(include_str!(
+            "../../tests/fixtures/atoms/Pa30CopyNative/rift-lookup.json"
+        ))
+        .unwrap();
+        assert_eq!(capture.schema, 1);
+        assert_eq!(
+            capture.dll_sha256,
+            "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+        );
+        assert_eq!(capture.lookup_rva, 0x1c0d0);
+        assert_eq!(capture.cases.len(), 7);
+        let mut queries = 0;
+        for case in capture.cases {
+            let table = RiftTable {
+                entries: case
+                    .entries
+                    .iter()
+                    .map(|pair| RiftEntry {
+                        source: pair[0].parse().unwrap(),
+                        target: pair[1].parse().unwrap(),
+                    })
+                    .collect(),
+            };
+            for query in case.queries {
+                let position = query.position.parse().unwrap();
+                let expected = (
+                    query.displacement.parse().unwrap(),
+                    query.last_position.parse().unwrap(),
+                );
+                assert_eq!(
+                    table.get_rift(position),
+                    expected,
+                    "{} at {position}",
+                    case.name
+                );
+                if table
+                    .entries
+                    .first()
+                    .is_none_or(|entry| position >= entry.source)
+                {
+                    assert_eq!(
+                        table.map(position),
+                        expected.0,
+                        "{} public map at {position}",
+                        case.name
+                    );
+                }
+                queries += 1;
+            }
+        }
+        assert_eq!(queries, 34);
+    }
 
     #[test]
     fn empty_rift_table() {

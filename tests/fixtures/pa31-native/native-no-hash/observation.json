@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "dll_sha256": "b2abf7125b94c5061f4044f747e23477237cb28c7a25ceae74f3d6dcbc887958",
+  "harness_sha256": "43660a32b70329b9bfd3bb2da1cdc36feb809ec7b811a00306598ea111531803",
+  "operation": "create-no-hash",
+  "native_create_flags": 268435456,
+  "hash_algorithm": 0,
+  "create_ok": false,
+  "create_error": 0
+}

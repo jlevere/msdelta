@@ -1,10 +1,9 @@
 //! CLR IL token remapping used by the managed disassembly transform.
 
 use crate::pe::cli::map::CliMapModel;
-use crate::pe::cli::metadata::{CliColumnValue, CliMetadataModel};
+use crate::pe::cli::metadata::CliMetadataModel;
 use crate::pe::cli::method::cli_method_bodies;
-use crate::pe::cli::schema::{table, CliSchemaFlavor, HeapKind};
-use crate::pe::cli::tokens::StringsHeapOffset;
+use crate::pe::cli::schema::{table, CliSchemaFlavor};
 use crate::pe::parse::PeInfo;
 use crate::{Error, Result};
 
@@ -16,17 +15,50 @@ enum IlOperand {
     Token,
 }
 
+#[derive(Clone, Copy)]
+enum MethodWalk {
+    ClassicNative,
+    Cli4Compatibility,
+}
+
 pub(crate) fn transform_cli_disasm_tokens(
     image: &mut [u8],
     pe: &PeInfo,
     metadata: &CliMetadataModel,
     cli_map: &CliMapModel,
 ) -> usize {
+    transform_method_tokens(image, pe, metadata, cli_map, MethodWalk::ClassicNative)
+}
+
+fn transform_method_tokens(
+    image: &mut [u8],
+    pe: &PeInfo,
+    metadata: &CliMetadataModel,
+    cli_map: &CliMapModel,
+    walk: MethodWalk,
+) -> usize {
     let bodies = cli_method_bodies(image, pe, metadata);
-    let constructor_map = constructor_cli_map(cli_map);
+    // The native classic transform iterates one-based MethodDef RIDs strictly
+    // below the stored row count. The final method is left untouched, regardless
+    // of its name; constructors within the visited range use the full token map.
+    // Keep this compatibility boundary local to this transform, not enumeration.
+    let method_limit = metadata.row_counts[table::METHOD_DEF as usize];
+    // CLI4 has no equivalent native stage capture in this change. Preserve its
+    // existing wrapper policy rather than exporting classic-format evidence to
+    // it: inclusive enumeration and the prior constructor token restriction.
+    let cli4_constructor_map = if matches!(walk, MethodWalk::Cli4Compatibility) {
+        let mut map = CliMapModel::default();
+        map.tables[table::METHOD_DEF as usize] = cli_map.tables[table::METHOD_DEF as usize].clone();
+        Some(map)
+    } else {
+        None
+    };
     let mut rewrites = 0usize;
 
     for body in bodies {
+        if matches!(walk, MethodWalk::ClassicNative) && body.rid >= method_limit {
+            continue;
+        }
         let code_start = body.file_offset.saturating_add(body.header_size);
         let Some(code_end) = code_start.checked_add(body.code_size) else {
             continue;
@@ -34,11 +66,10 @@ pub(crate) fn transform_cli_disasm_tokens(
         if code_end > image.len() {
             continue;
         }
-        let method_map = if is_constructor_body(image, metadata, body.rid) {
-            &constructor_map
-        } else {
-            cli_map
-        };
+        let method_map = cli4_constructor_map
+            .as_ref()
+            .filter(|_| is_constructor_body(image, metadata, body.rid))
+            .unwrap_or(cli_map);
         rewrites += transform_il_tokens(&mut image[code_start..code_end], method_map);
     }
 
@@ -57,7 +88,13 @@ pub(crate) fn transform_cli4_disasm_tokens(
         ));
     }
 
-    Ok(transform_cli_disasm_tokens(image, pe, metadata, cli_map))
+    Ok(transform_method_tokens(
+        image,
+        pe,
+        metadata,
+        cli_map,
+        MethodWalk::Cli4Compatibility,
+    ))
 }
 
 pub(crate) fn transform_il_tokens(il: &mut [u8], cli_map: &CliMapModel) -> usize {
@@ -144,6 +181,9 @@ fn map_rid(rift: &crate::lzx::rift::RiftTable, rid: u32) -> u32 {
 }
 
 fn is_constructor_body(image: &[u8], metadata: &CliMetadataModel, method_rid: u32) -> bool {
+    use crate::pe::cli::metadata::CliColumnValue;
+    use crate::pe::cli::schema::HeapKind;
+    use crate::pe::cli::tokens::StringsHeapOffset;
     let Ok(row) = metadata.table_row_by_id(image, table::METHOD_DEF, method_rid) else {
         return false;
     };
@@ -158,22 +198,6 @@ fn is_constructor_body(image: &[u8], metadata: &CliMetadataModel, method_rid: u3
         metadata.strings(image, StringsHeapOffset::new(offset)),
         Ok(".ctor" | ".cctor")
     )
-}
-
-fn constructor_cli_map(cli_map: &CliMapModel) -> CliMapModel {
-    // KNOWN-INCORRECT HEURISTIC. Genuine's CliDisasm (Ghidra 0x180015920) walks
-    // EVERY method body uniformly and remaps all token operands through the full
-    // CliMap -- there is no constructor special case. We confirmed this against a
-    // lab-dumped genuine T(source): removing this restriction takes the matrix
-    // fixture's IL-token diffs 220 -> 1. It is kept ONLY as a band-aid: dropping
-    // it currently regresses the synthetic cli-interface-impl fixture (a separate
-    // unfinished issue in the per-kind blob walker / CliMap rift), so removing it
-    // in isolation trades one fixture for another. Remove together with the blob
-    // walker fix. See managed-tail-diagnosis.
-    let mut constructor_map = CliMapModel::default();
-    constructor_map.tables[table::METHOD_DEF as usize] =
-        cli_map.tables[table::METHOD_DEF as usize].clone();
-    constructor_map
 }
 
 // IL opcode operand classification, cross-checked byte-for-byte against genuine
@@ -385,7 +409,7 @@ mod tests {
     }
 
     #[test]
-    fn cli_disasm_transform_preserves_constructor_memberrefs() {
+    fn cli_disasm_transform_leaves_final_method_unchanged() {
         let root = managed_native_corpus_dir();
         if !root.exists() {
             return;
@@ -411,12 +435,13 @@ mod tests {
                 continue;
             }
             constructors += 1;
+            assert_eq!(body.rid, metadata.row_counts[table::METHOD_DEF as usize]);
             let code_start = body.file_offset + body.header_size;
             let code_end = code_start + body.code_size;
             assert_eq!(
                 &transformed[code_start..code_end],
                 &source[code_start..code_end],
-                "constructor body RID {} should preserve MemberRef operands",
+                "final method RID {} should remain outside the native walk",
                 body.rid
             );
         }

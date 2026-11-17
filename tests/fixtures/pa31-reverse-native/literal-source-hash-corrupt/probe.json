@@ -1,0 +1,10 @@
+{
+  "control": "native-literal",
+  "native_control_sha256": "251457b3b7e5e2fec167a9054ae9d0f585931521350f377ab430c4757c9d8bed",
+  "payload_unchanged": true,
+  "native_noop_roundtrip_exact": true,
+  "mutation": {
+    "field": "source_hash",
+    "change": "flip first digest bit"
+  }
+}

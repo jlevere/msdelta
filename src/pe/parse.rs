@@ -215,6 +215,10 @@ impl PeOptionalHeaderKind {
         0x38
     }
 
+    pub const fn size_of_headers_relative_offset(self) -> usize {
+        0x3c
+    }
+
     pub const fn checksum_relative_offset(self) -> usize {
         0x40
     }
@@ -324,6 +328,11 @@ impl PeHeaderLayout {
     pub fn size_of_image_offset(self) -> Option<usize> {
         self.optional_header_offset
             .checked_add(self.optional_header_kind.size_of_image_relative_offset())
+    }
+
+    pub fn size_of_headers_offset(self) -> Option<usize> {
+        self.optional_header_offset
+            .checked_add(self.optional_header_kind.size_of_headers_relative_offset())
     }
 
     pub fn checksum_offset(self) -> Option<usize> {

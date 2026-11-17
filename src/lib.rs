@@ -42,7 +42,7 @@ pub enum Error {
     BitstreamExhausted { needed: u32, available: u32 },
     #[error("invalid variable-length integer encoding")]
     InvalidVarInt,
-    #[error("target hash too large ({size} bytes, max {max})")]
+    #[error("delta hash too large ({size} bytes, max {max})")]
     HashTooLarge { size: usize, max: usize },
     #[error("malformed stream: {0}")]
     Malformed(&'static str),
@@ -53,6 +53,8 @@ pub enum Error {
     Unsupported(&'static str),
     #[error("target hash mismatch (expected {expected}, got {got})")]
     HashMismatch { expected: String, got: String },
+    #[error("source hash mismatch (expected {expected}, got {got})")]
+    SourceHashMismatch { expected: String, got: String },
     #[error("PA19: {0}")]
     Pa19(String),
     #[error("base manifest extraction: {0}")]

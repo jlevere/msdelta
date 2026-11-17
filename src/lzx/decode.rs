@@ -141,9 +141,8 @@ pub(super) fn read_compression_lengths(
 /// from, or `-1` for a literal supplied by the patch. Bytes copied from the
 /// already-reconstructed `output` (LZ back-references) inherit the copy-source
 /// of the region they copy, so the reference provenance propagates through
-/// back-references. This both flags copied-from-reference bytes (`>= 0`) -- the
-/// genuine "transform marker" gate -- and, by inverting against a known target,
-/// reconstructs genuine's transformed source `T(source)` at every copied offset.
+/// back-references. This records reference-derived bytes (`>= 0`) separately
+/// from literal-derived bytes; it does not represent PE structural ownership.
 /// Copy `len` bytes into `output` for one match at output position `dst_pos`
 /// with `distance` (source = dst_pos - distance). The source range may lie in
 /// the reference (`< ref_len`), in the already-decoded output (`>= ref_len`,
@@ -232,6 +231,8 @@ pub(super) fn decompress_into(
     let mut reader = BitReader::new(patch_data)?;
 
     let mut rift_table = rift::RiftTable::from_reader(&mut reader)?;
+    #[cfg(test)]
+    crate::pa30::pipeline_tests::record_rift("PatchRift", "after", &rift_table);
 
     // Merge with caller-provided rift (from PE preprocessing)
     if let Some(cr) = caller_rift {
@@ -239,6 +240,8 @@ pub(super) fn decompress_into(
             rift_table.entries.push(*e);
         }
     }
+    #[cfg(test)]
+    crate::pa30::pipeline_tests::record_rift("MergedRift", "before-sort", &rift_table);
 
     // Add boundary entry at source_size (as ApplyForward does in msdelta.dll)
     let ref_len = reference.len();
@@ -247,6 +250,8 @@ pub(super) fn decompress_into(
         target: 0,
     });
     rift_table.entries.sort_by_key(|e| e.source);
+    #[cfg(test)]
+    crate::pa30::pipeline_tests::record_rift("OffsetRiftInput", "after", &rift_table);
     let ort = rift::OffsetRiftTable::from_rift_table(&rift_table);
 
     let cf_simple = reader.read_bits(1)? != 0;

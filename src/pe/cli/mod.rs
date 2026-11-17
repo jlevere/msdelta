@@ -17,3 +17,7 @@ pub(crate) mod rift;
 pub(crate) mod schema;
 pub(crate) mod signature;
 pub(crate) mod tokens;
+pub(crate) mod transform;
+
+#[cfg(test)]
+mod native_signature_tests;

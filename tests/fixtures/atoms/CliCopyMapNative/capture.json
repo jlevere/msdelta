@@ -1,0 +1,22 @@
+{"schema":1,"dll_sha256":"ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb","harness_sha256":"66b3419ae7d3462598bbe37191a5778e611e8f81bc3d58ce7dd8fd057471cc7b","loaded_dll_sha256":"ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb","scope":"fixed-width AddTableMap only; synthetic layouts with preallocated output","cases":[
+{"name":"empty","rva":124304,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[],"output":[["1054","908"]]},
+{"name":"memberref-first-row","rva":124304,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[["0","0"],["1","2"],["3","5"]],"output":[["1060","908"],["1078","920"]]},
+{"name":"first-row-shifted","rva":124304,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[["0","0"],["1","3"],["3","5"]],"output":[["1066","908"],["1078","920"]]},
+{"name":"identity-first-row","rva":124304,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[["0","0"],["2","3"]],"output":[["1054","908"],["1066","914"]]},
+{"name":"before-first-wrap","rva":124304,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[["2","3"],["4","7"]],"output":[["1072","908"],["1066","914"],["1090","926"]]},
+{"name":"zero-only","rva":124304,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[["0","2"]],"output":[["1066","908"]]},
+{"name":"duplicate-first-row","rva":124304,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[["0","0"],["1","2"],["1","4"],["3","5"]],"output":[["1072","908"],["1078","920"]]},
+{"name":"source-sentinel","rva":124304,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[["0","0"],["1","2"],["4294967295","7"],["4294967296","8"]],"output":[["1060","908"],["1090","25769804672"]]},
+{"name":"negative-prefix","rva":124304,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[["-2","0"],["0","2"],["1","3"],["4","8"]],"output":[["1066","908"],["1096","926"]]},
+{"name":"guid-width","rva":124304,"source_base":"1224","target_base":"1548","row_width":16,"input_unchanged":true,"input":[["0","0"],["1","2"],["3","5"]],"output":[["1564","1224"],["1612","1256"]]},
+{"name":"empty","rva":124624,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[],"output":[["1054","908"]]},
+{"name":"memberref-first-row","rva":124624,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[["0","0"],["1","2"],["3","5"]],"output":[["1060","908"],["1078","920"]]},
+{"name":"first-row-shifted","rva":124624,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[["0","0"],["1","3"],["3","5"]],"output":[["1066","908"],["1078","920"]]},
+{"name":"identity-first-row","rva":124624,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[["0","0"],["2","3"]],"output":[["1054","908"],["1066","914"]]},
+{"name":"before-first-wrap","rva":124624,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[["2","3"],["4","7"]],"output":[["1072","908"],["1066","914"],["1090","926"]]},
+{"name":"zero-only","rva":124624,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[["0","2"]],"output":[["1066","908"]]},
+{"name":"duplicate-first-row","rva":124624,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[["0","0"],["1","2"],["1","4"],["3","5"]],"output":[["1072","908"],["1078","920"]]},
+{"name":"source-sentinel","rva":124624,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[["0","0"],["1","2"],["4294967295","7"],["4294967296","8"]],"output":[["1060","908"],["1090","25769804672"]]},
+{"name":"negative-prefix","rva":124624,"source_base":"908","target_base":"1054","row_width":6,"input_unchanged":true,"input":[["-2","0"],["0","2"],["1","3"],["4","8"]],"output":[["1066","908"],["1096","926"]]},
+{"name":"guid-width","rva":124624,"source_base":"1224","target_base":"1548","row_width":16,"input_unchanged":true,"input":[["0","0"],["1","2"],["3","5"]],"output":[["1564","1224"],["1612","1256"]]}
+]}

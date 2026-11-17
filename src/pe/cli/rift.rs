@@ -227,7 +227,28 @@ fn build_cli_compression_rift_impl(
         let Some(target_table_file_offset) = target_metadata.table_file_offsets[table_id] else {
             continue;
         };
-        append_cli_table_rift_entries(
+        // Equal total row sizes alone do not establish a fixed layout: one
+        // index can widen while another narrows. Native dispatch also compares
+        // every column width before selecting the fixed-width helper.
+        let same_columns = table_schema(table_id as u8).is_some_and(|schema| {
+            schema.columns.iter().all(|column| {
+                column_width(
+                    column.kind,
+                    &source_metadata.row_counts,
+                    source_metadata.heap_widths,
+                ) == column_width(
+                    column.kind,
+                    &target_metadata.row_counts,
+                    target_metadata.heap_widths,
+                )
+            })
+        });
+        let append_rows = if same_columns {
+            append_cli_table_rift_entries
+        } else {
+            append_cli_table_row_breakpoints
+        };
+        append_rows(
             &mut entries,
             source_table_file_offset as i64,
             target_table_file_offset as i64,
@@ -352,6 +373,77 @@ fn append_optional_guid_table(
 }
 
 fn append_cli_table_rift_entries(
+    entries: &mut Vec<RiftEntry>,
+    source_table_file_offset: i64,
+    target_table_file_offset: i64,
+    source_row_size: u32,
+    target_row_size: u32,
+    table_map: &RiftTable,
+) {
+    if source_row_size == 0 || target_row_size == 0 {
+        return;
+    }
+
+    if table_map.entries.is_empty() {
+        entries.push(RiftEntry {
+            source: target_table_file_offset,
+            target: source_table_file_offset,
+        });
+        return;
+    }
+
+    if source_row_size == target_row_size {
+        // Native fixed-width AddTableMap starts at the displacement active for
+        // RID 1. A RID 0 sentinel is not a separate row and must not introduce
+        // a target-table-start anchor when the first row maps elsewhere.
+        // Both classic (RVA 0x1e590) and CLI4 (0x1e6d0) use this rule.
+        let first_later_row = table_map
+            .entries
+            .iter()
+            .position(|entry| entry.source > 1)
+            .unwrap_or(table_map.entries.len());
+        let initial = table_map.entries[if first_later_row == 0 {
+            table_map.entries.len() - 1
+        } else {
+            first_later_row - 1
+        }];
+        let width = i64::from(source_row_size);
+        entries.push(RiftEntry {
+            source: target_table_file_offset.wrapping_add(
+                initial
+                    .target
+                    .wrapping_sub(initial.source)
+                    .wrapping_mul(width),
+            ),
+            target: source_table_file_offset,
+        });
+        for entry in &table_map.entries[first_later_row..] {
+            if entry.source > CLI_MAP_SOURCE_SENTINEL {
+                break;
+            }
+            entries.push(RiftEntry {
+                source: target_table_file_offset
+                    .wrapping_add(entry.target.wrapping_sub(1).wrapping_mul(width)),
+                target: source_table_file_offset
+                    .wrapping_add(entry.source.wrapping_sub(1).wrapping_mul(width)),
+            });
+        }
+        return;
+    }
+
+    append_cli_table_row_breakpoints(
+        entries,
+        source_table_file_offset,
+        target_table_file_offset,
+        source_row_size,
+        target_row_size,
+        table_map,
+    );
+}
+
+// Preserve the existing changed-column implementation outside the fixed-width
+// native contract. Width-changing row expansion remains a separate frontier.
+fn append_cli_table_row_breakpoints(
     entries: &mut Vec<RiftEntry>,
     source_table_file_offset: i64,
     target_table_file_offset: i64,
@@ -560,6 +652,144 @@ mod tests {
     use serde_json::Value;
     use std::collections::BTreeSet;
     use std::path::PathBuf;
+
+    #[test]
+    fn fixed_width_table_rift_matches_native_classic_and_cli4() {
+        use serde::Deserialize;
+        use sha2::{Digest, Sha256};
+        #[derive(Deserialize)]
+        struct Case {
+            name: String,
+            rva: u32,
+            source_base: String,
+            target_base: String,
+            row_width: u32,
+            input_unchanged: bool,
+            input: Vec<[String; 2]>,
+            output: Vec<[String; 2]>,
+        }
+        #[derive(Deserialize)]
+        struct Capture {
+            schema: u32,
+            dll_sha256: String,
+            loaded_dll_sha256: String,
+            harness_sha256: String,
+            cases: Vec<Case>,
+        }
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let directory = root.join("tests/fixtures/atoms/CliCopyMapNative");
+        let provenance: Value =
+            serde_json::from_slice(&std::fs::read(directory.join("provenance.json")).unwrap())
+                .unwrap();
+        let capture_bytes = std::fs::read(directory.join("capture.json")).unwrap();
+        let hash = |bytes: &[u8]| {
+            Sha256::digest(bytes)
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
+        };
+        assert_eq!(hash(&capture_bytes), provenance["capture_sha256"]);
+        assert_eq!(
+            hash(&std::fs::read(root.join(provenance["source_file"].as_str().unwrap())).unwrap()),
+            provenance["source_sha256"]
+        );
+        let capture: Capture = serde_json::from_slice(&capture_bytes).unwrap();
+        assert_eq!(capture.schema, 1);
+        assert_eq!(
+            capture.dll_sha256,
+            "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+        );
+        assert_eq!(capture.loaded_dll_sha256, capture.dll_sha256);
+        assert_eq!(capture.dll_sha256, provenance["dll_sha256"]);
+        assert_eq!(capture.harness_sha256, provenance["harness_sha256"]);
+        let names = [
+            "empty",
+            "memberref-first-row",
+            "first-row-shifted",
+            "identity-first-row",
+            "before-first-wrap",
+            "zero-only",
+            "duplicate-first-row",
+            "source-sentinel",
+            "negative-prefix",
+            "guid-width",
+        ];
+        let expected_inventory: BTreeSet<_> = [0x1e590, 0x1e6d0]
+            .into_iter()
+            .flat_map(|rva| names.map(|name| (rva, name.to_owned())))
+            .collect();
+        assert_eq!(capture.cases.len(), expected_inventory.len());
+        assert_eq!(
+            capture
+                .cases
+                .iter()
+                .map(|case| (case.rva, case.name.clone()))
+                .collect::<BTreeSet<_>>(),
+            expected_inventory
+        );
+        for case in capture.cases {
+            assert!(case.input_unchanged);
+            let parse_pairs = |pairs: &[[String; 2]]| -> Vec<(i64, i64)> {
+                pairs
+                    .iter()
+                    .map(|p| (p[0].parse().unwrap(), p[1].parse().unwrap()))
+                    .collect()
+            };
+            let mut entries = Vec::new();
+            append_cli_table_rift_entries(
+                &mut entries,
+                case.source_base.parse().unwrap(),
+                case.target_base.parse().unwrap(),
+                case.row_width,
+                case.row_width,
+                &rift(&parse_pairs(&case.input)),
+            );
+            // Compare the helper's append sequence, including the deliberately
+            // unsorted before-first control, before any Rust sorting/reduction.
+            assert_eq!(
+                pairs(&RiftTable { entries }),
+                parse_pairs(&case.output),
+                "{} at RVA {:x}",
+                case.name,
+                case.rva
+            );
+        }
+    }
+
+    #[test]
+    fn interface_memberref_copy_map_starts_at_first_mapped_row() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/atoms/PePipelineExistingNative/cli-interface-impl");
+        let source = std::fs::read(path.join("source.bin")).unwrap();
+        let delta = std::fs::read(path.join("delta.pa30")).unwrap();
+        let parsed = crate::pa30::parse(&delta).unwrap();
+        let pp = crate::pa30::preprocess::parse_pe_preprocess(&parsed.preprocess).unwrap();
+        let source_metadata =
+            parse_cli_metadata_from_pe(&source, CliSchemaFlavor::Classic).unwrap();
+        let target_metadata = &pp.target_info.target_metadata;
+        let id = crate::pe::cli::schema::table::MEMBER_REF as usize;
+        assert_eq!(source_metadata.table_file_offsets[id], Some(908));
+        assert_eq!(target_metadata.table_file_offsets[id], Some(1054));
+        assert_eq!(
+            (source_metadata.row_sizes[id], target_metadata.row_sizes[id]),
+            (6, 6)
+        );
+        assert_eq!(pairs(&pp.cli_map.tables[id]), [(0, 0), (1, 2), (3, 5)]);
+        let map = build_cli_compression_rift(&source_metadata, target_metadata, &pp.cli_map);
+        assert!(!map.entries.contains(&RiftEntry {
+            source: 1054,
+            target: 908
+        }));
+        // Native composed map keeps the preceding InterfaceImpl interval until
+        // MemberRef RID 1 maps to target RID 2. These six positions previously
+        // mapped eight bytes too early even though the sample output matched.
+        for offset in 1054..1060 {
+            assert_eq!(eval(&map, offset), 916 + offset - 1054);
+        }
+        for offset in 1060..1066 {
+            assert_eq!(eval(&map, offset), 908 + offset - 1060);
+        }
+    }
 
     const MANAGED_NATIVE_CASES: &[&str] = &[
         "cli-const-string",

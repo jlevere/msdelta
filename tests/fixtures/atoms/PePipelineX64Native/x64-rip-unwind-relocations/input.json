@@ -1,0 +1,79 @@
+{
+  "schema": 1,
+  "source": {
+    "text_rva": 4096,
+    "data_rva": 12288,
+    "image_base": 5368709120,
+    "rip_instructions": [
+      {
+        "name": "load",
+        "rva": 4128,
+        "file_offset": 1056,
+        "length": 7,
+        "operand_file_offset": 1059,
+        "destination_rva": 12544
+      },
+      {
+        "name": "address",
+        "rva": 4135,
+        "file_offset": 1063,
+        "length": 7,
+        "operand_file_offset": 1066,
+        "destination_rva": 12800
+      }
+    ],
+    "runtime_function_file_offset": 6144,
+    "runtime_function": {
+      "begin": 4128,
+      "end": 4143,
+      "unwind": 13056
+    },
+    "unwind_header_file_offset": 2304,
+    "handler_slot_file_offset": 2308,
+    "handler_rva": 4352,
+    "relocation_operand_file_offsets": [
+      1568,
+      1576,
+      5616,
+      5624
+    ]
+  },
+  "target": {
+    "text_rva": 8192,
+    "data_rva": 20480,
+    "image_base": 9663676416,
+    "rip_instructions": [
+      {
+        "name": "load",
+        "rva": 8224,
+        "file_offset": 1056,
+        "length": 7,
+        "operand_file_offset": 1059,
+        "destination_rva": 20736
+      },
+      {
+        "name": "address",
+        "rva": 8231,
+        "file_offset": 1063,
+        "length": 7,
+        "operand_file_offset": 1066,
+        "destination_rva": 20992
+      }
+    ],
+    "runtime_function_file_offset": 8192,
+    "runtime_function": {
+      "begin": 8224,
+      "end": 8239,
+      "unwind": 21248
+    },
+    "unwind_header_file_offset": 2816,
+    "handler_slot_file_offset": 2820,
+    "handler_rva": 8448,
+    "relocation_operand_file_offsets": [
+      2080,
+      2088,
+      6128,
+      6136
+    ]
+  }
+}

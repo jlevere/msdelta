@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "dll_sha256": "b2abf7125b94c5061f4044f747e23477237cb28c7a25ceae74f3d6dcbc887958",
+  "dll_file_version": "5.00 (WinBuild.160101.0800)",
+  "oracle_sha256": "43660a32b70329b9bfd3bb2da1cdc36feb809ec7b811a00306598ea111531803",
+  "source_sha256": {
+    "oracle.c": "33fc39b0fffdc5358479b0a31ea32c2dd2e89c64467fee16ab39221746e15e95",
+    "make_probes.py": "8f620b665994d7bee9dcb14e2a36bd459f87e599b42856b1b59e915b0facf3d1",
+    "controls.ps1": "55e42fec66c482458b2c363352de471467e8c2bf35f09eb861905b65b26c5891",
+    "probe.ps1": "895709d22518948bcf2bec12cde394147f6c7b5d29d4518b767bbdaf97c57140"
+  },
+  "input_design": "RAW source is 1024 C bytes; target is 256 D bytes, independent of source copies.",
+  "next_stage": "Run make_probes.py on native-sha256, then probe.ps1 on generated cases."
+}

@@ -1,0 +1,197 @@
+{
+  "schema": 1,
+  "relocation_directory": {
+    "rva": 0,
+    "size": 0
+  },
+  "tail_remaining": 5,
+  "source_image_base": 2147483648,
+  "target_image_base": 2415919104,
+  "source_size_of_image": 16384,
+  "target_size_of_image": 20480,
+  "size_of_headers": 512,
+  "source_sites": [
+    {
+      "name": "header-pointer-pattern",
+      "file_offset": 80,
+      "value": 2147492096,
+      "category": "before-scan"
+    },
+    {
+      "name": "header-last-word",
+      "file_offset": 508,
+      "value": 2147492096,
+      "category": "before-scan"
+    },
+    {
+      "name": "first-scanned-word",
+      "file_offset": 512,
+      "value": 2147492096,
+      "category": "code-pointer"
+    },
+    {
+      "name": "unaligned-code-immediate",
+      "file_offset": 545,
+      "value": 2147492352,
+      "category": "code-pointer"
+    },
+    {
+      "name": "nonexec-data-pointer",
+      "file_offset": 1056,
+      "value": 2147492096,
+      "category": "data-pointer"
+    },
+    {
+      "name": "unaligned-data-pointer",
+      "file_offset": 1065,
+      "value": 2147492352,
+      "category": "data-pointer"
+    },
+    {
+      "name": "header-rva-pointee",
+      "file_offset": 1088,
+      "value": 2147483649,
+      "category": "header-target"
+    },
+    {
+      "name": "virtual-only-pointee",
+      "file_offset": 1096,
+      "value": 2147497984,
+      "category": "unbacked-image-target"
+    },
+    {
+      "name": "equal-image-base",
+      "file_offset": 1152,
+      "value": 2147483648,
+      "category": "exclusive-lower-bound"
+    },
+    {
+      "name": "equal-image-end",
+      "file_offset": 1160,
+      "value": 2147500032,
+      "category": "exclusive-upper-bound"
+    },
+    {
+      "name": "below-image-base",
+      "file_offset": 1168,
+      "value": 2147483647,
+      "category": "outside-image"
+    },
+    {
+      "name": "above-image-end",
+      "file_offset": 1176,
+      "value": 2147500033,
+      "category": "outside-image"
+    },
+    {
+      "name": "structural-timestamp-pattern",
+      "file_offset": 2308,
+      "value": 2147492096,
+      "category": "structural-owned"
+    },
+    {
+      "name": "raw-gap-pointer",
+      "file_offset": 5376,
+      "value": 2147492096,
+      "category": "outside-sections"
+    },
+    {
+      "name": "scan-tail-boundary",
+      "file_offset": 6651,
+      "value": 2147492096,
+      "category": "end-minus-5"
+    }
+  ],
+  "target_sites": [
+    {
+      "name": "header-pointer-pattern",
+      "file_offset": 80,
+      "value": 2147492096,
+      "category": "before-scan"
+    },
+    {
+      "name": "header-last-word",
+      "file_offset": 508,
+      "value": 2147492096,
+      "category": "before-scan"
+    },
+    {
+      "name": "first-scanned-word",
+      "file_offset": 512,
+      "value": 2415931648,
+      "category": "code-pointer"
+    },
+    {
+      "name": "unaligned-code-immediate",
+      "file_offset": 545,
+      "value": 2415931904,
+      "category": "code-pointer"
+    },
+    {
+      "name": "nonexec-data-pointer",
+      "file_offset": 1568,
+      "value": 2415931648,
+      "category": "data-pointer"
+    },
+    {
+      "name": "unaligned-data-pointer",
+      "file_offset": 1577,
+      "value": 2415931904,
+      "category": "data-pointer"
+    },
+    {
+      "name": "header-rva-pointee",
+      "file_offset": 1600,
+      "value": 2415919105,
+      "category": "header-target"
+    },
+    {
+      "name": "virtual-only-pointee",
+      "file_offset": 1608,
+      "value": 2415937536,
+      "category": "unbacked-image-target"
+    },
+    {
+      "name": "equal-image-base",
+      "file_offset": 1664,
+      "value": 2147483648,
+      "category": "exclusive-lower-bound"
+    },
+    {
+      "name": "equal-image-end",
+      "file_offset": 1672,
+      "value": 2147500032,
+      "category": "exclusive-upper-bound"
+    },
+    {
+      "name": "below-image-base",
+      "file_offset": 1680,
+      "value": 2147483647,
+      "category": "outside-image"
+    },
+    {
+      "name": "above-image-end",
+      "file_offset": 1688,
+      "value": 2147500033,
+      "category": "outside-image"
+    },
+    {
+      "name": "structural-timestamp-pattern",
+      "file_offset": 2820,
+      "value": 2147492096,
+      "category": "structural-owned"
+    },
+    {
+      "name": "raw-gap-pointer",
+      "file_offset": 5888,
+      "value": 2415931648,
+      "category": "outside-sections"
+    },
+    {
+      "name": "scan-tail-boundary",
+      "file_offset": 7675,
+      "value": 2415931648,
+      "category": "end-minus-5"
+    }
+  ]
+}

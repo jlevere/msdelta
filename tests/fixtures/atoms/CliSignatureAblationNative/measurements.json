@@ -1,0 +1,94 @@
+{
+  "schema": 1,
+  "only_changed_actual_header_flag": 32768,
+  "normal_delta_reproduces_baseline": true,
+  "identical_source_and_target": true,
+  "measurements": {
+    "normal": {
+      "flags": 57854,
+      "delta_size": 493,
+      "preprocess_size": 303,
+      "patch_size": 147,
+      "target_signature_hex": "66e7649495d9ed2fdfce3e5420233881",
+      "delta_sha256": "123f555a77089ec2d7622aca56cdacf66f413f52210c62c6e1e29ec99e503be5",
+      "transformed_source_sha256": "e32c138da2789736d939bca4b4ac19847ce4358530f13ef5c7e7520b51636ce9",
+      "native_creation": {
+        "schema": 1,
+        "mode": "normal",
+        "reset_flags": 0,
+        "dll_sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb",
+        "harness_sha256": "140be86d047efeaa658208eb88777e68f82d54521d58d2a1085af7c684d92c4e",
+        "create_ok": true,
+        "create_error": 0,
+        "apply_ok": true,
+        "apply_error": 0,
+        "output_equal": true,
+        "inputs_unchanged": true,
+        "source_sha256": "7dec1e1d80cc0eb6a0d1ad7b054a10592d30038e6693d71fcba19fed78dd23f4",
+        "target_sha256": "fcd59b16c17781758d14e607c7bdb1caa217963959ed12419e2cfc482fb59fc7",
+        "delta_sha256": "123f555a77089ec2d7622aca56cdacf66f413f52210c62c6e1e29ec99e503be5"
+      }
+    },
+    "no-metadata": {
+      "flags": 25086,
+      "delta_size": 677,
+      "preprocess_size": 301,
+      "patch_size": 333,
+      "target_signature_hex": "66e7649495d9ed2fdfce3e5420233881",
+      "delta_sha256": "e435cb6cfd8372763a09518aa16935e1c3abbded58dcc70387bac274b04c737f",
+      "transformed_source_sha256": "34523e2ed447c4b0be3b624bde4c548a121fafd8f1ce8a173a79f202e03024e0",
+      "native_creation": {
+        "schema": 1,
+        "mode": "no-metadata",
+        "reset_flags": 32768,
+        "dll_sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb",
+        "harness_sha256": "140be86d047efeaa658208eb88777e68f82d54521d58d2a1085af7c684d92c4e",
+        "create_ok": true,
+        "create_error": 0,
+        "apply_ok": true,
+        "apply_error": 0,
+        "output_equal": true,
+        "inputs_unchanged": true,
+        "source_sha256": "7dec1e1d80cc0eb6a0d1ad7b054a10592d30038e6693d71fcba19fed78dd23f4",
+        "target_sha256": "fcd59b16c17781758d14e607c7bdb1caa217963959ed12419e2cfc482fb59fc7",
+        "delta_sha256": "e435cb6cfd8372763a09518aa16935e1c3abbded58dcc70387bac274b04c737f"
+      }
+    }
+  },
+  "transformed_source_different_bytes": 149,
+  "reusable_signature_candidates": [
+    {
+      "table": "TypeSpec",
+      "rid": 2,
+      "name": "",
+      "target_rid": 2,
+      "source_file_offset": 2455,
+      "target_file_offset": 2547,
+      "length": 6,
+      "signature_hex": "151238011209",
+      "claim": "equal reusable range; copy-use requires decoder trace"
+    },
+    {
+      "table": "TypeSpec",
+      "rid": 3,
+      "name": "",
+      "target_rid": 3,
+      "source_file_offset": 2462,
+      "target_file_offset": 2554,
+      "length": 3,
+      "signature_hex": "1d123c",
+      "claim": "equal reusable range; copy-use requires decoder trace"
+    },
+    {
+      "table": "MethodDef",
+      "rid": 13,
+      "name": "PlainDefinition",
+      "target_rid": 15,
+      "source_file_offset": 2378,
+      "target_file_offset": 2470,
+      "length": 6,
+      "signature_hex": "0001123c123c",
+      "claim": "equal reusable range; copy-use requires decoder trace"
+    }
+  ]
+}

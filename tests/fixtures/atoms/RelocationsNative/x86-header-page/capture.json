@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "dll_sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb",
+  "transform_rva": 154176,
+  "harness_sha256": "222f949201dd3d99dc77fe450e671b4ef3ca8161e400019b511de1c4f0885993",
+  "delta_origin": "native CreateDeltaB",
+  "observation_scope": "synchronous caller thread",
+  "source_sha256": "3e0ce71312aa536523f94aeedfcf80b773bcc726a4b3bb0faae971078f63d345",
+  "delta_sha256": "71514796921bbd3ed12ead13d3c9f83f5e5e7f3b6a4743e08304f1948933dc22",
+  "target_sha256": "1286374215560dbadb57815931ae4afe2eb6c61f948e0ae9f202cbe3c86aee22",
+  "target_base": 2147483648,
+  "directory_offset": 5120,
+  "directory_size": 16,
+  "directory_capacity": 512,
+  "rift_count": 2,
+  "used_count": 0,
+  "uninstrumented_output_equal": true,
+  "artifact_sha256": {
+    "before.bin": "3e0ce71312aa536523f94aeedfcf80b773bcc726a4b3bb0faae971078f63d345",
+    "after.bin": "aed4fc9e95febf41f2f68012b002f55c7dfb22d4c2e60246c1e9c606bde4e91c",
+    "marker-before.bin": "58480c2df23a5ed45ab13c196ea3c8c9a82514c5400c6e0724bd632a2cfb42e3",
+    "marker-after.bin": "58480c2df23a5ed45ab13c196ea3c8c9a82514c5400c6e0724bd632a2cfb42e3",
+    "rift.bin": "2d4bd4eb9c93c50389c6d811863eef07f3b235d2c7b45ee9fb5a46533fd47427",
+    "used-before.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "used-after.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

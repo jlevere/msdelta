@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "original_fixture": "tests/fixtures/atoms/Pa30CopyNative/x64-rva-preserved",
+  "source_sha256": "f79b12687fb11fedeb214f073e59ea588ceb1698c968987032088bf256a9b18f",
+  "delta_sha256": "da8ab5bd711bf54a7f01efed4a5df497628cf30ce240bd4482235969a0bd3c88",
+  "expected_sha256": "48db8fb05a420ef36a27d7fb29fd9778bfbed73e33dbd7da920341f8e9640eeb",
+  "original_provenance_file": "tests/fixtures/atoms/Pa30CopyNative/x64-rva-preserved/capture.json",
+  "original_provenance_sha256": "edcf289a21861f52d49070054e09c43e2f1af09a4677bd7f38d39d21eb3fd391"
+}

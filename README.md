@@ -1,6 +1,6 @@
 # msdelta
 
-Pure-Rust implementation of Microsoft's MSDelta binary patch format. Encodes and decodes PA30, PA31, and PA19 deltas — the format behind Windows Update, WinSxS manifest compression, MSP/MSU patches, and WSUSSCAN.cab.
+Pure-Rust implementation of Microsoft's MSDelta binary patch format. Encodes and decodes PA30 and PA31 deltas, with incomplete PA19 decoding — the formats behind Windows Update, WinSxS manifest compression, MSP/MSU patches, and WSUSSCAN.cab.
 
 No Windows dependencies. No C bindings. Just `&[u8]` in, `Vec<u8>` out.
 
@@ -49,7 +49,7 @@ msdelta create old.bin new.bin -o patch.delta --hash sha256
 # Apply a delta and also emit the reverse delta (target -> reference)
 msdelta reverse old.bin patch.delta -o reverse.delta --target new.bin
 
-# Inspect a delta header (works on raw PA30/PA31/PA19 or DCM)
+# Inspect a delta header (raw PA30/PA31 or DCM; PA19 parsing is incomplete)
 msdelta info core.manifest
 
 # Hash a buffer (--normalize zeroes volatile PE fields first)
@@ -75,13 +75,13 @@ msdelta = { version = "0.1", default-features = false }
 |-|--------|--------------------------|
 | **PA30** (primary format) | yes | yes |
 | **PA31** (extended header) | yes | yes |
-| **PA19** (legacy LZX) | yes | - |
+| **PA19** (legacy LZX) | incomplete | - |
 | **DCM** (manifest wrapper) | yes | yes |
 | **PseudoLzx** codec | yes | yes |
 | **BsDiff** codec | yes | yes |
 | **LZMS** codec | yes | yes |
-| **PE transforms** — native x86 / x64 | yes (byte-exact) | reconstructs (not byte-exact) |
-| **PE transforms** — managed classic CLI (.NET) | yes (byte-exact) | reconstructs (not byte-exact) |
+| **PE transforms** — native x86 / x64 | partial (658/659 bulk corpus fixtures) | self round-trip on decodable fixtures |
+| **PE transforms** — managed classic CLI (.NET) | partial (78/80 managed corpus fixtures) | reconstructs (not byte-exact) |
 | **PE transforms** — managed CLI4 (.NET) | no (rejected) | no |
 
 ### PE transforms
@@ -104,12 +104,11 @@ registry in [`docs/feature-atoms.tsv`](docs/feature-atoms.tsv). Native
 stage-oracle capture is planned in
 [`docs/frida-oracle-system.md`](docs/frida-oracle-system.md).
 
-**Decode** of native x86 / x64 PE deltas is complete and byte-exact (see status
-below). **Encode** of native PE now reconstructs the target: all 659 genuine
-targets in the corpus round-trip through this crate's decoder (0 broken), at
-~1.34x genuine's size. The output is **not yet byte-exact-identical** to genuine
-(matching genuine's exact preprocess rift and LZX parse is open work, tracked by
-the encode oracle); the header is byte-exact.
+**Decode** matches 658/659 bulk PE fixtures and 78/80 managed fixtures
+(736/739 combined). Remaining failures concern managed metadata signatures;
+passing final output does not establish every intermediate transformation.
+**Encode** reconstructs the targets accepted by the decoder in self round-trip
+checks; native acceptance and byte-identical encoding remain separate goals.
 
 | Transform (decode) | Status |
 |--------------------|--------|
@@ -123,22 +122,22 @@ the encode oracle); the header is byte-exact.
 | `TransformRelocations` (HIGHLOW + DIR64, block rebuild) | implemented |
 | `DisasmX64` (RIP-relative disp32) + `PdataX64` (RUNTIME_FUNCTION/unwind) | implemented |
 | Instruction disasm / `.pdata` — ARM / ARM64 | not implemented |
-| CLI metadata / disasm (.NET managed) | not implemented (rejected) |
+| CLI metadata / disasm (.NET managed) | classic CLI partial; CLI4 rejected |
 
 **Decode status, by artifact class:**
 
 - **RAW deltas** (express-LCU class): bit-exact — MD5-identical to `msdelta.dll`
   across all bundled DCM/PE manifest fixtures and **377/377** against a full
   Win11 24H2 LCU express PSF (baseless PA31).
-- **Native PE deltas** (x86 / x64, `file_type != 1`): **byte-exact** — verified
+- **Native PE deltas** (x86 / x64, `file_type != 1`): **partial** — verified
   identical to genuine across a curated diverse WinSxS matrix (**25/26**: DLLs,
   EXEs, `.mui`, keyboard layouts; i386 + amd64), each cross-checked by dumping
   genuine's intermediate `T(source)` and composed rift. An architecture-diverse
   subset is committed and gated in CI (`tests/pe_decode.rs`); the broader matrix /
   rift corpora run locally. At scale, a **659-fixture** genuine-delta corpus
-  decodes **651 byte-exact (98.8%)** hash-verified against genuine; the remaining
-  8 are a documented long-tail (below).
-- **Managed / .NET PE deltas (classic CLI)**: **decode is byte-exact** — verified
+  decodes **658 byte-exact** hash-verified against genuine; the remaining
+  failure is a managed assembly included in that corpus.
+- **Managed / .NET PE deltas (classic CLI)**: **decode is partial (78/80 managed corpus fixtures)** — also verified
   identical to genuine across 14 committed CLI fixtures (CI-gated; user strings,
   metadata growth, signatures, custom attributes, resources, generics, P/Invoke,
   amd64 managed, ...) and real `msil` assemblies in the reverse corpus. **Encode
@@ -146,12 +145,10 @@ the encode oracle); the header is byte-exact.
   the body is not yet byte-identical (the native parse/rift gap applies). The
   newer **CLI4** metadata branch is detected and **rejected** with
   `Error::Unsupported` (unimplemented) rather than decoded wrong.
-- **Long-tail native edges** (8 of the 659): a few binaries carry operand /
-  relocation relayout deltas (e.g. `.text` absolute-pointer and `.reloc` block
-  remaps) genuine applies that this crate does not yet reproduce exactly — these
-  surface as a **clean `HashMismatch` error** from `apply()` (which verifies the
-  embedded SHA-256 target hash), never silent corruption. ARM/ARM64
-  instruction/`.pdata` transforms are likewise unimplemented (no fixtures yet).
+- **Remaining PE gaps:** managed signature grammar and ownership markers remain
+  incomplete. Some passing files also differ at intermediate stages, including
+  an import transformation. ARM/ARM64 instruction and `.pdata` transforms are
+  unimplemented. Target hashes remain the final integrity check.
 
 **Encoder ↔ Windows compatibility is partial.** Note that
 `PA31` is **not** an `msdelta.dll` format at all — `msdelta.dll` (build 26100)
@@ -160,9 +157,9 @@ in **`UpdateCompression.dll`** / **`dpx.dll`**, which expose the same
 `ApplyDeltaB` and are the correct oracle for PA31 / SHA-256 deltas. A
 differential cross-check passes for **RAW PseudoLzx** (PA30 against `msdelta.dll`,
 PA31 against `UpdateCompression.dll`) at any size, with the identical-input and
-empty-target edge cases. For **native PE**, the encoder now reconstructs every
-genuine target (verified by re-decoding our own delta to the genuine bytes across
-all 659 corpus deltas) with a byte-exact header, but the body is not yet
+empty-target edge cases. For **native PE**, the encoder reconstructs accepted
+targets in self round-trip tests (verified by re-decoding our own delta; this
+does not establish native acceptance) with a byte-exact header, but the body is not yet
 byte-identical to genuine — the open work is matching genuine's exact preprocess
 rift and LZX parse. See
 [Known limitations](#known-limitations).
@@ -194,13 +191,13 @@ MSRV: 1.85
 
 ## Known limitations
 
-**Decode** (the primary use case) is complete for RAW, native x86 / x64 PE, and
-managed **classic CLI** (.NET) deltas. Not yet supported:
+**Decode** supports RAW and partially supports native x86 / x64 PE and managed
+**classic CLI** (.NET) deltas. Remaining limitations:
 
 - **Managed CLI4 (.NET)**: the newer CLI metadata branch (`file_type` 0x10-0x80)
   is detected and rejected (`Error::Unsupported`) rather than decoded wrong;
   validating it needs CLI4 ground truth (not in the local corpus). Classic CLI
-  (`file_type` 2/4/8 + CLR header) decodes byte-exact and encodes (reconstructs).
+  (`file_type` 2/4/8 + CLR header) has remaining signature grammar gaps.
   ARM / ARM64 instruction and `.pdata` transforms are likewise unimplemented (no
   fixtures yet).
 
@@ -210,8 +207,8 @@ managed **classic CLI** (.NET) deltas. Not yet supported:
 hashes and identical/empty-target edges. Still open:
 
 - **BsDiff** codec: our LZMS-wrapped container framing does not match genuine.
-- **Byte-exact PE encode**: native PE encode reconstructs every genuine target
-  (round-trip-verified across the 659-delta corpus; byte-exact header), but the
+- **Byte-exact PE encode**: native PE encode round-trips decodable targets
+  through our own decoder (undecodable fixtures are skipped), but the
   delta body is not yet byte-identical to genuine — matching genuine's exact
   preprocess rift and LZX parse is open.
 - `msdelta.dll` does not implement **PA31** — validate PA31 / SHA-256 against
@@ -220,7 +217,8 @@ hashes and identical/empty-target edges. Still open:
 
 In-crate round-trip tests prove self-consistency; Windows is the ground truth.
 
-- **PA19 encoding** not implemented (legacy; `lzxd` is decode-only). Decode works.
+- **PA19 encoding** is not implemented. Decode is incomplete: a captured native
+  source-dependent patch fails the current header parser.
 - The LZX encoder uses the rift for offset selection (SOURCE_COPY / signed-delta
   anchoring) with cost-based lazy matching, but does not yet reproduce genuine's
   exact parse, so encoded deltas run ~1.34x genuine's size.

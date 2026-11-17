@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "case": "x86-import-name-beyond-section",
+  "expected_name_resolution": "unterminated within raw section; external NUL is not part of name",
+  "source": {
+    "branches": [
+      {
+        "instruction": "call",
+        "file_offset": 544,
+        "rva": 4128,
+        "length": 5,
+        "destination_rva": 8448,
+        "destination_kind": "backed-executable"
+      },
+      {
+        "instruction": "jmp",
+        "file_offset": 576,
+        "rva": 4160,
+        "length": 5,
+        "destination_rva": 8448,
+        "destination_kind": "backed-executable"
+      },
+      {
+        "instruction": "jcc",
+        "file_offset": 608,
+        "rva": 4192,
+        "length": 6,
+        "destination_rva": 8448,
+        "destination_kind": "backed-executable"
+      }
+    ],
+    "import_name_rva": 12284,
+    "hint_file_offset": 5116,
+    "raw_section_end": 5120,
+    "first_nul_after_hint": 5120,
+    "ilt_file_offset": 2560,
+    "iat_file_offset": 2624
+  },
+  "target": {
+    "branches": [
+      {
+        "instruction": "call",
+        "file_offset": 544,
+        "rva": 8224,
+        "length": 5,
+        "destination_rva": 16640,
+        "destination_kind": "backed-executable"
+      },
+      {
+        "instruction": "jmp",
+        "file_offset": 576,
+        "rva": 8256,
+        "length": 5,
+        "destination_rva": 16640,
+        "destination_kind": "backed-executable"
+      },
+      {
+        "instruction": "jcc",
+        "file_offset": 608,
+        "rva": 8288,
+        "length": 6,
+        "destination_rva": 16640,
+        "destination_kind": "backed-executable"
+      }
+    ],
+    "import_name_rva": 20476,
+    "hint_file_offset": 5628,
+    "raw_section_end": 5632,
+    "first_nul_after_hint": 5632,
+    "ilt_file_offset": 3072,
+    "iat_file_offset": 3136
+  }
+}

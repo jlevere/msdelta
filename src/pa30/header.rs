@@ -11,7 +11,7 @@ pub const MAGIC: &[u8; 4] = PA30_MAGIC;
 pub(super) const PA19_MAGIC: &[u8; 4] = b"PA19";
 pub(super) const FILETIME_OFFSET: usize = 4;
 pub(super) const BITSTREAM_OFFSET: usize = 12;
-const MAX_HASH_LEN: usize = 33;
+const MAX_HASH_LEN: usize = 32;
 
 /// Delta format version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,7 +21,8 @@ pub enum FormatVersion {
     PA31,
 }
 
-/// PA30/PA31 delta header, corresponding to `_DELTA_HEADER_INFO_EX` in msdelta.
+/// PA30/PA31 delta header, including the extended metadata exposed by
+/// `GetDeltaInfoExB` in UpdateCompression.dll.
 #[derive(Debug, Clone)]
 pub struct Header {
     /// Which format version this delta uses.
@@ -47,10 +48,15 @@ pub struct Header {
 /// Extra fields present in PA31 but not PA30.
 #[derive(Debug, Clone)]
 pub struct Pa31Extra {
-    pub field1: i32,
-    pub field2: i32,
-    pub field3: i32,
-    pub extra_hash: Vec<u8>,
+    /// Native API header structure size in bytes, not the serialized header length.
+    pub header_size: u32,
+    /// Native serialization selector: zero selects PA30, nonzero selects PA31.
+    /// Parsing uses the file magic and preserves this field independently.
+    pub format_version: u32,
+    /// Minimum delta client version; this implementation supports values 0 and 1.
+    pub min_client_version: u32,
+    /// Optional hash of the original source, using the header's hash algorithm.
+    pub source_hash: Vec<u8>,
 }
 
 /// Parsed PA30 delta: header + preprocess data + compressed patch data.
@@ -63,10 +69,7 @@ pub struct ParsedDelta {
     pub patch_data: Vec<u8>,
 }
 
-/// Parse a PA30 delta header from raw delta bytes.
-///
-/// Returns the header and a `Delta` that holds a reference to the raw data
-/// for subsequent decompression.
+/// Parse delta header metadata without decompressing the payload.
 pub fn parse_header(delta: &[u8]) -> Result<Header> {
     if delta.len() < BITSTREAM_OFFSET {
         return Err(Error::Truncated);
@@ -141,21 +144,26 @@ pub fn parse_header(delta: &[u8]) -> Result<Header> {
     }
 
     let pa31_extra = if version == FormatVersion::PA31 {
-        let f1 = reader.read_i64()? as i32;
-        let f2 = reader.read_i64()? as i32;
-        let f3 = reader.read_i64()? as i32;
-        let extra_hash = reader.read_buffer()?;
-        if extra_hash.len() > MAX_HASH_LEN {
+        // Native deserialization retains the low 32 bits before checking the
+        // minimum client version, even when the wire integer is wider.
+        let header_size = reader.read_i64()? as u32;
+        let format_version = reader.read_i64()? as u32;
+        let min_client_version = reader.read_i64()? as u32;
+        let source_hash = reader.read_buffer()?;
+        if source_hash.len() > MAX_HASH_LEN {
             return Err(Error::HashTooLarge {
-                size: extra_hash.len(),
+                size: source_hash.len(),
                 max: MAX_HASH_LEN,
             });
         }
+        if min_client_version > 1 {
+            return Err(Error::Malformed("unsupported PA31 minimum client version"));
+        }
         Some(Pa31Extra {
-            field1: f1,
-            field2: f2,
-            field3: f3,
-            extra_hash,
+            header_size,
+            format_version,
+            min_client_version,
+            source_hash,
         })
     } else {
         None

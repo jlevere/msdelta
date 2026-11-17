@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "original_fixture": "tests/fixtures/atoms/ManagedNativeCorpus/cli-constructor-user-string-boundary",
+  "source_sha256": "447d146ad0fc790db85075d8cc1a193e5db749c2110849938912e5d98b354db4",
+  "delta_sha256": "2c53f28ac8757cdbeb48c8395c7b0ffba2b4cec5ec6a72816d837be14b8f1f5a",
+  "expected_sha256": "5069098b8af243409b341b58f1a6db232b0a12913bebe935ceb6af2462ae4892",
+  "original_provenance_file": "tests/fixtures/atoms/ManagedNativeCorpus/cli-constructor-user-string-boundary/case.toml",
+  "original_provenance_sha256": "b6c4180ca41d3ab5263fdc5c40e966bc9f5ce5303c133eb6753d6e74a10bcfae"
+}

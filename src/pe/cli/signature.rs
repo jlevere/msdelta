@@ -2,7 +2,7 @@
 
 use crate::pe::cli::blob::{read_compressed_u32, write_compressed_u32_preserving_width};
 use crate::pe::cli::map::CliMapModel;
-use crate::pe::cli::schema::CodedIndexKind;
+use crate::pe::cli::schema::{table, CodedIndexKind};
 
 const ELEMENT_TYPE_VOID: u8 = 0x01;
 const ELEMENT_TYPE_TYPEDBYREF: u8 = 0x16;
@@ -20,6 +20,47 @@ const ELEMENT_TYPE_CMOD_REQD: u8 = 0x1f;
 const ELEMENT_TYPE_CMOD_OPT: u8 = 0x20;
 
 const IMAGE_CEE_CS_CALLCONV_GENERIC: u8 = 0x10;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SignatureDialect {
+    // Preserve existing behavior for kinds and CLI4 paths outside the native
+    // MethodDef, method MemberRef, and TypeSpec fixture coverage.
+    LegacyCompatibility,
+    ClassicPa30,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Walk {
+    Complete,
+    // The argument count remains unread; method slot accounting continues.
+    GenericOuterComplete,
+    StopBlob,
+}
+
+pub(crate) fn transform_classic_method_signature_blob(
+    blob: &mut [u8],
+    cli_map: &CliMapModel,
+) -> usize {
+    if blob
+        .first()
+        .is_some_and(|byte| byte & IMAGE_CEE_CS_CALLCONV_GENERIC != 0)
+    {
+        // Generic method arity has a separate grammar from a generic type
+        // appearing in an ordinary method signature. Its native walk is open.
+        return transform_method_signature_blob(blob, cli_map);
+    }
+    let mut transformer = SignatureTransformer::new(blob, cli_map);
+    transformer.dialect = SignatureDialect::ClassicPa30;
+    transformer.transform_method_signature();
+    transformer.rewrites
+}
+
+pub(crate) fn transform_classic_type_spec_blob(blob: &mut [u8], cli_map: &CliMapModel) -> usize {
+    let mut transformer = SignatureTransformer::new(blob, cli_map);
+    transformer.dialect = SignatureDialect::ClassicPa30;
+    transformer.transform_type();
+    transformer.rewrites
+}
 
 pub(crate) fn transform_method_signature_blob(blob: &mut [u8], cli_map: &CliMapModel) -> usize {
     let mut transformer = SignatureTransformer::new(blob, cli_map);
@@ -43,11 +84,11 @@ pub(crate) fn transform_property_signature_blob(blob: &mut [u8], cli_map: &CliMa
     let Some(param_count) = transformer.read_compressed().map(|value| value.0) else {
         return 0;
     };
-    if !transformer.transform_type() {
+    if transformer.transform_type() == Walk::StopBlob {
         return transformer.rewrites;
     }
     for _ in 0..param_count {
-        if !transformer.transform_param() {
+        if transformer.transform_param() == Walk::StopBlob {
             break;
         }
     }
@@ -65,6 +106,7 @@ struct SignatureTransformer<'a> {
     cli_map: &'a CliMapModel,
     cursor: usize,
     rewrites: usize,
+    dialect: SignatureDialect,
 }
 
 impl<'a> SignatureTransformer<'a> {
@@ -74,86 +116,121 @@ impl<'a> SignatureTransformer<'a> {
             cli_map,
             cursor: 0,
             rewrites: 0,
+            dialect: SignatureDialect::LegacyCompatibility,
         }
     }
 
-    fn transform_method_signature(&mut self) -> bool {
+    fn transform_method_signature(&mut self) -> Walk {
         let Some(call_conv) = self.read_byte() else {
-            return false;
+            return Walk::StopBlob;
         };
         if call_conv & IMAGE_CEE_CS_CALLCONV_GENERIC != 0 && self.read_compressed().is_none() {
-            return false;
+            return Walk::StopBlob;
         }
         let Some(param_count) = self.read_compressed().map(|value| value.0) else {
-            return false;
+            return Walk::StopBlob;
         };
-        if !self.transform_param() {
-            return false;
+        if self.transform_param() == Walk::StopBlob {
+            return Walk::StopBlob;
         }
         for _ in 0..param_count {
-            if !self.transform_param() {
-                return false;
+            if self.transform_param() == Walk::StopBlob {
+                return Walk::StopBlob;
             }
         }
-        true
+        Walk::Complete
     }
 
-    fn transform_param(&mut self) -> bool {
+    fn transform_param(&mut self) -> Walk {
         if !self.transform_sentinel() {
-            return false;
+            return Walk::StopBlob;
         }
         match self.peek_byte() {
+            Some(ELEMENT_TYPE_VOID) if self.dialect == SignatureDialect::ClassicPa30 => {
+                // Native revisits VOID without advancing for the remaining
+                // method slots, so subsequent tokens are left untouched.
+                Walk::StopBlob
+            }
             Some(ELEMENT_TYPE_VOID | ELEMENT_TYPE_TYPEDBYREF) => {
                 self.cursor += 1;
-                true
+                Walk::Complete
             }
             Some(ELEMENT_TYPE_BYREF) => {
                 self.cursor += 1;
                 self.transform_type()
             }
             Some(_) => self.transform_type(),
-            None => false,
+            None => Walk::StopBlob,
         }
     }
 
-    fn transform_type(&mut self) -> bool {
+    fn transform_type(&mut self) -> Walk {
         loop {
             let Some(element_type) = self.read_byte() else {
-                return false;
+                return Walk::StopBlob;
             };
 
             match element_type {
-                0x02..=0x0e | ELEMENT_TYPE_TYPEDBYREF | 0x18 | 0x19 | 0x1c => return true,
+                0x02..=0x0e | ELEMENT_TYPE_TYPEDBYREF | 0x18 | 0x19 | 0x1c => {
+                    return Walk::Complete
+                }
                 ELEMENT_TYPE_PTR | ELEMENT_TYPE_SZARRAY => return self.transform_type(),
                 ELEMENT_TYPE_VALUETYPE | ELEMENT_TYPE_CLASS => {
-                    return self.transform_type_def_or_ref();
+                    return if self.transform_type_def_or_ref() {
+                        Walk::Complete
+                    } else {
+                        Walk::StopBlob
+                    };
                 }
-                ELEMENT_TYPE_VAR | ELEMENT_TYPE_MVAR => return self.read_compressed().is_some(),
+                ELEMENT_TYPE_VAR | ELEMENT_TYPE_MVAR => {
+                    return if self.read_compressed().is_some() {
+                        Walk::Complete
+                    } else {
+                        Walk::StopBlob
+                    }
+                }
                 ELEMENT_TYPE_ARRAY => {
-                    return self.transform_type() && self.transform_array_shape();
+                    return match self.transform_type() {
+                        Walk::GenericOuterComplete => Walk::GenericOuterComplete,
+                        Walk::Complete if self.transform_array_shape() => Walk::Complete,
+                        _ => Walk::StopBlob,
+                    };
                 }
                 ELEMENT_TYPE_GENERICINST => {
-                    if !self.transform_type() {
-                        return false;
+                    if self.transform_type() == Walk::StopBlob {
+                        return Walk::StopBlob;
+                    }
+                    if self.dialect == SignatureDialect::ClassicPa30 {
+                        // Leave the argument count unread. The method's remaining
+                        // slots determine subsequent visits: arity one encounters
+                        // VOID, while arity two is consumed as a primitive first.
+                        return Walk::GenericOuterComplete;
                     }
                     let Some(arg_count) = self.read_compressed().map(|value| value.0) else {
-                        return false;
+                        return Walk::StopBlob;
                     };
                     for _ in 0..arg_count {
-                        if !self.transform_type() {
-                            return false;
+                        if self.transform_type() == Walk::StopBlob {
+                            return Walk::StopBlob;
                         }
                     }
-                    return true;
+                    return Walk::Complete;
                 }
-                ELEMENT_TYPE_FNPTR => return self.transform_method_signature(),
+                ELEMENT_TYPE_FNPTR => {
+                    // Native function-pointer traversal needs its own fixture.
+                    let dialect = self.dialect;
+                    self.dialect = SignatureDialect::LegacyCompatibility;
+                    let outcome = self.transform_method_signature();
+                    self.dialect = dialect;
+                    return outcome;
+                }
                 ELEMENT_TYPE_CMOD_REQD | ELEMENT_TYPE_CMOD_OPT => {
-                    if !self.transform_type_def_or_ref() {
-                        return false;
+                    if !self.transform_modifier_token() {
+                        return Walk::StopBlob;
                     }
                 }
                 _ if element_type & 0xf0 == 0x40 => {}
-                _ => return false,
+                _ => return Walk::StopBlob,
             }
         }
     }
@@ -169,7 +246,7 @@ impl<'a> SignatureTransformer<'a> {
             }
             if byte == ELEMENT_TYPE_CMOD_REQD || byte == ELEMENT_TYPE_CMOD_OPT {
                 self.cursor += 1;
-                if !self.transform_type_def_or_ref() {
+                if !self.transform_modifier_token() {
                     return false;
                 }
                 continue;
@@ -215,7 +292,30 @@ impl<'a> SignatureTransformer<'a> {
         true
     }
 
+    fn transform_modifier_token(&mut self) -> bool {
+        // Modifier-token mapping is not established by the CLASS/VALUETYPE
+        // controls. Preserve its prior behavior until independently exercised.
+        let dialect = self.dialect;
+        self.dialect = SignatureDialect::LegacyCompatibility;
+        let complete = self.transform_type_def_or_ref();
+        self.dialect = dialect;
+        complete
+    }
+
     fn map_type_def_or_ref(&self, raw: u32) -> u32 {
+        if self.dialect == SignatureDialect::ClassicPa30 {
+            // This is a signature-specific native rule. Metadata table columns
+            // still use the ordinary coded-index tag-to-table mapping.
+            let tag = raw & 3;
+            let table_id = match tag {
+                0 | 1 => table::TYPE_DEF,
+                2 => table::TYPE_SPEC,
+                _ => return raw,
+            };
+            let rid = i64::from(raw >> 2);
+            let mapped = rid.wrapping_add(self.cli_map.tables[table_id as usize].map(rid)) as u32;
+            return (mapped << 2) | tag;
+        }
         self.cli_map
             .coded_token_map()
             .and_then(|token_map| token_map.map_coded_token(raw, CodedIndexKind::TypeDefOrRef))
@@ -328,6 +428,48 @@ mod tests {
         assert_eq!(rewrites, 2);
         assert_eq!(signature[2], (4 << 2) | 1);
         assert_eq!(signature[5], 6 << 2);
+    }
+
+    #[test]
+    fn unverified_classic_subgrammars_preserve_compatibility_mapping() {
+        let mut cli_map = CliMapModel::default();
+        cli_map.tables[table::TYPE_REF as usize] = rift(&[(3, 7)]);
+        cli_map.tables[table::TYPE_DEF as usize] = rift(&[(3, 6)]);
+        let reference = (3 << 2) | 1;
+        for signature in [
+            vec![0x10, 1, 1, ELEMENT_TYPE_VOID, ELEMENT_TYPE_CLASS, reference],
+            vec![
+                0,
+                1,
+                ELEMENT_TYPE_I4,
+                ELEMENT_TYPE_FNPTR,
+                0,
+                1,
+                ELEMENT_TYPE_I4,
+                ELEMENT_TYPE_CLASS,
+                reference,
+            ],
+            vec![
+                0,
+                1,
+                ELEMENT_TYPE_I4,
+                ELEMENT_TYPE_CMOD_REQD,
+                reference,
+                ELEMENT_TYPE_I4,
+            ],
+        ] {
+            let mut compatibility = signature.clone();
+            let mut classic = signature;
+            assert_eq!(
+                transform_method_signature_blob(&mut compatibility, &cli_map),
+                1
+            );
+            assert_eq!(
+                transform_classic_method_signature_blob(&mut classic, &cli_map),
+                1
+            );
+            assert_eq!(classic, compatibility);
+        }
     }
 
     const ELEMENT_TYPE_I4: u8 = 0x08;
