@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "dll_sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb",
+  "harness_sha256": "66b3419ae7d3462598bbe37191a5778e611e8f81bc3d58ce7dd8fd057471cc7b",
+  "source_file": "lab/cli-copy-map/table_map.c",
+  "source_sha256": "c9252d651532afb46102d9dd3a0dc9bbcc7c018051c90ffcd485434d0f2db326",
+  "capture_sha256": "de1b1e074e8064466985dc5f8cae0e88bd27540cbbe45c6da903105135c450b4",
+  "compile_command": "x86_64-w64-mingw32-gcc -std=c11 -Wall -Wextra -Werror -O2 lab/cli-copy-map/table_map.c -lbcrypt -o table_map.exe",
+  "native_execution": "JL Windows VM; isolated msdelta-cli-copy-map directory",
+  "input_scope": "Synthetic row maps; first-row controls derived from owned ManagedNativeCorpus/cli-interface-impl; no PE or proprietary content in direct-call fixture",
+  "observation_scope": "Exact append order before sorting or reduction; fixed-width helper only; stack-owned output capacity128 avoids allocation",
+  "loaded_dll_sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb"
+}

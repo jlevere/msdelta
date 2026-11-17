@@ -14,4 +14,6 @@ result
 
 # Claude Code local state
 .claude/
+__pycache__/
+*.pyc
 notes/managed-tail-repro/

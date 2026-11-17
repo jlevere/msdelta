@@ -3,8 +3,19 @@
 //! The format is undocumented; this module is built from reverse-engineering
 //! `msdelta.dll` and `UpdateCompression.dll` (with PDB symbols).
 
+mod copy_map;
 mod encode;
 pub(crate) mod header;
+#[cfg(test)]
+mod native_copy_tests;
+#[cfg(test)]
+mod native_header_tests;
+#[cfg(test)]
+mod native_postprocess_tests;
+#[cfg(test)]
+mod native_reverse_header_tests;
+#[cfg(test)]
+pub(crate) mod pipeline_tests;
 pub(crate) mod preprocess;
 pub(crate) mod reverse;
 pub(crate) mod signature;
@@ -18,149 +29,21 @@ pub use signature::{
 };
 
 use header::PA19_MAGIC;
+#[cfg(test)]
+use pipeline_tests::{record_buffer, record_rift};
 use preprocess::{apply_pe_timestamp_fixup, parse_pe_preprocess};
 use signature::hex_str;
 
 use crate::{Error, Result};
 
-/// Build the decompressor's copy-placement rift from the target-file-offset
-/// domain. The decompressor indexes the final caller rift by `pos = ref_len +
-/// target_file_offset` and, for a source copy, resolves it to the matching
-/// source file offset. Genuine `PreProcessor::PreProcessPEForApply` first
-/// computes the native PE component as:
-///
-///   pe_copy = Reverse( Multiply( Multiply(rift_B, io2rva), io2rva ) )
-///
-/// where `rift_B` is the decoded preprocess rift (source RVA -> target RVA)
-/// and `io2rva` = `SectionHelper::ExtractImageOffsetToRva` maps file offset ->
-/// RVA. Semantically that conjugation is `io2rva^-1 . rift_B^-1 . io2rva`, i.e.
-/// for a target file offset:
-///   target_fo --io2rva--> rva --rift_B^-1--> source_rva --io2rva^-1--> source_fo
-///
-/// Genuine holds only the SOURCE image, so it uses the source `io2rva` on both
-/// sides; that is exact on amd64 (FileAlignment == SectionAlignment, so file
-/// offset == RVA). On i386 (FileAlignment 0x200 != SectionAlignment) the TARGET
-/// file offset of an RVA-preserved tail section differs from the SOURCE file
-/// offset, so the input side must use the TARGET file-offset <-> RVA map. We
-/// have it: `pp.target_info.target_rva_to_file_offset` is the target RVA ->
-/// target file-offset map, so its reverse is the target `io2rva`. Using the
-/// target map on the input side and the source map on the output side makes the
-/// relayout exact for both arches:
-///
-///   pe_copy(target_fo) = io2rva_src^-1( rift_B^-1( io2rva_tgt(target_fo) ) )
-///
-/// Managed images add a second file-offset rift from the CLI metadata map:
-///
-///   final_file_offsets = RiftTable::Sum(pe_copy, cli_compression_rift)
-///
-/// At this native call site, `Sum` behaves as an entry-stream merge sorted by
-/// source. Only after that merge do we fold into the decompressor caller-rift
-/// domain by adding the reference length to the entry source offsets.
+use copy_map::build_pe_copy_rift_with_cli_rift;
 #[cfg(test)]
-fn build_pe_copy_rift(
-    reference: &[u8],
-    pp: &preprocess::PePreprocess,
-) -> crate::lzx::rift::RiftTable {
-    let empty_cli_rift = crate::lzx::rift::RiftTable {
-        entries: Vec::new(),
-    };
-    build_pe_copy_rift_with_cli_rift(reference, pp, &empty_cli_rift)
-}
+use copy_map::{
+    build_pe_copy_rift, build_pe_copy_rift_unfolded, build_pe_io2rva,
+    fold_target_to_source_rift_for_decompressor, merge_rift_entries,
+};
 
-fn build_pe_copy_rift_with_cli_rift(
-    reference: &[u8],
-    pp: &preprocess::PePreprocess,
-    cli_rift: &crate::lzx::rift::RiftTable,
-) -> crate::lzx::rift::RiftTable {
-    let Some(mut target_to_source) = build_pe_copy_rift_unfolded(reference, pp) else {
-        return build_pe_copy_rift_fallback(pp);
-    };
-
-    if !cli_rift.entries.is_empty() {
-        target_to_source = merge_rift_entries(&target_to_source, cli_rift);
-    }
-
-    fold_target_to_source_rift_for_decompressor(reference.len(), &target_to_source)
-}
-
-fn build_pe_copy_rift_fallback(pp: &preprocess::PePreprocess) -> crate::lzx::rift::RiftTable {
-    // Reference is not a parseable PE: preserve the old RVA-domain
-    // concatenation (pe_rift then preprocess_rift), sorted by source.
-    let mut combined = pp.target_info.target_rva_to_file_offset.clone();
-    for e in &pp.preprocess_rift.entries {
-        combined.entries.push(*e);
-    }
-    combined.entries.sort_by_key(|e| e.source);
-    combined
-}
-
-fn build_pe_copy_rift_unfolded(
-    reference: &[u8],
-    pp: &preprocess::PePreprocess,
-) -> Option<crate::lzx::rift::RiftTable> {
-    let Ok(src_pe) = crate::pe::parse::PeInfo::parse_lenient(reference) else {
-        return None;
-    };
-
-    // io2rva for the SOURCE image, exactly as ExtractImageOffsetToRva.
-    let io2rva_src = build_pe_io2rva(&src_pe);
-
-    // Genuine `PreProcessPEForApply` builds the PE FORWARD chain in the source
-    // file-offset -> target file-offset direction and applies a SINGLE
-    // `Reverse` to the whole thing:
-    //
-    //   forward(source_fo) = pe_rift( preprocess_rift( io2rva_src(source_fo) ) )
-    //                      = source_fo --io2rva_src--> rva
-    //                                  --preprocess_rift--> target_rva
-    //                                  --pe_rift--> target_fo
-    //
-    // (`a.multiply(b)` composes as `b . a`, applied innermost-first, so the
-    // left-to-right `io2rva_src . preprocess_rift . pe_rift` is exactly that
-    // chain.) `pe_rift` is the target RVA -> target file-offset map, used
-    // directly -- no per-factor reverse. The single `Reverse` of the forward
-    // chain handles the i386 FileAlignment relayout's overlaps and gaps via the
-    // genuine working-buffer interval logic, which a naive swap cannot.
-    let forward = io2rva_src
-        .multiply(&pp.preprocess_rift)
-        .multiply(&pp.target_info.target_rva_to_file_offset);
-    Some(forward.reverse())
-}
-
-fn fold_target_to_source_rift_for_decompressor(
-    reference_len: usize,
-    target_to_source: &crate::lzx::rift::RiftTable,
-) -> crate::lzx::rift::RiftTable {
-    use crate::lzx::rift::RiftEntry;
-    let ref_len = reference_len as i64;
-    // composed maps target file offset -> source file offset. Fold into the
-    // decompressor's keying: entry source = ref_len + target_fo, target = src_fo.
-    let mut out = crate::lzx::rift::RiftTable {
-        entries: Vec::with_capacity(target_to_source.entries.len()),
-    };
-    for e in &target_to_source.entries {
-        // wrapping: composed entries can carry near-i64::MIN/MAX wrap-boundary
-        // values; the sum wraps (correct) in release but would overflow-panic in
-        // a debug build. The decompressor's offset lookups are wrap-consistent.
-        out.entries.push(RiftEntry {
-            source: ref_len.wrapping_add(e.source),
-            target: e.target,
-        });
-    }
-    out.entries.sort_by_key(|e| e.source);
-    out
-}
-
-fn merge_rift_entries(
-    a: &crate::lzx::rift::RiftTable,
-    b: &crate::lzx::rift::RiftTable,
-) -> crate::lzx::rift::RiftTable {
-    let mut entries = Vec::with_capacity(a.entries.len() + b.entries.len());
-    entries.extend_from_slice(&a.entries);
-    entries.extend_from_slice(&b.entries);
-    entries.sort_by_key(|entry| entry.source);
-    crate::lzx::rift::RiftTable { entries }
-}
-
+#[cfg(test)]
 fn apply_classic_cli_source_transforms(
     image: &mut [u8],
     pe: &crate::pe::parse::PeInfo,
@@ -170,37 +53,21 @@ fn apply_classic_cli_source_transforms(
     flags: u64,
 ) {
     if flags & crate::pe::transform::transform_flags::CLI_DISASM != 0 {
+        #[cfg(test)]
+        record_buffer("TransformCliDisasm", "before", image, None);
         crate::pe::cli::disasm::transform_cli_disasm_tokens(image, pe, metadata, cli_map);
+        #[cfg(test)]
+        record_buffer("TransformCliDisasm", "after", image, None);
     }
     if flags & crate::pe::transform::transform_flags::CLI_METADATA != 0 {
+        #[cfg(test)]
+        record_buffer("TransformCliMetadata", "before", image, None);
         crate::pe::cli::metadata_transform::transform_cli_metadata_with_rva_map(
             image, metadata, cli_map, rva_map,
         );
+        #[cfg(test)]
+        record_buffer("TransformCliMetadata", "after", image, None);
     }
-}
-
-/// Build `io2rva` exactly as `SectionHelper::ExtractImageOffsetToRva`: an
-/// initial `Add(0, 0)` entry, then per section (skipping those whose
-/// VirtualAddress == 0 or PointerToRawData == 0) an `Add(PointerToRawData,
-/// VirtualAddress)` -- i.e. `{source = file offset, target = RVA}` -- sorted by
-/// source. Maps file offset -> RVA.
-fn build_pe_io2rva(pe: &crate::pe::parse::PeInfo) -> crate::lzx::rift::RiftTable {
-    use crate::lzx::rift::RiftEntry;
-    let mut entries = vec![RiftEntry {
-        source: 0,
-        target: 0,
-    }];
-    for s in &pe.sections {
-        if s.virtual_address == 0 || s.raw_offset == 0 {
-            continue;
-        }
-        entries.push(RiftEntry {
-            source: s.raw_offset as i64,
-            target: s.virtual_address as i64,
-        });
-    }
-    entries.sort_by_key(|e| e.source);
-    crate::lzx::rift::RiftTable { entries }
 }
 
 /// Apply a delta to a reference buffer.
@@ -220,6 +87,8 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
     }
 
     let parsed = parse(delta)?;
+    #[cfg(test)]
+    record_buffer("Apply", "before", reference, None);
     let target_size = parsed.header.target_size as usize;
 
     const MAX_TARGET_SIZE: usize = 64 * 1024 * 1024;
@@ -241,6 +110,20 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
             }
         }
         return Ok(output);
+    }
+
+    // UpdateCompression checks the original source before PE normalization.
+    // Reverse playback takes a separate native path without this check.
+    if let Some(extra) = &parsed.header.pa31_extra {
+        if !extra.source_hash.is_empty() {
+            let computed = get_signature(reference, parsed.header.hash_alg_id as u32)?;
+            if computed.hash != extra.source_hash {
+                return Err(Error::SourceHashMismatch {
+                    expected: hex_str(&extra.source_hash),
+                    got: hex_str(&computed.hash),
+                });
+            }
+        }
     }
 
     let has_pe_preprocess = parsed.header.file_type != 1 && !parsed.preprocess.is_empty();
@@ -283,7 +166,6 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
     let pe_ref;
     let decode_ref: &[u8] = if let Some(pp) = &pp {
         let mut r = reference.to_vec();
-        crate::pe::transform::zero_pe_checksum(&mut r);
         let source_metadata =
             if managed_branch == Some(crate::pe::transform::ManagedBranch::ClassicCli) {
                 Some(crate::pe::cli::metadata::parse_cli_metadata_from_pe(
@@ -295,28 +177,23 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
             };
         // Build T(source): transform the reference exactly as genuine
         // PreProcessPEForApply does before the LZX copy stage, so copies land
-        // bit-identical. i386 relative calls/jmps + relocation operands, gated
-        // by the header transform-selection flags. No-op on amd64 (handled by a
-        // separate pass) and on images whose flags leave these transforms off.
+        // bit-identical. PE and classic CLI stages run together in native
+        // order, gated by transform flags and architecture.
         if let Ok(src_pe) = crate::pe::parse::PeInfo::parse_lenient(&r) {
-            crate::pe::transform::build_transformed_source(
+            crate::pe::transform::build_transformed_source_with_cli(
                 &mut r,
                 &src_pe,
                 &pp.preprocess_rift,
                 parsed.header.flags as u64,
                 pp.target_info.image_base,
                 pp.target_info.time_date_stamp,
+                source_metadata
+                    .as_ref()
+                    .map(|metadata| crate::pe::atom::ClassicCliSource {
+                        metadata,
+                        map: &pp.cli_map,
+                    }),
             );
-            if let Some(metadata) = &source_metadata {
-                apply_classic_cli_source_transforms(
-                    &mut r,
-                    &src_pe,
-                    metadata,
-                    &pp.cli_map,
-                    &pp.preprocess_rift,
-                    parsed.header.flags as u64,
-                );
-            }
         }
         let cli_rift = if let Some(metadata) = &source_metadata {
             crate::pe::cli::rift::build_cli_compression_rift_from_transformed_source(
@@ -331,11 +208,18 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
             }
         };
         caller_rift = Some(build_pe_copy_rift_with_cli_rift(reference, pp, &cli_rift));
+        #[cfg(test)]
+        {
+            record_rift("CliRift", "after", &cli_rift);
+            record_rift("CallerRift", "after", caller_rift.as_ref().unwrap());
+        }
         pe_ref = r;
         &pe_ref
     } else {
         reference
     };
+    #[cfg(test)]
+    record_buffer("TransformedSource", "after", decode_ref, None);
 
     // Discriminate the patch codec by its actual leading bytes, not by
     // file_type_set: genuine reverse deltas (ApplyDeltaGetReverseB) carry
@@ -344,6 +228,8 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
     // API container starts with its magic; everything else is PseudoLzx.
     const LZMS_API_MAGIC: [u8; 4] = 0xC0E5_510Au32.to_le_bytes();
     let is_lzms = parsed.patch_data.len() >= 4 && parsed.patch_data[..4] == LZMS_API_MAGIC;
+    #[cfg(test)]
+    record_buffer("Decompress", "before", decode_ref, None);
     let mut output = if is_lzms {
         let decompressed = lzms::decompress_compression_api(&parsed.patch_data)?;
         // An LZMS Compression-API container in a PA3x delta normally holds the
@@ -365,9 +251,15 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
             caller_rift.as_ref(),
         )?
     };
+    #[cfg(test)]
+    record_buffer("Decompress", "after", &output, None);
 
     if let Some(pp) = &pp {
+        #[cfg(test)]
+        record_buffer("PeTargetFixup", "before", &output, None);
         apply_pe_timestamp_fixup(reference, pp, &mut output)?;
+        #[cfg(test)]
+        record_buffer("PeTargetFixup", "after", &output, None);
         // AMD64 DisasmX64 + PdataX64 now run as SOURCE transforms in
         // build_transformed_source (decode_ref = T(source)), mirroring genuine
         // PreProcessPEForApply -- so they are no longer post-decode passes here.
@@ -380,8 +272,14 @@ pub(crate) fn apply_impl(reference: &[u8], delta: &[u8], verify: bool) -> Result
     // NOT be touched have it clear -- which is why applying it unconditionally
     // regressed ~184 .mui. See notes/pa31-lcu-gaps/REGRESSION-AND-HANDOFF.md.
     if parsed.header.flags & 1 != 0 {
+        #[cfg(test)]
+        record_buffer("PostProcessI386", "before", &output, None);
         crate::pe::transform::undo_x86_e8_translation(&mut output);
+        #[cfg(test)]
+        record_buffer("PostProcessI386", "after", &output, None);
     }
+    #[cfg(test)]
+    record_buffer("Apply", "after", &output, None);
 
     if verify && parsed.header.hash_alg_id != 0 && !parsed.header.target_hash.is_empty() {
         let computed = get_signature(&output, parsed.header.hash_alg_id as u32)?;
@@ -1722,7 +1620,7 @@ mod tests {
             let mut got: Vec<(i64, i64)> = ours
                 .entries
                 .iter()
-                .map(|e| (e.source - reflen, e.target))
+                .map(|e| (e.source.wrapping_sub(reflen), e.target))
                 .filter(|&(t, s)| !is_sentinel(t) && !is_sentinel(s))
                 .collect();
             got.sort();
@@ -2228,7 +2126,7 @@ mod tests {
                 composed.entries.len()
             );
             for e in &composed.entries {
-                eprintln!("  {:x},{:x}", e.source - reflen, e.target);
+                eprintln!("  {:x},{:x}", e.source.wrapping_sub(reflen), e.target);
             }
             // FORWARDCHAIN: dump the forward chain (source_fo -> target_fo)
             // io2rva_src . preprocess_rift . pe_rift, as raw (source,target) pairs
@@ -2980,3 +2878,6 @@ mod managed_bulk_probe {
         eprintln!("byte-exact={exact}  mismatch={mismatch}  errored={errored}  total={total}");
     }
 }
+
+#[cfg(test)]
+mod native_metadata_benefit_tests;

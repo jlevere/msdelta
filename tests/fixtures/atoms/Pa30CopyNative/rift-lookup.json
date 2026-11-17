@@ -1,0 +1,16 @@
+{
+  "schema":1,
+  "dll_sha256":"ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb",
+  "harness_sha256":"e27a7d9d3718abfde3da7f05f414286a708be05c34bd0145b1857bc520551c94",
+  "lookup_rva":114896,
+  "integer_encoding":"signed64 decimal strings",
+  "cases":[
+    {"name":"empty","entries":[],"queries":[{"position":"-9223372036854775808","displacement":"0","last_position":"9223372036854775807"},{"position":"-1","displacement":"0","last_position":"9223372036854775807"},{"position":"0","displacement":"0","last_position":"9223372036854775807"},{"position":"9223372036854775807","displacement":"0","last_position":"9223372036854775807"}]},
+    {"name":"single","entries":[["5","9"]],"queries":[{"position":"4","displacement":"4","last_position":"4"},{"position":"5","displacement":"4","last_position":"9223372036854775807"},{"position":"6","displacement":"4","last_position":"9223372036854775807"}]},
+    {"name":"duplicate-source","entries":[["0","10"],["5","20"],["5","30"],["10","40"]],"queries":[{"position":"4","displacement":"10","last_position":"4"},{"position":"5","displacement":"25","last_position":"9"},{"position":"6","displacement":"25","last_position":"9"},{"position":"9","displacement":"25","last_position":"9"},{"position":"10","displacement":"30","last_position":"9223372036854775807"}]},
+    {"name":"before-first","entries":[["10","20"],["30","70"]],"queries":[{"position":"-9223372036854775808","displacement":"40","last_position":"9"},{"position":"-1","displacement":"40","last_position":"9"},{"position":"0","displacement":"40","last_position":"9"},{"position":"9","displacement":"40","last_position":"9"},{"position":"10","displacement":"10","last_position":"29"},{"position":"29","displacement":"10","last_position":"29"},{"position":"30","displacement":"40","last_position":"9223372036854775807"},{"position":"9223372036854775807","displacement":"40","last_position":"9223372036854775807"}]},
+    {"name":"signed-positions","entries":[["-20","-5"],["-5","5"],["0","-1"],["6","6"]],"queries":[{"position":"-21","displacement":"0","last_position":"-21"},{"position":"-20","displacement":"15","last_position":"-6"},{"position":"-6","displacement":"15","last_position":"-6"},{"position":"-5","displacement":"10","last_position":"-1"},{"position":"-1","displacement":"10","last_position":"-1"},{"position":"0","displacement":"-1","last_position":"5"},{"position":"1","displacement":"-1","last_position":"5"},{"position":"6","displacement":"0","last_position":"9223372036854775807"}]},
+    {"name":"wrapping-displacement","entries":[["0","0"],["9223372036854775807","-9223372036854775808"]],"queries":[{"position":"9223372036854775806","displacement":"0","last_position":"9223372036854775806"},{"position":"9223372036854775807","displacement":"1","last_position":"9223372036854775807"}]},
+    {"name":"wrapping-single","entries":[["-9223372036854775808","9223372036854775807"]],"queries":[{"position":"-9223372036854775808","displacement":"-1","last_position":"9223372036854775807"},{"position":"-1","displacement":"-1","last_position":"9223372036854775807"},{"position":"0","displacement":"-1","last_position":"9223372036854775807"},{"position":"9223372036854775807","displacement":"-1","last_position":"9223372036854775807"}]}
+  ]
+}

@@ -160,15 +160,14 @@ impl<'a> RangeDecoder<'a> {
         self.normalize();
         let prob = probs[*state as usize].get();
         let bound = (self.range >> PROB_BITS) * prob;
-        let bit;
-        if self.code < bound {
+        let bit = if self.code < bound {
             self.range = bound;
-            bit = 0;
+            0
         } else {
             self.range -= bound;
             self.code -= bound;
-            bit = 1;
-        }
+            1
+        };
         probs[*state as usize].update(bit);
         *state = (*state << 1 | bit) & (num_states as u32 - 1);
         bit

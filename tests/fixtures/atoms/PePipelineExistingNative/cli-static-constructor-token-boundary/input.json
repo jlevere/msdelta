@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "original_fixture": "tests/fixtures/atoms/ManagedNativeCorpus/cli-static-constructor-token-boundary",
+  "source_sha256": "a4dbea3aea799e8fe77e6fd19691cf58992eabd2fb172058a885d97de258acf9",
+  "delta_sha256": "6098b9dbf2c55fe219dc32633c90251d1e056a6147aa81cb638b56b1ec1e3dc4",
+  "expected_sha256": "d3ca4eac462aec3ac6f891529effb33c97ae1ec1973c927478494a7b9ff19300",
+  "original_provenance_file": "tests/fixtures/atoms/ManagedNativeCorpus/cli-static-constructor-token-boundary/case.toml",
+  "original_provenance_sha256": "ed8f26b29132eda7e9d3e172401e89a1b312895e56a6d79e9c9dfbe72f7fe9ba"
+}

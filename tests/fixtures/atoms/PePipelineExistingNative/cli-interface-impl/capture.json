@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "dll_sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb",
+  "harness_sha256": "06f385c4039c5f014f1262b4780934e4fc52ed9d45dc328a65a59161754a4871",
+  "stage_trace_sha256": "a4e00c92662569945f335893cf2203e59d476dcf40733fec4198571612a3cd8d",
+  "stage_count": 10,
+  "decompress_rva": 31552,
+  "sum_rva": 118288,
+  "sum_calls": 2,
+  "reference_size": 3072,
+  "target_size": 3584,
+  "original_source_size": 3072,
+  "folded": true,
+  "rift_encoding": "signed64-le source,target pairs",
+  "caller_rift_domain": "reference_size + target file offset -> source file offset",
+  "patch_rift_origin": "SumRiftTables input 0, decoded patch-local rift",
+  "caller_rift_origin": "SumRiftTables input 1, apply-preprocess copy map after reference-size composition and reduction",
+  "merged_rift_origin": "SumRiftTables output 0, identity matched to Decompress input 3",
+  "observation_scope": "synchronous caller thread",
+  "uninstrumented_output_equal": true,
+  "decompress_source_unchanged": true,
+  "artifact_sha256": {
+    "source.bin": "5a2973977593cae68203d574952f776511740183b984295b08ccf827c60e557e",
+    "delta.pa30": "0ecbd033d6c1c693408d00fcf6a885749376ad02f1e99c4be4048a7622d3d724",
+    "target.bin": "8976f1e932d897de26f1395134024acee104ef80450979b3d99f3572c428fb2a",
+    "transformed-source.bin": "3edca457bd14891d7592ba46954c32949d286a1d621be8a01bfb8d6e0a5a6566",
+    "decompressed-target.bin": "8976f1e932d897de26f1395134024acee104ef80450979b3d99f3572c428fb2a",
+    "caller-rift.bin": "98ec2ba27d7c9a4e6e0b326c69490e3e01d2406ddb195ba9f9996f4adc7cbb2d",
+    "patch-rift.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "merged-rift.bin": "98ec2ba27d7c9a4e6e0b326c69490e3e01d2406ddb195ba9f9996f4adc7cbb2d"
+  }
+}

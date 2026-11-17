@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "case": "definition-moves",
+  "dnfile_version": "0.18.0",
+  "source": {
+    "compiler_output_sha256": "8197f87e9263ca48215f8b406f098d3ff6a8123f52ab05883c5b6fba8023ad51",
+    "normalized_sha256": "61cb6d25d42f3e2c57a51702d0d12661f92f96b1e3facbee25b697e10018d8b6",
+    "source_sha256": "820550e4913e972d81c1f1e9c85bae4a10f24b1c981aade2bc57f1312474f3f4",
+    "normalization": [
+      {
+        "field": "Module.Mvid derived from source SHA256",
+        "offset": 5992,
+        "before_hex": "dfc59d241ebf0640b2538788584eed57",
+        "after_hex": "820550e4913e972d81c1f1e9c85bae4a"
+      },
+      {
+        "field": "COFF.TimeDateStamp",
+        "offset": 136,
+        "before_hex": "24a8fb6a",
+        "after_hex": "00000000"
+      },
+      {
+        "field": "OptionalHeader.CheckSum",
+        "offset": 216,
+        "before_hex": "00000000",
+        "after_hex": "00000000"
+      }
+    ]
+  },
+  "target": {
+    "compiler_output_sha256": "d2ed4d07b0612fbe86b25ee1b36afc9003646dea175518c96468d83115ab5a03",
+    "normalized_sha256": "9e859ce3b61e9e17054cea0ff9f9628441f701c5efd5b442922daac43e716bd4",
+    "source_sha256": "1cb1e0c9097543824e70d8c83e4a67901dd75f2b37535305b33c91dd794f7105",
+    "normalization": [
+      {
+        "field": "Module.Mvid derived from source SHA256",
+        "offset": 6084,
+        "before_hex": "92f7889c323a3240be7be439db4dff5e",
+        "after_hex": "1cb1e0c9097543824e70d8c83e4a6790"
+      },
+      {
+        "field": "COFF.TimeDateStamp",
+        "offset": 136,
+        "before_hex": "24a8fb6a",
+        "after_hex": "00000000"
+      },
+      {
+        "field": "OptionalHeader.CheckSum",
+        "offset": 216,
+        "before_hex": "00000000",
+        "after_hex": "00000000"
+      }
+    ]
+  }
+}

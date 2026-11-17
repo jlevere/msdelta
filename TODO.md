@@ -9,25 +9,20 @@ UpdateCompression.dll, mspatcha.dll, mspatchc.dll, cabinet.dll, and wcp.dll.
 > by the native DLL) and the Phase 1-3 re-rail plan supersede the tactical
 > milestone list. This file tracks status; that section sets direction.
 
-## Current status (2026-06-15)
+## Current status (2026-11-16)
 
-**Decode (primary use case) — hardened.** Native PE: 651/659 genuine deltas
-byte-exact (98.8%); matrix 25/26. An architecture-diverse subset is committed and
-**gated in CI** (`tests/pe_decode.rs` + `tests/fixtures/pe-decode/`), so the
-transform pipeline can no longer regress unnoticed (the broad bulk/matrix/pa31
-corpora stay local). The 8-case decode long tail is operand/relocation relayout
-edges (e.g. `.text` absolute-pointer remaps off by a per-region delta, `.reloc`
-block rebuild) -- they return a clean `HashMismatch` (apply() verifies the
-SHA-256 target hash), never silent corruption. Driving these to 0 is deep
-per-DLL transform RE (the next focused campaign).
+**Decode remains partial:** 658/659 bulk PE fixtures and 78/80 managed fixtures
+reconstruct exactly (736/739 combined). Native stage comparisons and owned
+regressions cover source transformations, ownership markers, copy maps,
+decompression, and final output. Remaining failures involve managed signature
+grammar; managed ownership markers and some passing files still have intermediate
+discrepancies. Inferred I386 relocations now have native stage and pipeline proofs.
 
-**Encode (native PE) — reconstructs, not yet byte-exact.** All 659 genuine
-targets round-trip through our decoder (0 broken), ~1.34x genuine size, byte-exact
-header. Body byte-exact needs genuine's exact preprocess rift + LZX parse (see
-the `encode_oracle` / `encode_byte_diff` probes in `src/pa30/mod.rs`).
+**Encode remains partial:** self round-trip reconstruction does not establish
+native acceptance or byte-identical encoding. Matching native preprocessing and
+LZX parse decisions remains open. PA19 source-dependent decoding is incomplete.
 
-Sections below are the older transform-coverage audit; decode rows are largely
-superseded by the byte-exact status above.
+The older coverage audit below does not supersede these measured limitations.
 
 ## Win32 API coverage
 
@@ -52,15 +47,15 @@ superseded by the byte-exact status above.
 
 | Export | Status | Notes |
 |--------|--------|-------|
-| `GetDeltaInfoExB` | **done** | returns PA31 extended fields (field1/field2/field3 + extra hash) |
+| `GetDeltaInfoExB` | **done** | returns PA31 header structure size, format version, minimum client version, and source hash |
 
 ### mspatcha.dll / mspatchc.dll (PA19 legacy)
 
 | Capability | Status | Notes |
 |------------|--------|-------|
-| PA19 decode | **done** | `pa19::apply()` via `lzxd` crate |
+| PA19 decode | **partial** | Native source-dependent fixture fails header parsing; reference history and chunk framing remain incomplete |
 | PA19 encode | missing | would need `mspatchc.dll` parity; low priority (legacy format) |
-| PA19 E8 transform | missing | call-instruction translation filter for x86 code sections |
+| PA19 E8 transform | partial | Filter exists; chunk ownership and boundary behavior remain unverified |
 | PA19 signature/normalize | missing | CRC-based, different from PA30's MD5/SHA |
 
 ### wcp.dll (DCM wrapper)
@@ -78,9 +73,9 @@ superseded by the byte-exact status above.
 
 | Format | Decode | Encode | Notes |
 |--------|--------|--------|-------|
-| PA19 | **done** | missing | legacy, standard LZX via `lzxd` crate |
+| PA19 | **partial** | missing | source-dependent container parsing remains incomplete |
 | PA30 | **done** | **done** | primary format |
-| PA31 | **done** | **done** | extended header with 3 extra i32 fields + extra hash |
+| PA31 | **done** | **done** | extended header with three u32 fields and optional source hash; forward apply verifies the original source |
 | DCM | **done** | **done** | 4-byte magic wrapper around PA30 |
 
 ---
@@ -207,7 +202,6 @@ deltas via `uup` (`fe3` enumerate + `psf` extract) + `msu gaps`: amd64 LCU/SSU
 |---------|----------|-------|
 | **PE transform pipeline** | **high** | the frontier — see the matrix above; start with the T0 loud-fail detector |
 | Configurable target size limit | low | currently hardcoded 64 MB |
-| PA31 encoding | medium | header extension fields; decoder already handles it |
 | `no_std` support | low | would need to feature-gate `std`, replace `Vec` allocations |
 | Streaming API | low | current API is one-shot `&[u8]` → `Vec<u8>` |
 
@@ -223,7 +217,7 @@ implemented — see the API surface table in the README.)
 | DCM manifest roundtrips | **done** | all bundled fixtures pass (incl. WOW64 proxystub) |
 | RAW delta roundtrips | **done** | PseudoLzx + BsDiff |
 | PE delta roundtrips | **done** | cmd→cmd_patched, advapi32_old→advapi32_new |
-| PA19 decode | **done** | fixture from Windows |
+| PA19 decode | **partial** | native source-dependent fixture exposes incomplete header parsing |
 | PA31 decode (full population) | **done** | 377/377 LCU express deltas, gated in `tests/pa31_lcu_gaps.rs` |
 | Fuzz: decoder robustness | **done** | 8 cargo-fuzz targets (incl. fuzz_pa31_apply, fuzz_lzx, fuzz_x86_e8) |
 | Fuzz: roundtrip (LZX / BsDiff) | **done** | clean |

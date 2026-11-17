@@ -9,6 +9,7 @@ use crate::pe::cli::schema::{
     SignatureKind,
 };
 use crate::pe::cli::signature::{
+    transform_classic_method_signature_blob, transform_classic_type_spec_blob,
     transform_field_signature_blob, transform_method_signature_blob,
     transform_property_signature_blob, transform_type_spec_blob,
 };
@@ -160,6 +161,20 @@ fn transform_signature_blob_at_source_offset(
     let Some(blob) = blob_value_mut(image, stream, blob_offset) else {
         return 0;
     };
+    if metadata.flavor == CliSchemaFlavor::Classic {
+        match signature_kind_for_table(table_id) {
+            Some(SignatureKind::MethodSig) => {
+                return transform_classic_method_signature_blob(blob, cli_map)
+            }
+            Some(SignatureKind::MemberRefSig) if blob.first().copied() != Some(CALLCONV_FIELD) => {
+                return transform_classic_method_signature_blob(blob, cli_map)
+            }
+            Some(SignatureKind::TypeSpecSig) => {
+                return transform_classic_type_spec_blob(blob, cli_map)
+            }
+            _ => {}
+        }
+    }
     match signature_kind_for_table(table_id) {
         Some(SignatureKind::FieldSig) => transform_field_signature_blob(blob, cli_map),
         Some(SignatureKind::MethodSig) => transform_method_signature_blob(blob, cli_map),
@@ -361,13 +376,14 @@ mod tests {
         image[blob_start + 1..blob_start + 6].copy_from_slice(&[
             0x00,
             0x01,
-            0x01,
+            0x08, // I4 return: native classic VOID stops before parameters.
             0x12,
             (3 << 2) | 1,
         ]);
 
         let mut table_maps = CliMapModel::default().tables;
         table_maps[0x01] = rift(&[(3, 7)]);
+        table_maps[0x02] = rift(&[(3, 6)]);
         table_maps[0x04] = rift(&[(1, 4)]);
         table_maps[0x06] = rift(&[(1, 6)]);
         table_maps[0x08] = rift(&[(1, 2)]);
@@ -390,6 +406,7 @@ mod tests {
         image: &[u8],
         blob_start: usize,
         stats: CliMetadataTransformStats,
+        signature_rid: u8,
     ) {
         assert!(stats.index_rewrites >= 6);
         assert_eq!(stats.signature_blob_rewrites, 1);
@@ -401,7 +418,7 @@ mod tests {
         assert_eq!(read_u16(image, 0x28), (7 << 2) | 1);
         assert_eq!(read_u16(image, 0x2a), 4);
         assert_eq!(read_u16(image, 0x2c), 6);
-        assert_eq!(image[blob_start + 5], (7 << 2) | 1);
+        assert_eq!(image[blob_start + 5], (signature_rid << 2) | 1);
     }
 
     #[test]
@@ -410,7 +427,9 @@ mod tests {
 
         let stats = transform_cli_metadata(&mut fixture.image, &fixture.metadata, &fixture.cli_map);
 
-        assert_fixture_was_transformed(&fixture.image, fixture.blob_start, stats);
+        // Table columns use the TypeRef map; the native classic signature
+        // path uses the independently different TypeDef map for this tag.
+        assert_fixture_was_transformed(&fixture.image, fixture.blob_start, stats, 6);
     }
 
     #[test]
@@ -437,7 +456,7 @@ mod tests {
             transform_cli4_metadata(&mut fixture.image, &fixture.metadata, &fixture.cli_map)
                 .unwrap();
 
-        assert_fixture_was_transformed(&fixture.image, fixture.blob_start, stats);
+        assert_fixture_was_transformed(&fixture.image, fixture.blob_start, stats, 7);
     }
 
     #[test]

@@ -9,8 +9,8 @@ use super::signature::{get_signature, HASH_ALG_NONE, HASH_ALG_SHA256};
 
 /// Encode `target` as a PA30 delta against `reference`.
 ///
-/// Equivalent to `CreateDeltaB(...)` on Windows. Produces a format-compatible
-/// delta decodable by both this crate and msdelta.dll.
+/// Produces a format-compatible delta; compression and creation policy can
+/// differ from `CreateDeltaB(...)` on Windows.
 pub fn create(reference: &[u8], target: &[u8]) -> Result<Vec<u8>> {
     CreateOptions::default().execute(reference, target)
 }
@@ -57,7 +57,8 @@ impl CreateOptions {
         Self::default()
     }
 
-    /// Set the hash algorithm for target integrity verification.
+    /// Set the hash algorithm for target integrity verification and, for PA31,
+    /// verification of the original source.
     /// Use `HASH_ALG_MD5`, `HASH_ALG_SHA256`, or `HASH_ALG_NONE`.
     pub fn hash_algorithm(mut self, alg: u32) -> Self {
         self.hash_alg = alg;
@@ -206,11 +207,15 @@ impl CreateOptions {
             header_writer.write_i64(target.len() as i64);
             header_writer.write_i64(effective_hash_alg as i64);
             header_writer.write_buffer(&target_hash);
-            // PA31 extra fields
-            header_writer.write_i64(0); // field1
-            header_writer.write_i64(0); // field2
-            header_writer.write_i64(0); // field3
-            header_writer.write_buffer(&[]); // extra_hash
+            let source_hash = if effective_hash_alg != HASH_ALG_NONE {
+                get_signature(reference, effective_hash_alg)?.hash
+            } else {
+                Vec::new()
+            };
+            header_writer.write_i64(0x88); // native API header structure size
+            header_writer.write_i64(1); // PA31 serialization selector
+            header_writer.write_i64(0); // minimum client version
+            header_writer.write_buffer(&source_hash);
             let header_buf = header_writer.finish();
             outer_writer.write_buffer(&header_buf);
         } else {
@@ -269,8 +274,52 @@ pub fn get_info_ex(delta: &[u8]) -> Result<super::header::Header> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::header::parse_header;
+    use super::super::signature::HASH_ALG_MD5;
     use super::*;
     use crate::pe::parse::PeMachine;
+
+    #[test]
+    fn pa31_creation_records_original_source_integrity() {
+        for source in [b"".as_slice(), b"original source bytes".as_slice()] {
+            for algorithm in [HASH_ALG_MD5, HASH_ALG_SHA256, HASH_ALG_NONE] {
+                let target = b"replacement target bytes";
+                let delta = CreateOptions::new()
+                    .version(FormatVersion::PA31)
+                    .hash_algorithm(algorithm)
+                    .execute(source, target)
+                    .unwrap();
+                let header = parse_header(&delta).unwrap();
+                let extra = header.pa31_extra.unwrap();
+                assert_eq!(extra.header_size, 0x88);
+                assert_eq!(extra.format_version, 1);
+                assert_eq!(extra.min_client_version, 0);
+                if algorithm == HASH_ALG_NONE {
+                    assert!(extra.source_hash.is_empty());
+                    assert!(header.target_hash.is_empty());
+                } else {
+                    assert_eq!(
+                        extra.source_hash,
+                        get_signature(source, algorithm).unwrap().hash
+                    );
+                    assert_eq!(
+                        header.target_hash,
+                        get_signature(target, algorithm).unwrap().hash
+                    );
+                }
+                assert_eq!(super::super::apply(source, &delta).unwrap(), target);
+            }
+        }
+    }
+
+    #[test]
+    fn pa30_creation_keeps_source_hash_absent() {
+        let delta = CreateOptions::new()
+            .hash_algorithm(HASH_ALG_SHA256)
+            .execute(b"original source", b"replacement target")
+            .unwrap();
+        assert!(parse_header(&delta).unwrap().pa31_extra.is_none());
+    }
 
     fn pe(machine: PeMachine) -> PeInfo {
         PeInfo {

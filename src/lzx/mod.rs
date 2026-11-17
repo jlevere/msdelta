@@ -45,9 +45,9 @@ pub fn decompress_with_rift(
 ///
 /// The second return value is exactly `target_size` entries, one per output
 /// byte: the **reference offset** the byte was copied from, or `-1` for a
-/// literal. `>= 0` flags copied-from-reference bytes (the transform-marker
-/// gate); inverting against a known target reconstructs genuine's transformed
-/// source `T(source)` at every copied offset.
+/// literal-derived byte. Output back-references inherit their source's origin.
+/// These origins describe decompression reuse; they are distinct from the
+/// ownership markers used during PE source transformations.
 pub fn decompress_with_copy_source(
     reference: &[u8],
     patch_data: &[u8],

@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "dll_sha256": "b2abf7125b94c5061f4044f747e23477237cb28c7a25ceae74f3d6dcbc887958",
+  "dll_file_version": "5.00 (WinBuild.160101.0800)",
+  "oracle_sha256": "ba33a48682e1e847d7408a60b7e2f9d9fed7563c8b0fe2b0ef2fcf297f623154",
+  "source_sha256": {
+    "oracle.c": "52ac26ad70c88acdeedc403a75c9ad0d5ec20fa44658c160505594af2102619d",
+    "mutate_reverse.py": "1075630ba89162be58f67115f13dfc2f531fb9c832c257640936027605ff0bb8",
+    "controls.ps1": "a503410a95334bf1d1b286915c7be9ad49b38c0cfb9f54bd1aa59276d56c1460",
+    "../pa31-header/make_probes.py": "8f620b665994d7bee9dcb14e2a36bd459f87e599b42856b1b59e915b0facf3d1",
+    "../pa31-header/probe.ps1": "895709d22518948bcf2bec12cde394147f6c7b5d29d4518b767bbdaf97c57140"
+  },
+  "input_design": "Literal control C1024->D256; copy control is an identical deterministic 4096-byte pair.",
+  "reverse_api": "ApplyDeltaGetReverseB(flags, original, forward_delta, source_filetime, new_out, reverse_delta_out)",
+  "source_filetime": 0,
+  "next_stage": "Run mutate_reverse.py on these controls, then ../pa31-header/probe.ps1 with this reverse oracle."
+}

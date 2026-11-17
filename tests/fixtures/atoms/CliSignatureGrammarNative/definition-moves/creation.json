@@ -1,0 +1,7 @@
+{
+  "schema":1,"mode":"normal","reset_flags":0,
+  "dll_sha256":"ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb","harness_sha256":"140be86d047efeaa658208eb88777e68f82d54521d58d2a1085af7c684d92c4e",
+  "create_ok":true,"create_error":0,"apply_ok":true,"apply_error":0,
+  "output_equal":true,"inputs_unchanged":true,
+  "source_sha256":"61cb6d25d42f3e2c57a51702d0d12661f92f96b1e3facbee25b697e10018d8b6","target_sha256":"9e859ce3b61e9e17054cea0ff9f9628441f701c5efd5b442922daac43e716bd4","delta_sha256":"73c275e9e2353687bf06cc95a578111059b5b69eae0c6743ace26a949661dc37"
+}

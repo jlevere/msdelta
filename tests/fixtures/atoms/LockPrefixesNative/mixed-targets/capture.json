@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "dll_sha256": "ac96e0c3bfd052c3391a49e5fe4586969fb032a920b9f564dadffd8b5f4358eb",
+  "transform_rva": 73104,
+  "harness_sha256": "c7c2931abe3a174e458764131f16a6701dce09d2b1a8b664d9cb081b0524ead9",
+  "delta_origin": "native CreateDeltaB",
+  "observation_scope": "synchronous caller thread",
+  "source_sha256": "db1eeb2fe8285f43cceffcbe00e7ecde391fe1b5a7b62d78e0c3154d07194e45",
+  "delta_sha256": "c26d6e0810a4c44db2933adf46bbd54cd09bb93e09c383adb23baa05432aa760",
+  "target_sha256": "b9a42fede3b2563891040099081bcae11c7a3e18e175c7f10bbd525831ad8754",
+  "uninstrumented_output_equal": true,
+  "artifact_sha256": {
+    "before.bin": "db1eeb2fe8285f43cceffcbe00e7ecde391fe1b5a7b62d78e0c3154d07194e45",
+    "after.bin": "408b0f84acad10119ead4c9ce8f2e0f1c0cbcbc63e62be8142331d986f9d49a2"
+  }
+}

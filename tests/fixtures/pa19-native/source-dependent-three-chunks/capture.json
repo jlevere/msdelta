@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "case": "source-dependent-three-chunks",
+  "mspatcha_sha256": "c301d1cc359708dde08f2d9e2f5d8a39c92e36be3e9d298a16ec18d4c0dd6ec6",
+  "mspatchc_sha256": "e671f5e786b80ac41a270fe6cf88993288ba9a0dab089adee686d550ecb5a92e",
+  "harness_sha256": "b3cd2bcda8b5e844d92148839cdcd44fb58fbb39c00ba2807194922aa83176f7",
+  "source_sha256": "7c010707eed80ee26bd6baab06577e5eba4172c91229a19f0888af5df05fc4e1",
+  "target_sha256": "780efdda0dd3af3c76bc61ee83c5a8a2173ccddf0b034fbf8a0249f50bc6de2f",
+  "patch_sha256": "54acc802c8bad494e0eda1065acc65d49cb3de4deb6d1a8145ed145082682c6c",
+  "applied_sha256": "780efdda0dd3af3c76bc61ee83c5a8a2173ccddf0b034fbf8a0249f50bc6de2f",
+  "wrong_source_sha256": "a7e9d82848c6e51492e8aea86716c1bf95396e0cfa9a21b20d6c67ce6dfceb36",
+  "source_size": 65537,
+  "target_size": 65537,
+  "patch_size": 111,
+  "create_flags": 8388609,
+  "apply_flags": 0,
+  "native_roundtrip_equal": true,
+  "same_size_wrong_source_rejected": true,
+  "wrong_source_error": 3222159620
+}

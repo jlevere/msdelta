@@ -1,0 +1,10 @@
+{
+  "native_control_sha256": "5b865b4bd47872c1ce88465f9e2649e38b203ce5b1ad967d10fb4e1394afb697",
+  "payload_unchanged": true,
+  "native_noop_roundtrip_exact": true,
+  "mutation": {
+    "field": "structure_size",
+    "before": 136,
+    "after": 0
+  }
+}

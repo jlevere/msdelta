@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "case": "definition-moves",
+  "intended_definition_insertion": 2,
+  "intended_reference_insertion": null,
+  "require_observed_native_map_movement": true
+}

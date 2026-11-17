@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "destination": "header-gap",
+  "data_virtual_size": 8192,
+  "data_raw_size": 4096,
+  "source_branches": [
+    {
+      "instruction": "call",
+      "file_offset": 544,
+      "rva": 4128,
+      "length": 5,
+      "destination_rva": 2048,
+      "destination_kind": "header-gap"
+    },
+    {
+      "instruction": "jmp",
+      "file_offset": 576,
+      "rva": 4160,
+      "length": 5,
+      "destination_rva": 2048,
+      "destination_kind": "header-gap"
+    },
+    {
+      "instruction": "jcc",
+      "file_offset": 608,
+      "rva": 4192,
+      "length": 6,
+      "destination_rva": 2048,
+      "destination_kind": "header-gap"
+    }
+  ],
+  "target_branches": [
+    {
+      "instruction": "call",
+      "file_offset": 544,
+      "rva": 8224,
+      "length": 5,
+      "destination_rva": 2048,
+      "destination_kind": "header-gap"
+    },
+    {
+      "instruction": "jmp",
+      "file_offset": 576,
+      "rva": 8256,
+      "length": 5,
+      "destination_rva": 2048,
+      "destination_kind": "header-gap"
+    },
+    {
+      "instruction": "jcc",
+      "file_offset": 608,
+      "rva": 8288,
+      "length": 6,
+      "destination_rva": 2048,
+      "destination_kind": "header-gap"
+    }
+  ]
+}

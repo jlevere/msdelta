@@ -1,12 +1,15 @@
 //! PE file type transforms applied during MSDelta decode/encode.
 //!
-//! When FileType is not RAW, the decoded output is post-processed
-//! through a transform pipeline. The most common transform is
-//! "inferred relocations" which scans for 32-bit pointers within
-//! the PE's image range and rebases them using the rift table.
+//! For PE deltas, the source image is transformed before LZX reconstruction.
+//! The selected passes remap structural fields and instruction operands into
+//! the target address domain; header fixups also run on the reconstructed output.
 
-use super::atom::{AtomMeta, SourceCtx, Transform};
-use super::parse::{DataDirectoryKind, PeHeaderLayout, PeInfo, PeMachine, PeOptionalHeaderKind};
+use super::atom::{AtomMeta, ClassicCliSource, SourceCtx, Transform};
+use super::markers::mark_non_executable;
+#[cfg(test)]
+use super::parse::PeMachine;
+use super::parse::{DataDirectoryKind, PeHeaderLayout, PeInfo, PeOptionalHeaderKind};
+use super::relocations::transform_source_relocs;
 use crate::pe::cli::metadata::CliMetadataModel;
 use crate::pe::cli::method::{cli_method_bodies, CliMethodBody};
 use crate::Result;
@@ -30,6 +33,7 @@ pub(crate) mod transform_flags {
     pub(crate) const EXPORTS: u64 = 0x8;
     pub(crate) const RESOURCES: u64 = 0x10;
     pub(crate) const RELOCATIONS: u64 = 0x20;
+    pub(crate) const SMASH_LOCK_PREFIXES_X86: u64 = 0x40;
     pub(crate) const RELATIVE_JMPS_X86: u64 = 0x80;
     pub(crate) const RELATIVE_CALLS_X86: u64 = 0x100;
     pub(crate) const DISASM_X64: u64 = 0x200;
@@ -67,11 +71,7 @@ const MAX_IMPORT_DESCRIPTORS: usize = 4096;
 
 use crate::lzx::rift::RiftTable;
 // The canonical RVA mapper lives with the typed address domains in `pe::addr`.
-use super::addr::map_rva_i64 as map_rva;
-
-fn first_section_rva(pe: &PeInfo) -> i64 {
-    pe.first_section_rva().map(i64::from).unwrap_or(0)
-}
+use super::addr::{map_rva_i64 as map_rva, SrcRva};
 
 /// Claim `len` bytes at file offset `fo` in the transform marker (bit 0 = owned),
 /// so a later instruction pass does not also rewrite them.
@@ -99,8 +99,7 @@ fn rva_to_file_off(pe: &PeInfo, rva: i64) -> Option<usize> {
 /// Build `T(source)`: the source image transformed exactly as genuine
 /// `ApplyDeltaB`'s `PreProcessPEForApply` transforms it before the LZX copy
 /// stage, so copies land bit-identical to genuine. `buf` is a clone of the
-/// reference with the optional-header CheckSum already zeroed; `pe` is parsed
-/// from it; `rift` is the delta's (coarse) preprocess rift; `flags` is the
+/// reference; `pe` is parsed from the original source; `rift` is the delta's (coarse) preprocess rift; `flags` is the
 /// header transform-selection word. Transforms run in `g_transformsMap` order
 /// (relocations, then jmps, then calls), each consulting/updating a per-file-
 /// offset marker so a later transform never rewrites bytes an earlier one owns.
@@ -112,17 +111,27 @@ pub(crate) fn build_transformed_source(
     target_base: u64,
     target_timestamp: u32,
 ) {
+    build_transformed_source_with_cli(buf, pe, rift, flags, target_base, target_timestamp, None);
+}
+
+pub(crate) fn build_transformed_source_with_cli(
+    buf: &mut [u8],
+    pe: &PeInfo,
+    rift: &RiftTable,
+    flags: u64,
+    target_base: u64,
+    target_timestamp: u32,
+    cli: Option<ClassicCliSource<'_>>,
+) {
     // PeUnbinder (flag bit 13, runs first in PreProcessPEForApply before the
     // transform executor): reset bound imports and mark .idata writable.
     if flags & transform_flags::PE_UNBINDER != 0 {
+        #[cfg(test)]
+        crate::pa30::pipeline_tests::record_buffer("PeUnbinder", "before", buf, None);
         unbind_pe(buf, pe);
+        #[cfg(test)]
+        crate::pa30::pipeline_tests::record_buffer("PeUnbinder", "after", buf, None);
     }
-    // PreProcessPEForApply writes the TARGET COFF TimeDateStamp into the source
-    // FileHeader so copies of it land the target value.
-    // (post-decode patching only covers known timestamp sites, not arbitrary
-    // copies into other sections). The transforms never touch this field, so
-    // the write order does not matter.
-    set_header_timestamp(buf, target_timestamp);
     // Run the registered source transforms in g_transformsMap order, each gated
     // by its header flag bit and the image architecture (see pe::atom). Running
     // on the SOURCE (producing T(source)) is the only correct architecture: the
@@ -130,12 +139,27 @@ pub(crate) fn build_transformed_source(
     // reads the transformed byte while a literal already carries the target byte
     // -- a post-decode remap could not tell them apart and would double-apply
     // the rift on literal-provided fields (e.g. comctl32 amd64 .pdata
-    // UnwindData). The marker carries copy provenance so a later i386
+    // UnwindData). The marker carries structural ownership so a later i386
     // instruction pass never rewrites bytes an earlier transform owns.
     let mut marker = vec![0u8; buf.len()];
-    crate::pe::atom::run_registered(buf, pe, rift, &mut marker, target_base, flags);
-    // SetImageBase: PreProcessPEForApply writes the TARGET image base last.
+    crate::pe::atom::run_registered_with_cli(buf, pe, rift, &mut marker, target_base, flags, cli);
+    // Header normalization follows the source transformations. Those passes
+    // must still see the source image base, timestamp, and checksum.
+    #[cfg(test)]
+    crate::pa30::pipeline_tests::record_buffer("PeImageBase", "before", buf, None);
     set_header_image_base(buf, target_base);
+    #[cfg(test)]
+    crate::pa30::pipeline_tests::record_buffer("PeImageBase", "after", buf, None);
+    #[cfg(test)]
+    crate::pa30::pipeline_tests::record_buffer("PeTimeStamp", "before", buf, None);
+    set_header_timestamp(buf, target_timestamp);
+    #[cfg(test)]
+    crate::pa30::pipeline_tests::record_buffer("PeTimeStamp", "after", buf, None);
+    #[cfg(test)]
+    crate::pa30::pipeline_tests::record_buffer("ZeroPeChecksum", "before", buf, None);
+    zero_pe_checksum(buf);
+    #[cfg(test)]
+    crate::pa30::pipeline_tests::record_buffer("ZeroPeChecksum", "after", buf, None);
 }
 
 // Transform-atom adapters. Each is a zero-sized type registered in `pe::atom`;
@@ -144,22 +168,35 @@ pub(crate) fn build_transformed_source(
 // registry test.) The bodies stay as free functions for now; folding them into
 // the trait method and out into per-atom modules is the next cleanup.
 
-/// `MarkNonExe` (`g_transformsMap` mask `0x2`, i386, runs first): mark every
-/// byte outside executable sections so the instruction passes leave it alone.
+/// `MarkNonExe` (mask `0x2`, runs first): mark PE structural ranges and
+/// non-executable section data before instruction transformations.
 pub(crate) struct MarkNonExe;
 impl Transform for MarkNonExe {
     fn meta(&self) -> AtomMeta {
         AtomMeta {
             id: "MarkNonExe",
-            layer: "x86",
+            layer: "pe",
             kind: "source_transform",
-            file_types: crate::pe::atom::X86_FILE_TYPES,
+            file_types: crate::pe::atom::PE_FILE_TYPES,
             flag_mask: transform_flags::MARK_NON_EXE,
             native_reference: "MarkNonExe::Run",
         }
     }
     fn apply(&self, ctx: &mut SourceCtx<'_>) {
         mark_non_executable(ctx.buf, ctx.pe, ctx.marker);
+        if let Some(cli) = ctx.cli {
+            // Native classic CLI ownership excludes the final MethodDef row,
+            // just like its IL transform. General method enumeration remains
+            // inclusive; this boundary belongs to the MSDelta stage.
+            let method_limit =
+                cli.metadata.row_counts[crate::pe::cli::schema::table::METHOD_DEF as usize];
+            for body in cli_method_bodies(ctx.buf, ctx.pe, cli.metadata)
+                .into_iter()
+                .filter(|body| body.rid < method_limit)
+            {
+                mark_marker_range(ctx.marker, body.file_offset, body.total_size, 3);
+            }
+        }
     }
 }
 
@@ -232,7 +269,35 @@ impl Transform for TransformRelocations {
         }
     }
     fn apply(&self, ctx: &mut SourceCtx<'_>) {
-        transform_source_relocs(ctx.buf, ctx.pe, ctx.rift, ctx.marker, ctx.target_base);
+        if super::inferred_relocations::uses_inferred_relocations(ctx.buf, ctx.pe) {
+            super::inferred_relocations::transform(
+                ctx.buf,
+                ctx.pe,
+                ctx.rift,
+                ctx.marker,
+                ctx.target_base,
+            );
+        } else {
+            transform_source_relocs(ctx.buf, ctx.pe, ctx.rift, ctx.marker, ctx.target_base);
+        }
+    }
+}
+
+pub(crate) struct SmashLockPrefixesX86;
+impl Transform for SmashLockPrefixesX86 {
+    fn meta(&self) -> AtomMeta {
+        AtomMeta {
+            id: "SmashLockPrefixesX86",
+            layer: "x86",
+            kind: "source_transform",
+            file_types: crate::pe::atom::X86_FILE_TYPES,
+            flag_mask: transform_flags::SMASH_LOCK_PREFIXES_X86,
+            native_reference: "SmashLockPrefixesI386::InternalProcess",
+        }
+    }
+
+    fn apply(&self, ctx: &mut SourceCtx<'_>) {
+        super::lock_prefixes::smash_lock_prefixes(ctx.buf, ctx.pe);
     }
 }
 
@@ -431,6 +496,7 @@ fn transform_source_imports(
     let ptr = if pe.is_64bit { 8usize } else { 4 };
     let ordinal_flag: u64 = if pe.is_64bit { 1 << 63 } else { 1 << 31 };
     let image_base = pe.image_base as i64;
+    let header_extent = header_file_extent(buf);
     let imports = match pe.data_directory(DataDirectoryKind::Import) {
         Some(value) if value.rva != 0 => value,
         _ => return,
@@ -487,17 +553,19 @@ fn transform_source_imports(
                     } else {
                         structs::write_u32(buf, fo, nv as u32);
                     }
-                    mark_bytes(marker, fo, ptr);
                 } else if v & ordinal_flag == 0 {
                     // by-name: low 32 bits are the IMAGE_IMPORT_BY_NAME RVA (a
                     // 32-bit RVA even in an 8-byte PE32+ thunk; high dword zero).
-                    map_rva_field(buf, marker, fo, rift);
-                    if pe.is_64bit {
-                        mark_bytes(marker, fo + 4, 4);
+                    if let Some(name_range) =
+                        import_name_file_range(buf, pe, SrcRva(v as u32), header_extent)
+                    {
+                        marker[name_range].fill(3);
+                        map_rva_field(buf, marker, fo, rift);
                     }
-                } else {
-                    mark_bytes(marker, fo, ptr); // by-ordinal slot
                 }
+                // Every nonzero slot is structural, including ordinals and
+                // invalid name references. The zero terminator is not claimed.
+                marker[fo..fo + ptr].fill(3);
                 k += 1;
             }
         };
@@ -523,6 +591,39 @@ fn transform_source_imports(
             rift,
         );
     }
+}
+
+/// Locate an import's hint, name, and terminating NUL within the same
+/// file-backed PE range. Native lookup requires four available bytes even for
+/// an empty name; a NUL in the next section cannot validate this reference.
+fn import_name_file_range(
+    buf: &[u8],
+    pe: &PeInfo,
+    name: SrcRva,
+    header_extent: usize,
+) -> Option<std::ops::Range<usize>> {
+    let (start, end) = if (name.0 as usize) < header_extent {
+        (name.0 as usize, header_extent)
+    } else {
+        pe.sections.iter().find_map(|section| {
+            let relative = name.0.checked_sub(section.virtual_address)?;
+            if relative >= section.raw_size {
+                return None;
+            }
+            let available = section.raw_size - relative;
+            let start = (section.raw_offset as usize).checked_add(relative as usize)?;
+            let end = start.checked_add(available as usize)?.min(buf.len());
+            Some((start, end))
+        })?
+    };
+    if end.checked_sub(start)? < 4 {
+        return None;
+    }
+    let name_len = buf
+        .get(start + 2..end)?
+        .iter()
+        .position(|&byte| byte == 0)?;
+    Some(start..start + 3 + name_len)
 }
 
 /// `TransformExports` (dpx, g_transformsMap mask 0x8): map the export
@@ -660,27 +761,6 @@ fn transform_source_resources(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, mar
     }
 }
 
-/// `MarkNonExe` (dpx, g_transformsMap mask 0x2, runs first): mark every byte
-/// that is NOT inside an executable section. The instruction transforms then
-/// rewrite a relative branch only when its target is UNMARKED (i.e. lands in
-/// executable code) -- this is what rejects the false-positive 0xE8/0xE9 bytes
-/// embedded in data/operands whose bogus target lands outside code.
-fn mark_non_executable(buf: &[u8], pe: &PeInfo, marker: &mut [u8]) {
-    for m in marker.iter_mut() {
-        *m |= 1;
-    }
-    for sec in &pe.sections {
-        if sec.characteristics & crate::pe::structs::SCN_MEM_EXECUTE == 0 {
-            continue;
-        }
-        let a = sec.raw_offset as usize;
-        let end = (a + sec.virtual_size.min(sec.raw_size) as usize).min(buf.len());
-        for m in &mut marker[a..end] {
-            *m &= !1;
-        }
-    }
-}
-
 pub(crate) fn build_cli_mark_non_exe_marker_map(
     buf: &[u8],
     pe: &PeInfo,
@@ -718,190 +798,47 @@ fn mark_marker_range(marker: &mut [u8], start: usize, len: usize, value: u8) {
     }
 }
 
-/// `TransformRelocations` apply pass on the source (dpx `ReadRelocationEntries`
-/// 0x18003f6a0): rewrite each relocation's pointed-to operand through the rift
-/// and mark its bytes so the instruction transforms skip them. Handles both
-/// type 3 (HIGHLOW, 32-bit -- i386) and type 10 (DIR64, 64-bit -- amd64); a PE
-/// carries one or the other. The block rebuild is type-agnostic.
-fn transform_source_relocs(
-    buf: &mut [u8],
+fn header_file_extent(buf: &[u8]) -> usize {
+    PeHeaderLayout::parse(buf)
+        .ok()
+        .and_then(|layout| layout.size_of_headers_offset())
+        .and_then(|offset| buf.get(offset..offset + 4))
+        .map(|bytes| u32::from_le_bytes(bytes.try_into().unwrap()) as usize)
+        .unwrap_or(0)
+        .min(buf.len())
+}
+
+/// Resolve a branch destination to the source file byte whose ownership is
+/// checked. Native branch transforms use SizeOfRawData, including raw padding,
+/// rather than the section's virtual extent. A virtual-only tail has no marker
+/// byte, even when its numeric RVA happens to be a valid file offset.
+fn branch_target_file_offset(
     pe: &PeInfo,
-    rift: &RiftTable,
-    marker: &mut [u8],
-    target_base: u64,
-) {
-    let image_base = pe.image_base as i64;
-    let relocs = match pe.data_directory(DataDirectoryKind::BaseRelocation) {
-        Some(value) if value.rva != 0 => value,
-        _ => return,
-    };
-    let Some(base) = rva_to_file_off(pe, relocs.rva as i64) else {
-        return;
-    };
-    let blocks_end = (base + relocs.size as usize).min(buf.len());
-
-    // Collected entries for the block rebuild: (mapped location RVA, type, extra).
-    let mut entries: Vec<(u32, u16, u16)> = Vec::new();
-
-    use crate::pe::structs::{self, ImageBaseRelocation};
-    let mut bo = base;
-    while let Some(block) = structs::read::<ImageBaseRelocation>(buf, bo) {
-        if bo + size_of::<ImageBaseRelocation>() > blocks_end {
-            break;
-        }
-        let page = block.page_rva.get() as i64;
-        let blk = block.size_of_block.get() as usize;
-        if blk < 8 || bo + blk > blocks_end {
-            break;
-        }
-        // Each entry is a u16: type<<12 | (offset within the 4 KiB page).
-        let n = (blk - 8) / 2;
-        let mut j = 0;
-        while j < n {
-            let eo = bo + 8 + j * 2;
-            let e = structs::read_u16(buf, eo);
-            let typ = e >> 12;
-            if typ == 0 {
-                break; // type-0 padding terminates the block (not a real entry)
-            }
-            let loc_rva = page + (e & 0xfff) as i64;
-            // The rebuilt block entry stores the MAPPED location RVA.
-            let mapped_loc = (loc_rva + rift.map(loc_rva)) as u32;
-            let mut extra = 0u16;
-            let mut kept = typ;
-            if let Some(op_fo) = rva_to_file_off(pe, loc_rva) {
-                match typ {
-                    3 => {
-                        // HIGHLOW: rewrite the pointed-to 32-bit operand. Map its
-                        // RVA and relinearize against the TARGET image base.
-                        let r = structs::read_u32(buf, op_fo) as i32 as i64 - image_base;
-                        let nv = (target_base as i64 + r + rift.map(r)) as u32;
-                        structs::write_u32(buf, op_fo, nv);
-                        mark_bytes(marker, op_fo, 4);
-                    }
-                    10 => {
-                        // DIR64: rewrite the pointed-to 64-bit operand.
-                        let r = structs::read_u64(buf, op_fo) as i64 - image_base;
-                        let nv = (target_base as i64)
-                            .wrapping_add(r)
-                            .wrapping_add(rift.map(r)) as u64;
-                        structs::write_u64(buf, op_fo, nv);
-                        mark_bytes(marker, op_fo, 8);
-                    }
-                    1 | 2 => mark_bytes(marker, op_fo, 2),
-                    4 => {
-                        // HIGHADJ consumes the following u16 as its extra field.
-                        mark_bytes(marker, op_fo, 2);
-                        if j + 1 < n {
-                            extra = structs::read_u16(buf, bo + 8 + (j + 1) * 2);
-                        }
-                        j += 1;
-                    }
-                    _ => kept = 0,
-                }
-            }
-            entries.push((mapped_loc, kept, extra));
-            j += 1;
-        }
-        bo += blk;
+    target: SrcRva,
+    header_extent: usize,
+    file_len: usize,
+) -> Option<usize> {
+    if target.0 == 0 || target.0 >= pe.size_of_image {
+        return None;
     }
-
-    rebuild_reloc_blocks(buf, pe, relocs.rva, relocs.size, base, &mut entries);
-}
-
-/// Regenerate the base-relocation directory in place from the collected,
-/// rift-mapped entries. Mirrors `WriteRelocationEntries` (dpx 0x18004048c):
-/// stable-sort ascending by mapped location RVA, regroup by 4 KiB page, each
-/// `u16 = type<<12 | (rva & 0xfff)` (HIGHADJ followed by its extra u16), pad
-/// each block to a 4-byte boundary with a zero `u16` when the entry count is
-/// odd, recompute `SizeOfBlock`, all within the `.reloc` section extent.
-fn rebuild_reloc_blocks(
-    buf: &mut [u8],
-    pe: &PeInfo,
-    reloc_rva: u32,
-    reloc_size: u32,
-    base: usize,
-    entries: &mut [(u32, u16, u16)],
-) {
-    entries.sort_by_key(|e| e.0);
-
-    // Budget = the RAW file bytes of `.reloc` from the dir start to the section's
-    // raw end (even), clamped to at least the data-directory size. The RAW extent
-    // (not VirtualSize) is what genuine writes into: rift remapping can regroup
-    // entries across a page boundary, adding a block header and expanding the
-    // table past VirtualSize into the section's raw padding (e.g. appserverai,
-    // VirtualSize 0x11b0 but rebuilt blocks reach 0x11c8 within raw 0x1200).
-    let extent = pe
-        .section_containing_rva(reloc_rva)
-        .map(|s| s.raw_size.saturating_sub(reloc_rva - s.virtual_address))
-        .unwrap_or(reloc_size)
-        .max(reloc_size);
-    let limit = (base + (extent & !1) as usize).min(buf.len());
-
-    use crate::pe::structs::{self, ImageBaseRelocation};
-    let mut out = base;
-    let mut i = 0usize;
-    while out + 8 <= limit && i < entries.len() {
-        let page = entries[i].0 & 0xffff_f000;
-        let header = out;
-        out += 8;
-        let body_start = out;
-        while out + 2 <= limit && i < entries.len() && (entries[i].0 & 0xffff_f000) == page {
-            let (rva, typ, extra) = entries[i];
-            structs::write_u16(buf, out, (typ << 12) | (rva & 0xfff) as u16);
-            out += 2;
-            if typ == 4 && out + 2 <= limit {
-                structs::write_u16(buf, out, extra); // HIGHADJ's trailing u16
-                out += 2;
-            }
-            i += 1;
-        }
-        // Pad to a 4-byte boundary with a zero u16 when the entry count is odd.
-        if ((out - body_start) / 2) % 2 == 1 && out + 2 <= limit {
-            structs::write_u16(buf, out, 0);
-            out += 2;
-        }
-        if let Some(h) = structs::view_mut::<ImageBaseRelocation>(buf, header) {
-            h.page_rva.set(page);
-            h.size_of_block.set((out - header) as u32);
-        }
-    }
-}
-
-/// Is `target` (a source RVA, UNSIGNED) a reachable relative-branch
-/// destination? Mirrors `RelativeCallsX86::Run`: nonzero, below `SizeOfImage`,
-/// and either below the first section or inside one. Unsigned throughout, so a
-/// wrapped (negative) displacement becomes a huge RVA and is rejected.
-fn branch_target_reachable(pe: &PeInfo, target: u32) -> bool {
-    target != 0
-        && target < pe.size_of_image
-        && ((target as i64) < first_section_rva(pe)
-            || pe
-                .sections
-                .iter()
-                .any(|section| section.contains_rva(target)))
-}
-
-/// Marker index for a branch target: rebased to a file offset when it lands in
-/// a section, else the RVA itself.
-fn target_marker_index(pe: &PeInfo, target: u32) -> i64 {
-    if (target as i64) < first_section_rva(pe) {
-        target as i64
+    let offset = if (target.0 as usize) < header_extent {
+        target.0 as usize
     } else {
-        rva_to_file_off(pe, target as i64)
-            .map(|f| f as i64)
-            .unwrap_or(target as i64)
-    }
-}
-
-fn marker_set(marker: &[u8], idx: i64) -> bool {
-    idx >= 0 && (idx as usize) < marker.len() && marker[idx as usize] & 1 != 0
+        pe.sections.iter().find_map(|section| {
+            let relative = target.0.checked_sub(section.virtual_address)?;
+            (relative < section.raw_size)
+                .then(|| (section.raw_offset as usize).checked_add(relative as usize))
+                .flatten()
+        })?
+    };
+    (offset != 0 && offset < file_len).then_some(offset)
 }
 
 /// `RelativeCallsX86::Run` apply pass (dpx 0x180040a00) on the source: rewrite
 /// 0xE8 rel32 displacements through the rift, skipping any whose instruction
 /// bytes or target are marker-owned.
 fn transform_source_calls_i386(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marker: &[u8]) {
+    let header_extent = header_file_extent(buf);
     for sec in &pe.sections {
         if sec.characteristics & crate::pe::structs::SCN_MEM_EXECUTE == 0 {
             continue;
@@ -926,11 +863,13 @@ fn transform_source_calls_i386(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, ma
             let site_end = (sec.virtual_address + (i - sraw) as u32).wrapping_add(5);
             let orig = i32::from_le_bytes(buf[i + 1..i + 5].try_into().unwrap());
             let target = site_end.wrapping_add(orig as u32);
-            if !branch_target_reachable(pe, target) {
+            let Some(target_offset) =
+                branch_target_file_offset(pe, SrcRva(target), header_extent, buf.len())
+            else {
                 i += 1;
                 continue;
-            }
-            if marker_set(marker, target_marker_index(pe, target)) {
+            };
+            if marker[target_offset] & 1 != 0 {
                 i += 1;
                 continue;
             }
@@ -948,6 +887,7 @@ fn transform_source_calls_i386(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, ma
 /// Remaps the displacement and collapses to the short form (`EB`/`7x`) when the
 /// new displacement fits a byte.
 fn transform_source_jmps_i386(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, marker: &[u8]) {
+    let header_extent = header_file_extent(buf);
     for sec in &pe.sections {
         if sec.characteristics & crate::pe::structs::SCN_MEM_EXECUTE == 0 {
             continue;
@@ -986,11 +926,13 @@ fn transform_source_jmps_i386(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, mar
             }
             let site_end = (sec.virtual_address + (d - sraw) as u32).wrapping_add(5);
             let target = site_end.wrapping_add(orig as u32);
-            if !branch_target_reachable(pe, target) {
+            let Some(target_offset) =
+                branch_target_file_offset(pe, SrcRva(target), header_extent, buf.len())
+            else {
                 i += 1;
                 continue;
-            }
-            if marker_set(marker, target_marker_index(pe, target)) {
+            };
+            if marker[target_offset] & 1 != 0 {
                 i += 1;
                 continue;
             }
@@ -1013,6 +955,10 @@ fn transform_source_jmps_i386(buf: &mut [u8], pe: &PeInfo, rift: &RiftTable, mar
 }
 
 /// Apply the inferred relocations transform for 32-bit (X86) PE binaries.
+///
+/// This legacy helper is not used by PA30 apply. The native-compatible source
+/// stage lives in `pe::inferred_relocations`, which keeps ownership bits in a
+/// separate marker buffer and scans the native post-header range.
 ///
 /// Scans the buffer for 32-bit values that fall within the PE's image range.
 /// Marks them with `RELOC_MARKER` in the output buffer and replaces the
@@ -1069,6 +1015,9 @@ pub fn transform_inferred_relocations_x86(
 }
 
 /// Apply inferred relocations for AMD64 PE binaries.
+///
+/// This legacy helper is not registered in the PA30 apply pipeline and has no
+/// native stage proof equivalent to the I386 implementation.
 ///
 /// Scans for 64-bit pointer values within the PE's image range.
 pub fn transform_inferred_relocations_amd64(
@@ -1258,21 +1207,17 @@ fn disasm_amd64(code: &[u8]) -> DisasmInsn {
     // through the 0F table; their ModRM/immediate forms are length-equivalent
     // to a normal 0F ModRM op for the purposes of this decoder, matching the
     // genuine table which assigns them ModRM kind 2 / no-immediate.)
-    let modrm_kind;
-    let imm_kind;
-    if code[pos] == 0x0f {
+    let (modrm_kind, imm_kind) = if code[pos] == 0x0f {
         pos += 1;
         if pos >= avail {
             stop!(pos);
         }
         let op = code[pos] as usize;
-        modrm_kind = MODRM_0F[op];
-        imm_kind = IMM_0F[op];
+        (MODRM_0F[op], IMM_0F[op])
     } else {
         let op = code[pos] as usize;
-        modrm_kind = MODRM_1B[op];
-        imm_kind = IMM_1B[op];
-    }
+        (MODRM_1B[op], IMM_1B[op])
+    };
     pos += 1; // consume opcode byte
 
     // Unknown opcode (table kind 1): genuine code stops here with the length at
@@ -1510,113 +1455,35 @@ pub(crate) fn transform_disasm_x64(output: &mut [u8], pe: &PeInfo, rift: &RiftTa
     changed
 }
 
-/// Undo MSDelta's x86 `0xE8` (near CALL) preprocessing on a reconstructed image.
+/// Undo the whole-buffer E8 translation selected by header flag bit 0.
 ///
-/// Genuine `ApplyDeltaB` (PA31, in UpdateCompression.dll / dpx.dll -- msdelta.dll
-/// has no PA31) preprocesses 32-bit x86 targets with the classic LZX E8 filter:
-/// the 4-byte displacement after each `0xE8` is converted to an absolute form
-/// for better compression, then converted back on apply. It is a whole-buffer
-/// scan (headers, code, even `.rsrc` -- NOT section-bounded), with the output
-/// length as the translation size: a site is converted iff `-i <= v < len`,
-/// where `i` is the byte offset and `v` the stored displacement (verified
-/// byte-for-byte against genuine output -- `translation_size == target_size`).
-///
-/// Runs ONLY on i386 PEs (`PeMachine::I386`) and skips
-/// pure-managed (.NET, `COMIMAGE_FLAGS_ILONLY`) images, which carry machine
-/// `0x14C` too but must not be touched. No-op on everything else, so it is safe
-/// to call unconditionally on the reconstructed image. Returns the site count.
-///
-/// `apply()` calls this only when header flag bit 0 is set (genuine ApplyDeltaB's
-/// transform-selection flag for E8x86) -- that gate, not the i386-PE check here,
-/// is what keeps it off resource-only PEs the encoder did not transform.
+/// This output stage is independent of the PE machine and file type. It scans
+/// the first 1 GiB, including a complete five-byte instruction at the end.
+/// Every E8 consumes its four operand bytes, even when the operand is outside
+/// the translation range. Returns the number of translated sites.
 pub(crate) fn undo_x86_e8_translation(buf: &mut [u8]) -> u32 {
-    // Gate with a manual header read rather than a full `goblin` parse: genuine
-    // msdelta keys only on the machine type, and goblin's strict validation
-    // rejects some otherwise-valid system images (e.g. comctl32). i386 only,
-    // and skip pure-managed (.NET) images.
-    if !is_i386_native_pe(buf) {
-        return 0;
-    }
-
-    let len = buf.len();
-    // A CALL displacement is a signed i32 and the translation size is the image
-    // length; both must fit i32 for the guard/arithmetic to be meaningful (real
-    // targets are well under -- apply() caps at 256 MiB).
-    if len < 10 || len > i32::MAX as usize {
-        return 0;
-    }
-    let ts = len as i32;
-    let mut count = 0u32;
-    let mut i = 0usize;
-    // Classic LZX leaves the last 10 bytes untouched (a CALL displacement never
-    // starts there). Every 0xE8 advances the cursor past its 4 operand bytes
-    // whether or not it is translated, matching the encoder's own scan. The
-    // rewrite is 32-bit wrapping arithmetic (`new = v - i` mod 2^32), matching
-    // genuine behaviour and avoiding overflow panics on adversarial input.
-    while i < len - 10 {
-        if buf[i] != 0xE8 {
-            i += 1;
+    let scan_len = buf.len().min(0x4000_0000);
+    let translation_size = scan_len as i32;
+    let mut count = 0;
+    let mut position = 0;
+    while position + 5 <= scan_len {
+        if buf[position] != 0xE8 {
+            position += 1;
             continue;
         }
-        let v = i32::from_le_bytes(buf[i + 1..i + 5].try_into().unwrap());
-        if v >= -(i as i32) && v < ts {
-            let new = if v >= 0 {
-                v.wrapping_sub(i as i32)
+        let operand = i32::from_le_bytes(buf[position + 1..position + 5].try_into().unwrap());
+        if operand.wrapping_add(position as i32) >= 0 && operand < translation_size {
+            let displacement = if operand < 0 {
+                operand.wrapping_add(translation_size)
             } else {
-                v.wrapping_add(ts)
+                operand.wrapping_sub(position as i32)
             };
-            buf[i + 1..i + 5].copy_from_slice(&new.to_le_bytes());
+            buf[position + 1..position + 5].copy_from_slice(&displacement.to_le_bytes());
             count += 1;
         }
-        i += 5;
+        position += 5;
     }
     count
-}
-
-/// Is `buf` a native 32-bit (i386) PE that is NOT a pure-managed (.NET) image?
-///
-/// Parses only the few header fields needed, by hand (no full `goblin` parse,
-/// which over-validates and rejects some valid system images). Requires machine
-/// `PeMachine::I386` and a PE32 optional header, and rejects
-/// images whose CLR runtime header (data directory 14) has `COMIMAGE_FLAGS_ILONLY`.
-fn is_i386_native_pe(buf: &[u8]) -> bool {
-    let rd_u32 = |o: usize| -> Option<u32> {
-        buf.get(o..o + 4)
-            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
-    };
-
-    let Ok(layout) = PeHeaderLayout::parse(buf) else {
-        return false;
-    };
-    if layout.machine != PeMachine::I386 {
-        return false; // not i386
-    }
-    if layout.optional_header_kind != PeOptionalHeaderKind::Pe32 {
-        return false;
-    }
-    let Some(clr) = layout.data_directory(buf, DataDirectoryKind::ClrRuntimeHeader) else {
-        return true; // no CLR header -> native
-    };
-    if clr.rva == 0 {
-        return true; // native
-    }
-    // Map the CLR header RVA to a file offset via the section table and read
-    // its COR20 Flags (u32 at +16); ILONLY (bit 0) => managed, skip.
-    for i in 0..layout.number_of_sections {
-        let Some(section) = layout.section(buf, i) else {
-            break;
-        };
-        if clr.rva >= section.virtual_address
-            && clr.rva < section.virtual_address.wrapping_add(section.virtual_size)
-        {
-            // usize add (a u32 add could overflow on a hostile header).
-            let off = section.raw_offset as usize + (clr.rva - section.virtual_address) as usize;
-            if let Some(flags) = rd_u32(off + 16) {
-                return flags & 0x1 == 0; // ILONLY clear => native
-            }
-        }
-    }
-    true
 }
 
 /// Is `buf` a managed (.NET / CLI) PE image -- one carrying a CLR runtime
@@ -1883,18 +1750,15 @@ mod tests {
     }
 
     #[test]
-    fn managed_and_i386_native_probes_share_header_layout() {
+    fn managed_probe_uses_header_layout() {
         let native = synthetic_transform_pe(false, PeMachine::I386, None);
         assert!(!is_managed_pe(&native));
-        assert!(is_i386_native_pe(&native));
 
         let il_only = synthetic_transform_pe(false, PeMachine::I386, Some(1));
         assert!(is_managed_pe(&il_only));
-        assert!(!is_i386_native_pe(&il_only));
 
         let mixed_mode = synthetic_transform_pe(false, PeMachine::I386, Some(0));
         assert!(is_managed_pe(&mixed_mode));
-        assert!(is_i386_native_pe(&mixed_mode));
     }
 
     #[test]

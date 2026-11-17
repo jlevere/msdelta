@@ -11,10 +11,10 @@
 //! and rows-without-code are still only guarded by `tests/feature_atoms_
 //! registry.rs`). Status, apply policy, oracle level, and proof stay
 //! registry-owned until the re-rail plan's Phase 2 derives them from oracle
-//! results. Every native PE source transform is now registered here; the next
-//! step is folding their bodies into per-atom modules and generating the
-//! registry from code.
+//! results. The registry interleaves classic CLI passes with PE transforms in native
+//! execution order. CLI4 remains outside this apply path.
 
+use super::cli::{map::CliMapModel, metadata::CliMetadataModel};
 use super::parse::{PeInfo, PeMachine};
 use crate::lzx::rift::RiftTable;
 
@@ -37,18 +37,25 @@ pub(crate) const PE_FILE_TYPES: &str = "0x2,0x4,0x8,0x10,0x20,0x40,0x80";
 pub(crate) const X86_FILE_TYPES: &str = "0x2,0x10";
 pub(crate) const X64_FILE_TYPES: &str = "0x8,0x20";
 
+#[derive(Clone, Copy)]
+pub(crate) struct ClassicCliSource<'a> {
+    pub metadata: &'a CliMetadataModel,
+    pub map: &'a CliMapModel,
+}
+
 /// The mutable state a source transform operates over while building T(source).
 pub(crate) struct SourceCtx<'a> {
     /// The image buffer, transformed in place from source to T(source).
     pub buf: &'a mut [u8],
     pub pe: &'a PeInfo,
     pub rift: &'a RiftTable,
-    /// Per-file-offset copy-provenance marker (bit 0 = owned by an earlier
-    /// transform). The RVA-field transforms claim into it; the i386 instruction
-    /// passes consult it so they never rewrite bytes a literal already supplied.
+    /// Per-file-offset ownership bits. PE structures and earlier transforms
+    /// claim ranges so later instruction passes do not reinterpret their bytes
+    /// as instructions or branch destinations.
     pub marker: &'a mut [u8],
     /// The TARGET image base, written into fields that store absolute VAs.
     pub target_base: u64,
+    pub cli: Option<ClassicCliSource<'a>>,
 }
 
 /// One PE source transform: `source -> T(source)`, applied in place.
@@ -62,41 +69,41 @@ pub(crate) trait Transform {
     fn apply(&self, ctx: &mut SourceCtx<'_>);
 }
 
-/// The registered transforms, kept in `g_transformsMap` order (ascending flag
-/// bit), which is the order genuine `PreProcessPEForApply` runs them. The mix
-/// that actually runs is gated per delta by the header flag word and per image
-/// by architecture (see [`applies_to_machine`]): an i386 image runs MarkNonExe,
-/// the RVA-field transforms, then the jmp/call passes; an amd64 image runs the
-/// RVA-field transforms, then DisasmX64 before PdataX64 (the disasm driver reads
-/// the still-source-domain `.pdata` Begin/End RVAs to locate functions).
+/// Source transforms in native execution order, gated by header flags and
+/// image architecture. Classic CLI stages follow relocation processing and
+/// precede architecture-specific instruction passes. AMD64 disassembly reads
+/// source-domain exception records before PdataX64 rewrites them.
 pub(crate) const TRANSFORMS: &[&dyn Transform] = &[
-    &super::transform::MarkNonExe,           // 0x2
-    &super::transform::TransformImports,     // 0x4
-    &super::transform::TransformExports,     // 0x8
-    &super::transform::TransformResources,   // 0x10
-    &super::transform::TransformRelocations, // 0x20
-    &super::transform::RelativeJmpsX86,      // 0x80
-    &super::transform::RelativeCallsX86,     // 0x100
-    &super::transform::DisasmX64,            // 0x200
-    &super::x64::PdataX64,                   // 0x400
+    &super::transform::MarkNonExe,                // 0x2
+    &super::transform::TransformImports,          // 0x4
+    &super::transform::TransformExports,          // 0x8
+    &super::transform::TransformResources,        // 0x10
+    &super::transform::TransformRelocations,      // 0x20
+    &super::cli::transform::TransformCliDisasm,   // 0x4000
+    &super::cli::transform::TransformCliMetadata, // 0x8000
+    &super::transform::SmashLockPrefixesX86,      // 0x40
+    &super::transform::RelativeJmpsX86,           // 0x80
+    &super::transform::RelativeCallsX86,          // 0x100
+    &super::transform::DisasmX64,                 // 0x200
+    &super::x64::PdataX64,                        // 0x400
 ];
 
 /// Whether a transform applies to this image's architecture. Derived from the
 /// atom's `layer`: `x86` transforms run only on i386, `x64` only on amd64, and
-/// `pe`-layer (architecture-agnostic) transforms run on any native image. This
+/// `pe` and classic `cli` transforms are independent of machine architecture. This
 /// keeps an arch-mismatched flag bit in an untrusted delta from running a
 /// transform that would corrupt the image.
 fn applies_to_machine(layer: &str, pe: &PeInfo) -> bool {
     match layer {
         // Architecture-agnostic PE-structure transforms run on any native image.
-        "pe" => true,
+        "pe" | "cli" => true,
         "x86" => matches!(pe.machine, PeMachine::I386),
         "x64" => matches!(pe.machine, PeMachine::Amd64),
         "arm" => matches!(pe.machine, PeMachine::ArmNt),
         "arm64" => matches!(pe.machine, PeMachine::Arm64),
-        // A non-architectural layer must never reach dispatch; rather than run an
-        // atom on the wrong machine, do not run it. `registered_layers_are_
-        // architectural` guards that no such layer is ever registered.
+        // An unknown layer must never reach dispatch; rather than run an
+        // atom on the wrong machine, do not run it. `registered_layers_have_
+        // dispatch_rules` guards that no such layer is ever registered.
         _ => false,
     }
 }
@@ -111,17 +118,42 @@ pub(crate) fn run_registered(
     target_base: u64,
     flags: u64,
 ) {
+    run_registered_with_cli(buf, pe, rift, marker, target_base, flags, None);
+}
+
+pub(crate) fn run_registered_with_cli(
+    buf: &mut [u8],
+    pe: &PeInfo,
+    rift: &RiftTable,
+    marker: &mut [u8],
+    target_base: u64,
+    flags: u64,
+    cli: Option<ClassicCliSource<'_>>,
+) {
     let mut ctx = SourceCtx {
         buf,
         pe,
         rift,
         marker,
         target_base,
+        cli,
     };
     for transform in TRANSFORMS {
         let meta = transform.meta();
         if flags & meta.flag_mask != 0 && applies_to_machine(meta.layer, pe) {
+            #[cfg(test)]
+            let stage = if meta.id == "TransformRelocations"
+                && super::inferred_relocations::uses_inferred_relocations(ctx.buf, ctx.pe)
+            {
+                "InferredRelocationsI386"
+            } else {
+                meta.id
+            };
+            #[cfg(test)]
+            crate::pa30::pipeline_tests::record_buffer(stage, "before", ctx.buf, Some(ctx.marker));
             transform.apply(&mut ctx);
+            #[cfg(test)]
+            crate::pa30::pipeline_tests::record_buffer(stage, "after", ctx.buf, Some(ctx.marker));
         }
     }
 }
@@ -141,11 +173,11 @@ mod tests {
     /// silently never run. This stops a future non-arch layer from quietly
     /// disabling an atom.
     #[test]
-    fn registered_layers_are_architectural() {
+    fn registered_layers_have_dispatch_rules() {
         for transform in TRANSFORMS {
             let meta = transform.meta();
             assert!(
-                matches!(meta.layer, "pe" | "x86" | "x64" | "arm" | "arm64"),
+                matches!(meta.layer, "pe" | "cli" | "x86" | "x64" | "arm" | "arm64"),
                 "{} has non-architectural layer {}; applies_to_machine would never run it",
                 meta.id,
                 meta.layer

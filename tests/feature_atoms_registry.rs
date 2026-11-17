@@ -104,6 +104,7 @@ const CLASSIC_MANAGED_APPLY_ALLOWED_ATOMS: &[&str] = &[
     "ManagedFileTypeBranch",
     "PePreprocessManagedClassic",
     "CliMapBitstream",
+    "MarkNonExeCliMethods",
     "TransformCliDisasm",
     "CliBlobTypeTokenRemap",
     "TransformCliMetadata",

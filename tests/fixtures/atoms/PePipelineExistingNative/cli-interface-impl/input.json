@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "original_fixture": "tests/fixtures/atoms/ManagedNativeCorpus/cli-interface-impl",
+  "source_sha256": "5a2973977593cae68203d574952f776511740183b984295b08ccf827c60e557e",
+  "delta_sha256": "0ecbd033d6c1c693408d00fcf6a885749376ad02f1e99c4be4048a7622d3d724",
+  "expected_sha256": "8976f1e932d897de26f1395134024acee104ef80450979b3d99f3572c428fb2a",
+  "original_provenance_file": "tests/fixtures/atoms/ManagedNativeCorpus/cli-interface-impl/case.toml",
+  "original_provenance_sha256": "42db205d67324328de469c262c42a8727db539c84cd35323e888ed40bb8f557d"
+}

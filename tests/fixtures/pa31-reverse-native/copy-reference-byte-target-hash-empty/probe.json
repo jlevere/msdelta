@@ -1,0 +1,11 @@
+{
+  "control": "native-copy",
+  "native_control_sha256": "630566827a55609cd87f69e20ca7de2bcbdf3f71e55bc2c9efac2ce7a8c609ed",
+  "payload_unchanged": true,
+  "native_noop_roundtrip_exact": true,
+  "mutation": {
+    "parent": "copy-reference-byte",
+    "field": "target_hash",
+    "change": "empty output digest"
+  }
+}
